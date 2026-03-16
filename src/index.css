@@ -1,0 +1,32 @@
+:root {
+  --bg: #1a1210;
+  --bg-card: #2a2219;
+  --text: #c4b69c;
+  --text-bright: #e8dcc8;
+  --accent: #c0392b;
+  --accent-hover: #e74c3c;
+  --accent-secondary: #d4a017;
+  --border: #3d3226;
+
+  font-family: 'Georgia', 'Times New Roman', serif;
+  color-scheme: dark;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
