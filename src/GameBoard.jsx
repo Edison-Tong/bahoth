@@ -575,7 +575,6 @@ export default function GameBoard({ players, onQuit }) {
       {/* Header bar */}
       <div className="game-header">
         <div className="game-header-left">
-          <span className="turn-badge">Turn {game.turnNumber}</span>
           <span className="floor-tabs">
             {["upper", "ground", "basement"].map((f) => (
               <button
