@@ -511,6 +511,8 @@ export default function GameBoard({ players, onQuit }) {
       const speed = nextPlayer.character.speed[nextPlayer.statIndex.speed];
       const updatedPlayers = g.players.map((pl, i) => (i === next ? { ...pl, movesLeft: speed } : pl));
 
+      setCameraFloor(nextPlayer.floor);
+
       return {
         ...g,
         players: updatedPlayers,
