@@ -28,19 +28,21 @@ function initGameState(players) {
   const basementLanding = { ...STARTING_TILES[4], x: 0, y: 0, floor: "basement" };
 
   return {
-    players: players.map((p, i) => ({
-      ...p,
-      index: i,
-      x: 0,
-      y: 0,
-      floor: "ground",
-      movesLeft: 0,
-      // Stat indices track current position in each stat array
-      statIndex: { ...p.character.startIndex },
-      inventory: [],
-      omens: [],
-      isAlive: true,
-    })),
+    players: players.map((p, i) => {
+      const speed = p.character.speed[p.character.startIndex.speed];
+      return {
+        ...p,
+        index: i,
+        x: 0,
+        y: 0,
+        floor: "ground",
+        movesLeft: i === 0 ? speed : 0,
+        statIndex: { ...p.character.startIndex },
+        inventory: [],
+        omens: [],
+        isAlive: true,
+      };
+    }),
     board: {
       ground: [entrance, foyer, grandStaircase],
       upper: [upperLanding],
@@ -48,11 +50,13 @@ function initGameState(players) {
     },
     tileStack,
     currentPlayerIndex: 0,
-    turnPhase: "move", // 'move' | 'explore' | 'card' | 'endTurn'
+    turnPhase: "move",
+    movePath: [{ x: 0, y: 0, floor: "ground" }],
+    pendingExplore: null,
     omenCount: 0,
     hauntTriggered: false,
     turnNumber: 1,
-    message: null,
+    message: `${players[0].name}'s turn — ${players[0].character.speed[players[0].character.startIndex.speed]} moves`,
   };
 }
 
@@ -64,24 +68,26 @@ export default function GameBoard({ players, onQuit }) {
   const currentPlayer = game.players[game.currentPlayerIndex];
   const floorTiles = game.board[cameraFloor] || [];
 
-  // When turn starts, give the player moves equal to their speed
-  useEffect(() => {
-    if (game.turnPhase === "move" && currentPlayer.movesLeft === 0) {
-      setGame((g) => {
-        const p = g.players[g.currentPlayerIndex];
-        const speed = p.character.speed[p.statIndex.speed];
-        const updated = { ...g };
-        updated.players = g.players.map((pl, i) => (i === g.currentPlayerIndex ? { ...pl, movesLeft: speed } : pl));
-        updated.message = `${p.name}'s turn — ${speed} moves`;
-        return updated;
-      });
-    }
-  }, [game.currentPlayerIndex, game.turnPhase, currentPlayer.movesLeft]);
-
-  // Arrow key movement
+  // Keyboard controls
   useEffect(() => {
     function handleKeyDown(e) {
-      if (game.turnPhase !== "move" || currentPlayer.movesLeft <= 0) return;
+      // Rotate phase: R/E to rotate, Enter to place
+      if (game.turnPhase === "rotate") {
+        if (e.key === "r" || e.key === "R" || e.key === "ArrowRight") {
+          e.preventDefault();
+          handleRotateTile(1);
+        } else if (e.key === "e" || e.key === "E" || e.key === "ArrowLeft") {
+          e.preventDefault();
+          handleRotateTile(-1);
+        } else if (e.key === "Enter") {
+          e.preventDefault();
+          handlePlaceTile();
+        }
+        return;
+      }
+
+      if (game.turnPhase !== "move") return;
+      if (cameraFloor !== currentPlayer.floor) return;
 
       const keyToDir = {
         ArrowUp: "N",
@@ -94,12 +100,40 @@ export default function GameBoard({ players, onQuit }) {
 
       e.preventDefault();
 
+      // If on a pending explore placeholder, only allow backtracking
+      if (game.pendingExplore) {
+        const path = game.movePath;
+        if (path.length >= 2) {
+          const prev = path[path.length - 2];
+          const { dx, dy } = DIR[dir];
+          const nx = currentPlayer.x + dx;
+          const ny = currentPlayer.y + dy;
+          if (prev.x === nx && prev.y === ny && prev.floor === currentPlayer.floor) {
+            handleBacktrack();
+          }
+        }
+        return;
+      }
+
       const tile = getTileAt(currentPlayer.x, currentPlayer.y, currentPlayer.floor);
       if (!tile || !tile.doors.includes(dir)) return;
 
       const { dx, dy } = DIR[dir];
       const nx = currentPlayer.x + dx;
       const ny = currentPlayer.y + dy;
+
+      // Check if backtracking
+      const path = game.movePath;
+      if (path.length >= 2) {
+        const prev = path[path.length - 2];
+        if (prev.x === nx && prev.y === ny && prev.floor === currentPlayer.floor) {
+          handleBacktrack();
+          return;
+        }
+      }
+
+      if (currentPlayer.movesLeft <= 0) return;
+
       const neighbor = getTileAt(nx, ny, currentPlayer.floor);
 
       if (neighbor && neighbor.doors.includes(OPPOSITE[dir])) {
@@ -120,10 +154,33 @@ export default function GameBoard({ players, onQuit }) {
 
   // Get valid move directions from current tile
   function getValidMoves() {
-    if (game.turnPhase !== "move" || currentPlayer.movesLeft <= 0) return [];
+    if (game.turnPhase !== "move") return [];
+
+    // If on a pending explore placeholder, only allow backtrack
+    if (game.pendingExplore) {
+      const path = game.movePath;
+      if (path.length >= 2) {
+        const prev = path[path.length - 2];
+        // Find which direction leads back
+        const dx = prev.x - currentPlayer.x;
+        const dy = prev.y - currentPlayer.y;
+        const dir = Object.entries(DIR).find(([, v]) => v.dx === dx && v.dy === dy)?.[0];
+        if (dir) {
+          return [{ dir, x: prev.x, y: prev.y, type: "backtrack" }];
+        }
+      }
+      return [];
+    }
 
     const tile = getTileAt(currentPlayer.x, currentPlayer.y, currentPlayer.floor);
     if (!tile) return [];
+
+    // Find backtrack target
+    const path = game.movePath;
+    let backtrackPos = null;
+    if (path.length >= 2) {
+      backtrackPos = path[path.length - 2];
+    }
 
     const moves = [];
     for (const dir of tile.doors) {
@@ -133,36 +190,71 @@ export default function GameBoard({ players, onQuit }) {
       const neighbor = getTileAt(nx, ny, currentPlayer.floor);
 
       if (neighbor) {
-        // Can only move to neighbor if it also has a door facing back
         if (neighbor.doors.includes(OPPOSITE[dir])) {
-          moves.push({ dir, x: nx, y: ny, type: "move" });
+          // Check if this is a backtrack
+          const isBacktrack =
+            backtrackPos &&
+            backtrackPos.x === nx &&
+            backtrackPos.y === ny &&
+            backtrackPos.floor === currentPlayer.floor;
+          if (isBacktrack) {
+            moves.push({ dir, x: nx, y: ny, type: "backtrack" });
+          } else if (currentPlayer.movesLeft > 0) {
+            moves.push({ dir, x: nx, y: ny, type: "move" });
+          }
         }
-      } else {
-        // No tile there — can explore
+      } else if (currentPlayer.movesLeft > 0) {
         moves.push({ dir, x: nx, y: ny, type: "explore" });
       }
     }
     return moves;
   }
 
-  // Move player to an existing tile
+  // Move player to an existing tile (costs 1 move, extends path)
   function handleMove(nx, ny) {
     setGame((g) => {
-      const updated = { ...g };
-      const movesLeft = currentPlayer.movesLeft - 1;
-      updated.players = g.players.map((p, i) => (i === g.currentPlayerIndex ? { ...p, x: nx, y: ny, movesLeft } : p));
-      updated.message =
-        movesLeft > 0
-          ? `${currentPlayer.name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`
-          : `${currentPlayer.name} — no moves left`;
-      return updated;
+      const movesLeft = g.players[g.currentPlayerIndex].movesLeft - 1;
+      const newPath = [...g.movePath, { x: nx, y: ny, floor: g.players[g.currentPlayerIndex].floor }];
+      const updatedPlayers = g.players.map((p, i) =>
+        i === g.currentPlayerIndex ? { ...p, x: nx, y: ny, movesLeft } : p
+      );
+      return {
+        ...g,
+        players: updatedPlayers,
+        movePath: newPath,
+        message:
+          movesLeft > 0
+            ? `${g.players[g.currentPlayerIndex].name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`
+            : `${g.players[g.currentPlayerIndex].name} — no moves left`,
+      };
     });
   }
 
-  // Explore — draw a tile and place it
+  // Backtrack to previous tile in path (refunds 1 move)
+  function handleBacktrack() {
+    setGame((g) => {
+      const path = g.movePath;
+      if (path.length < 2) return g;
+      const prev = path[path.length - 2];
+      const newPath = path.slice(0, -1);
+      const movesLeft = g.players[g.currentPlayerIndex].movesLeft + 1;
+      const updatedPlayers = g.players.map((p, i) =>
+        i === g.currentPlayerIndex ? { ...p, x: prev.x, y: prev.y, movesLeft } : p
+      );
+      return {
+        ...g,
+        players: updatedPlayers,
+        movePath: newPath,
+        pendingExplore: null,
+        message: `${g.players[g.currentPlayerIndex].name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`,
+      };
+    });
+  }
+
+  // Explore — move player onto placeholder, don't reveal tile yet
   function handleExplore(dir, nx, ny) {
     setGame((g) => {
-      const floor = currentPlayer.floor;
+      const floor = g.players[g.currentPlayerIndex].floor;
 
       // Find a tile that fits this floor
       const tileIndex = g.tileStack.findIndex((t) => t.floors.includes(floor));
@@ -171,34 +263,120 @@ export default function GameBoard({ players, onQuit }) {
       }
 
       const tile = g.tileStack[tileIndex];
-      const newStack = [...g.tileStack];
-      newStack.splice(tileIndex, 1);
 
-      // Rotate tile so it has a door connecting back to where we came from
+      // Compute all valid rotations (must include the door connecting back)
       const neededDoor = OPPOSITE[dir];
-      const rotatedDoors = rotateDoors(tile.doors, neededDoor);
+      const allDirs = ["N", "E", "S", "W"];
+      const validRotations = [];
+      for (let rot = 0; rot < 4; rot++) {
+        const rotated = tile.doors.map((d) => {
+          const idx = allDirs.indexOf(d);
+          return allDirs[(idx + rot) % 4];
+        });
+        if (rotated.includes(neededDoor)) {
+          validRotations.push(rotated);
+        }
+      }
 
+      const movesLeft = g.players[g.currentPlayerIndex].movesLeft - 1;
+      const newPath = [...g.movePath, { x: nx, y: ny, floor }];
+      const updatedPlayers = g.players.map((p, i) =>
+        i === g.currentPlayerIndex ? { ...p, x: nx, y: ny, movesLeft } : p
+      );
+
+      return {
+        ...g,
+        players: updatedPlayers,
+        movePath: newPath,
+        pendingExplore: {
+          tile,
+          tileIndex,
+          x: nx,
+          y: ny,
+          floor,
+          dir,
+          validRotations,
+          rotationIndex: 0,
+        },
+        message: `${g.players[g.currentPlayerIndex].name} entered an unknown room... Move Here to reveal it, or back out.`,
+      };
+    });
+  }
+
+  // Handle clicking a move/explore/backtrack target
+  function handleAction(move) {
+    if (move.type === "backtrack") {
+      handleBacktrack();
+    } else if (move.type === "move") {
+      handleMove(move.x, move.y);
+    } else {
+      handleExplore(move.dir, move.x, move.y);
+    }
+  }
+
+  // Confirm move — commit current position, reset path
+  // If on a pending explore, enter rotate phase to choose orientation
+  function handleConfirmMove() {
+    setGame((g) => {
+      const p = g.players[g.currentPlayerIndex];
+
+      if (g.pendingExplore) {
+        return {
+          ...g,
+          turnPhase: "rotate",
+          message: `${p.name} discovered ${g.pendingExplore.tile.name}! Rotate the tile, then place it.`,
+        };
+      }
+
+      return {
+        ...g,
+        movePath: [{ x: p.x, y: p.y, floor: p.floor }],
+        message: `${p.name} moved — ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left`,
+      };
+    });
+  }
+
+  // Rotate the pending tile to the next valid orientation
+  function handleRotateTile(direction) {
+    setGame((g) => {
+      if (!g.pendingExplore) return g;
+      const pe = g.pendingExplore;
+      const count = pe.validRotations.length;
+      const newIndex = direction === 1 ? (pe.rotationIndex + 1) % count : (pe.rotationIndex - 1 + count) % count;
+      return {
+        ...g,
+        pendingExplore: { ...pe, rotationIndex: newIndex },
+      };
+    });
+  }
+
+  // Place the tile with the chosen rotation
+  function handlePlaceTile() {
+    setGame((g) => {
+      const p = g.players[g.currentPlayerIndex];
+      const pe = g.pendingExplore;
+      if (!pe) return g;
+
+      const chosenDoors = pe.validRotations[pe.rotationIndex];
       const placedTile = {
-        ...tile,
-        x: nx,
-        y: ny,
-        floor,
-        doors: rotatedDoors,
+        ...pe.tile,
+        x: pe.x,
+        y: pe.y,
+        floor: pe.floor,
+        doors: chosenDoors,
       };
 
       const newBoard = { ...g.board };
-      newBoard[floor] = [...newBoard[floor], placedTile];
+      newBoard[pe.floor] = [...newBoard[pe.floor], placedTile];
 
-      // Move player onto the new tile with 0 moves left (exploring ends movement)
-      const updatedPlayers = g.players.map((p, i) =>
-        i === g.currentPlayerIndex ? { ...p, x: nx, y: ny, movesLeft: 0 } : p
-      );
+      const newStack = [...g.tileStack];
+      newStack.splice(pe.tileIndex, 1);
 
-      let message = `${currentPlayer.name} discovered ${tile.name}!`;
-      let turnPhase = g.turnPhase;
+      let message = `${p.name} placed ${pe.tile.name}!`;
+      let turnPhase = "move";
 
-      if (tile.cardType) {
-        message += ` Draw an ${tile.cardType} card.`;
+      if (pe.tile.cardType) {
+        message += ` Draw an ${pe.tile.cardType} card.`;
         turnPhase = "card";
       } else {
         turnPhase = "endTurn";
@@ -208,37 +386,12 @@ export default function GameBoard({ players, onQuit }) {
         ...g,
         board: newBoard,
         tileStack: newStack,
-        players: updatedPlayers,
+        movePath: [{ x: p.x, y: p.y, floor: p.floor }],
+        pendingExplore: null,
         turnPhase,
         message,
       };
     });
-  }
-
-  // Rotate doors so the tile connects properly
-  function rotateDoors(doors, neededDoor) {
-    if (doors.includes(neededDoor)) return doors;
-
-    // Try rotations: 90, 180, 270
-    const allDirs = ["N", "E", "S", "W"];
-    for (let rot = 1; rot <= 3; rot++) {
-      const rotated = doors.map((d) => {
-        const idx = allDirs.indexOf(d);
-        return allDirs[(idx + rot) % 4];
-      });
-      if (rotated.includes(neededDoor)) return rotated;
-    }
-    // Fallback: just add the needed door
-    return [...doors, neededDoor];
-  }
-
-  // Handle clicking a move/explore target
-  function handleAction(move) {
-    if (move.type === "move") {
-      handleMove(move.x, move.y);
-    } else {
-      handleExplore(move.dir, move.x, move.y);
-    }
   }
 
   // Draw card (placeholder — just acknowledge it for now)
@@ -279,17 +432,24 @@ export default function GameBoard({ players, onQuit }) {
         attempts++;
       }
 
+      const nextPlayer = g.players[next];
+      const speed = nextPlayer.character.speed[nextPlayer.statIndex.speed];
+      const updatedPlayers = g.players.map((pl, i) => (i === next ? { ...pl, movesLeft: speed } : pl));
+
       return {
         ...g,
+        players: updatedPlayers,
         currentPlayerIndex: next,
         turnPhase: "move",
+        movePath: [{ x: nextPlayer.x, y: nextPlayer.y, floor: nextPlayer.floor }],
+        pendingExplore: null,
         turnNumber: g.turnNumber + (next === 0 ? 1 : 0),
-        message: null,
+        message: `${nextPlayer.name}'s turn — ${speed} moves`,
       };
     });
   }
 
-  const validMoves = getValidMoves();
+  const validMoves = cameraFloor === currentPlayer.floor ? getValidMoves() : [];
 
   // Calculate board bounds for centering
   const allXs = floorTiles.map((t) => t.x);
@@ -344,6 +504,24 @@ export default function GameBoard({ players, onQuit }) {
       <div className="board-container" ref={boardRef}>
         <div className="board-scroll">
           <div className="board-grid" style={{ width: gridWidth, height: gridHeight }}>
+            {/* Movement path line */}
+            {cameraFloor === currentPlayer.floor && game.movePath.length >= 2 && (
+              <svg className="path-svg" style={{ width: gridWidth, height: gridHeight }}>
+                <polyline
+                  points={game.movePath
+                    .filter((p) => p.floor === cameraFloor)
+                    .map((p) => {
+                      const cx = (p.x - minX) * (TILE_SIZE + GAP) + TILE_SIZE / 2;
+                      const cy = (p.y - minY) * (TILE_SIZE + GAP) + TILE_SIZE / 2;
+                      return `${cx},${cy}`;
+                    })
+                    .join(" ")}
+                  className="path-line"
+                  style={{ stroke: currentPlayer.color }}
+                />
+              </svg>
+            )}
+
             {/* Placed tiles */}
             {floorTiles.map((tile) => {
               const left = (tile.x - minX) * (TILE_SIZE + GAP);
@@ -383,34 +561,82 @@ export default function GameBoard({ players, onQuit }) {
               );
             })}
 
-            {/* Explore/move targets */}
-            {validMoves.map((m) => {
-              // Don't show target if there's already a tile there (move targets are on existing tiles)
-              if (m.type === "move") return null;
-              const left = (m.x - minX) * (TILE_SIZE + GAP);
-              const top = (m.y - minY) * (TILE_SIZE + GAP);
-              return (
-                <button
-                  key={`target-${m.x}-${m.y}`}
-                  className="explore-target"
-                  style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
-                  onClick={() => handleAction(m)}
-                >
-                  <span className="explore-icon">?</span>
-                </button>
-              );
-            })}
+            {/* Pending explore placeholder / rotate preview */}
+            {game.pendingExplore &&
+              game.pendingExplore.floor === cameraFloor &&
+              (() => {
+                const pe = game.pendingExplore;
+                const left = (pe.x - minX) * (TILE_SIZE + GAP);
+                const top = (pe.y - minY) * (TILE_SIZE + GAP);
+                const tilePlayersHere = playersOnFloor.filter((p) => p.x === pe.x && p.y === pe.y);
+                const isRotating = game.turnPhase === "rotate";
+                const previewDoors = isRotating ? pe.validRotations[pe.rotationIndex] : [];
 
-            {/* Clickable overlay on existing tiles for movement */}
+                return (
+                  <div
+                    key="pending-explore"
+                    className={`board-tile ${isRotating ? "board-tile-rotate" : "board-tile-pending"}`}
+                    style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
+                  >
+                    {isRotating ? (
+                      <>
+                        <div className="tile-name">{pe.tile.name}</div>
+                        {pe.tile.cardType && (
+                          <div className={`tile-type tile-type-${pe.tile.cardType}`}>{pe.tile.cardType}</div>
+                        )}
+                        <div className="tile-doors">
+                          {previewDoors.map((d) => (
+                            <div key={d} className={`door door-${d}`} />
+                          ))}
+                        </div>
+                      </>
+                    ) : (
+                      <div className="tile-name" style={{ color: "var(--accent)" }}>
+                        ?
+                      </div>
+                    )}
+                    {tilePlayersHere.length > 0 && (
+                      <div className="tile-players">
+                        {tilePlayersHere.map((p) => (
+                          <div key={p.index} className="player-token" style={{ background: p.color }} title={p.name}>
+                            {p.name.charAt(0)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+            {/* Explore/move targets */}
+            {!game.pendingExplore &&
+              validMoves.map((m) => {
+                // Don't show target if there's already a tile there (move targets are on existing tiles)
+                if (m.type === "move") return null;
+                const left = (m.x - minX) * (TILE_SIZE + GAP);
+                const top = (m.y - minY) * (TILE_SIZE + GAP);
+                return (
+                  <button
+                    key={`target-${m.x}-${m.y}`}
+                    className="explore-target"
+                    style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
+                    onClick={() => handleAction(m)}
+                  >
+                    <span className="explore-icon">?</span>
+                  </button>
+                );
+              })}
+
+            {/* Clickable overlay on existing tiles for movement/backtrack */}
             {validMoves
-              .filter((m) => m.type === "move")
+              .filter((m) => m.type === "move" || m.type === "backtrack")
               .map((m) => {
                 const left = (m.x - minX) * (TILE_SIZE + GAP);
                 const top = (m.y - minY) * (TILE_SIZE + GAP);
                 return (
                   <button
                     key={`move-${m.x}-${m.y}`}
-                    className="move-overlay"
+                    className={m.type === "backtrack" ? "backtrack-overlay" : "move-overlay"}
                     style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
                     onClick={() => handleAction(m)}
                   />
@@ -422,6 +648,24 @@ export default function GameBoard({ players, onQuit }) {
 
       {/* Action buttons */}
       <div className="game-actions">
+        {game.turnPhase === "move" && game.movePath.length > 1 && (
+          <button className="btn btn-confirm" onClick={handleConfirmMove}>
+            Move Here
+          </button>
+        )}
+        {game.turnPhase === "rotate" && (
+          <>
+            <button className="btn btn-rotate" onClick={() => handleRotateTile(-1)}>
+              ↺ Rotate Left
+            </button>
+            <button className="btn btn-confirm" onClick={handlePlaceTile}>
+              Place Tile
+            </button>
+            <button className="btn btn-rotate" onClick={() => handleRotateTile(1)}>
+              Rotate Right ↻
+            </button>
+          </>
+        )}
         {game.turnPhase === "card" && (
           <button className="btn btn-primary" onClick={handleDrawCard}>
             Draw Card

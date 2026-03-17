@@ -125,8 +125,25 @@
 }
 
 .board-tile-current {
-  border-color: #c0392b;
-  box-shadow: 0 0 12px rgba(192, 57, 43, 0.4);
+  border-color: #2ecc71;
+  box-shadow: 0 0 14px rgba(46, 204, 113, 0.5);
+}
+
+.board-tile-pending {
+  background: rgba(192, 57, 43, 0.1);
+  border: 2px dashed rgba(192, 57, 43, 0.5);
+}
+
+.board-tile-rotate {
+  background: #3a3020;
+  border: 2px solid #f39c12;
+  box-shadow: 0 0 14px rgba(243, 156, 18, 0.5);
+  animation: pulse-rotate 1s ease-in-out infinite;
+}
+
+@keyframes pulse-rotate {
+  0%, 100% { box-shadow: 0 0 10px rgba(243, 156, 18, 0.3); }
+  50% { box-shadow: 0 0 18px rgba(243, 156, 18, 0.6); }
 }
 
 .board-tile-event {
@@ -278,23 +295,75 @@
 .move-overlay {
   position: absolute;
   border-radius: 6px;
-  background: rgba(46, 204, 113, 0.15);
-  border: 2px solid rgba(46, 204, 113, 0.5);
+  background: transparent;
+  border: 2px solid rgba(241, 196, 15, 0.5);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: inherit;
   font-size: 0.75rem;
-  color: #2ecc71;
+  color: #f1c40f;
   font-weight: bold;
   transition: all 0.15s;
   z-index: 5;
+  animation: pulse-gold 1.5s ease-in-out infinite;
 }
 
 .move-overlay:hover {
-  background: rgba(46, 204, 113, 0.3);
-  border-color: #2ecc71;
+  background: rgba(241, 196, 15, 0.15);
+  border-color: #f1c40f;
+  box-shadow: 0 0 10px rgba(241, 196, 15, 0.3);
+}
+
+@keyframes pulse-gold {
+  0%, 100% { border-color: rgba(241, 196, 15, 0.3); }
+  50% { border-color: rgba(241, 196, 15, 0.7); }
+}
+
+/* Backtrack overlay */
+.backtrack-overlay {
+  position: absolute;
+  border-radius: 6px;
+  background: transparent;
+  border: 2px solid rgba(149, 165, 166, 0.5);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  transition: all 0.15s;
+  z-index: 5;
+  animation: pulse-silver 1.5s ease-in-out infinite;
+}
+
+.backtrack-overlay:hover {
+  background: rgba(149, 165, 166, 0.15);
+  border-color: #95a5a6;
+  box-shadow: 0 0 10px rgba(149, 165, 166, 0.3);
+}
+
+@keyframes pulse-silver {
+  0%, 100% { border-color: rgba(149, 165, 166, 0.3); }
+  50% { border-color: rgba(149, 165, 166, 0.7); }
+}
+
+/* Movement path SVG */
+.path-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.path-line {
+  fill: none;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.6;
+  stroke-dasharray: 8 4;
 }
 
 /* Game actions bar */
@@ -324,6 +393,39 @@
 
 .game-actions .btn-primary:hover {
   background: var(--accent-hover);
+}
+
+.game-actions .btn-confirm {
+  background: #2ecc71;
+  border: none;
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.game-actions .btn-confirm:hover {
+  background: #27ae60;
+}
+
+.game-actions .btn-rotate {
+  background: transparent;
+  border: 1px solid #f39c12;
+  color: #f39c12;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.game-actions .btn-rotate:hover {
+  background: rgba(243, 156, 18, 0.15);
 }
 
 /* Player sidebar */

@@ -26,7 +26,7 @@ export const STARTING_TILES = [
     id: "grand-staircase",
     name: "Grand Staircase",
     floors: ["ground"],
-    doors: ["S", "E", "W"],
+    doors: ["S"],
     cardType: null,
     description: "A sweeping staircase leads up... and down.",
     special: "staircase",
