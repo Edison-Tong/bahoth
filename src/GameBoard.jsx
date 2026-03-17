@@ -239,7 +239,7 @@ export default function GameBoard({ players, onQuit }) {
       const newPath = path.slice(0, -1);
       const movesLeft = g.players[g.currentPlayerIndex].movesLeft + 1;
       const updatedPlayers = g.players.map((p, i) =>
-        i === g.currentPlayerIndex ? { ...p, x: prev.x, y: prev.y, movesLeft } : p
+        i === g.currentPlayerIndex ? { ...p, x: prev.x, y: prev.y, floor: prev.floor || p.floor, movesLeft } : p
       );
       return {
         ...g,
@@ -248,6 +248,12 @@ export default function GameBoard({ players, onQuit }) {
         pendingExplore: null,
         message: `${g.players[g.currentPlayerIndex].name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`,
       };
+    });
+    // Auto-switch camera if backtracking across floors
+    setGame((g) => {
+      const p = g.players[g.currentPlayerIndex];
+      setCameraFloor(p.floor);
+      return g;
     });
   }
 
@@ -379,7 +385,7 @@ export default function GameBoard({ players, onQuit }) {
         message += ` Draw an ${pe.tile.cardType} card.`;
         turnPhase = "card";
       } else {
-        turnPhase = "endTurn";
+        message += ` ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`;
       }
 
       return {
@@ -421,6 +427,75 @@ export default function GameBoard({ players, onQuit }) {
     });
   }
 
+  // Change floor via staircase
+  function handleChangeFloor() {
+    setGame((g) => {
+      const p = g.players[g.currentPlayerIndex];
+
+      // Find current tile
+      const currentTile = g.board[p.floor]?.find((t) => t.x === p.x && t.y === p.y);
+      if (!currentTile || !currentTile.connectsTo) return g;
+
+      // Find the target tile on the board
+      let targetTile = null;
+      let targetFloor = null;
+      for (const floor of ["ground", "upper", "basement"]) {
+        const found = g.board[floor]?.find((t) => t.id === currentTile.connectsTo);
+        if (found) {
+          targetTile = found;
+          targetFloor = floor;
+          break;
+        }
+      }
+      if (!targetTile) return g;
+
+      // Check if this is a backtrack (target matches previous path position)
+      const path = g.movePath;
+      const prev = path.length >= 2 ? path[path.length - 2] : null;
+      const isBacktrack = prev && prev.x === targetTile.x && prev.y === targetTile.y && prev.floor === targetFloor;
+
+      if (isBacktrack) {
+        const movesLeft = p.movesLeft + 1;
+        const updatedPlayers = g.players.map((pl, i) =>
+          i === g.currentPlayerIndex ? { ...pl, x: targetTile.x, y: targetTile.y, floor: targetFloor, movesLeft } : pl
+        );
+        return {
+          ...g,
+          players: updatedPlayers,
+          movePath: path.slice(0, -1),
+          pendingExplore: null,
+          message: `${p.name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`,
+        };
+      }
+
+      if (p.movesLeft <= 0) return g;
+      const movesLeft = p.movesLeft - 1;
+      const updatedPlayers = g.players.map((pl, i) =>
+        i === g.currentPlayerIndex ? { ...pl, x: targetTile.x, y: targetTile.y, floor: targetFloor, movesLeft } : pl
+      );
+
+      return {
+        ...g,
+        players: updatedPlayers,
+        movePath: [...g.movePath, { x: targetTile.x, y: targetTile.y, floor: targetFloor }],
+        message:
+          movesLeft > 0
+            ? `${p.name} moved to ${targetTile.name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`
+            : `${p.name} moved to ${targetTile.name} — no moves left`,
+      };
+    });
+    // Auto-switch camera to the player's new floor
+    setCameraFloor((prev) => {
+      const p = game.players[game.currentPlayerIndex];
+      const currentTile = game.board[p.floor]?.find((t) => t.x === p.x && t.y === p.y);
+      if (!currentTile?.connectsTo) return prev;
+      for (const floor of ["ground", "upper", "basement"]) {
+        if (game.board[floor]?.find((t) => t.id === currentTile.connectsTo)) return floor;
+      }
+      return prev;
+    });
+  }
+
   // End turn
   function handleEndTurn() {
     setGame((g) => {
@@ -450,6 +525,27 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   const validMoves = cameraFloor === currentPlayer.floor ? getValidMoves() : [];
+
+  // Check if current player is on a staircase tile
+  const currentTileObj = game.board[currentPlayer.floor]?.find(
+    (t) => t.x === currentPlayer.x && t.y === currentPlayer.y
+  );
+  let stairTarget = null;
+  let stairIsBacktrack = false;
+  if (currentTileObj?.connectsTo && game.turnPhase === "move" && !game.pendingExplore) {
+    for (const floor of ["ground", "upper", "basement"]) {
+      const found = game.board[floor]?.find((t) => t.id === currentTileObj.connectsTo);
+      if (found) {
+        const path = game.movePath;
+        const prev = path.length >= 2 ? path[path.length - 2] : null;
+        stairIsBacktrack = prev && prev.x === found.x && prev.y === found.y && prev.floor === floor;
+        if (currentPlayer.movesLeft > 0 || stairIsBacktrack) {
+          stairTarget = found;
+        }
+        break;
+      }
+    }
+  }
 
   // Calculate board bounds for centering
   const allXs = floorTiles.map((t) => t.x);
@@ -653,6 +749,11 @@ export default function GameBoard({ players, onQuit }) {
             Move Here
           </button>
         )}
+        {stairTarget && (
+          <button className="btn btn-stairs" onClick={handleChangeFloor}>
+            Move to {stairTarget.name}
+          </button>
+        )}
         {game.turnPhase === "rotate" && (
           <>
             <button className="btn btn-rotate" onClick={() => handleRotateTile(-1)}>
@@ -671,7 +772,7 @@ export default function GameBoard({ players, onQuit }) {
             Draw Card
           </button>
         )}
-        {(game.turnPhase === "endTurn" || (game.turnPhase === "move" && currentPlayer.movesLeft === 0)) && (
+        {(game.turnPhase === "endTurn" || game.turnPhase === "move" || game.turnPhase === "card") && (
           <button className="btn btn-primary" onClick={handleEndTurn}>
             End Turn — Pass to {game.players[(game.currentPlayerIndex + 1) % game.players.length].name}
           </button>

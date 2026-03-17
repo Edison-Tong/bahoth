@@ -30,6 +30,7 @@ export const STARTING_TILES = [
     cardType: null,
     description: "A sweeping staircase leads up... and down.",
     special: "staircase",
+    connectsTo: "upper-landing",
   },
   {
     id: "upper-landing",
@@ -38,6 +39,7 @@ export const STARTING_TILES = [
     doors: ["N", "S", "E", "W"],
     cardType: null,
     description: "The stairs creak as you reach the second floor.",
+    connectsTo: "grand-staircase",
   },
   {
     id: "basement-landing",
@@ -46,6 +48,7 @@ export const STARTING_TILES = [
     doors: ["N", "S", "E", "W"],
     cardType: null,
     description: "Cold stone stairs lead down into darkness.",
+    connectsTo: "grand-staircase",
   },
 ];
 

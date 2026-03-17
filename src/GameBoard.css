@@ -412,6 +412,23 @@
   background: #27ae60;
 }
 
+.game-actions .btn-stairs {
+  background: #8e44ad;
+  border: none;
+  color: #fff;
+  padding: 8px 20px;
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.game-actions .btn-stairs:hover {
+  background: #7d3c98;
+}
+
 .game-actions .btn-rotate {
   background: transparent;
   border: 1px solid #f39c12;
