@@ -55,6 +55,7 @@ function initGameState(players) {
     pendingExplore: null,
     omenCount: 0,
     hauntTriggered: false,
+    drawnCard: null,
     turnNumber: 1,
     message: `${players[0].name}'s turn — ${players[0].character.speed[players[0].character.startIndex.speed]} moves`,
   };
@@ -380,9 +381,25 @@ export default function GameBoard({ players, onQuit }) {
 
       let message = `${p.name} placed ${pe.tile.name}!`;
       let turnPhase = "move";
+      let drawnCard = null;
+      let newOmenCount = g.omenCount;
 
       if (pe.tile.cardType) {
-        message += ` Draw an ${pe.tile.cardType} card.`;
+        const cardType = pe.tile.cardType;
+        drawnCard = {
+          type: cardType,
+          name: cardType === "omen" ? "Bite" : cardType === "event" ? "Angry Being" : "Amulet of the Ages",
+          description: cardType === "omen"
+            ? "Something bit you. You can't see any marks, but you feel different..."
+            : cardType === "event"
+            ? "A force of rage rushes through the room. Every living thing trembles."
+            : "You find a strange amulet glowing with an eerie light.",
+          flavor: "(Placeholder card — real cards coming soon)",
+        };
+        if (cardType === "omen") {
+          newOmenCount++;
+        }
+        message += ` A${cardType === "omen" || cardType === "event" ? "n" : ""} ${cardType} card appears...`;
         turnPhase = "card";
       } else {
         message += ` ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`;
@@ -394,33 +411,29 @@ export default function GameBoard({ players, onQuit }) {
         tileStack: newStack,
         movePath: [{ x: p.x, y: p.y, floor: p.floor }],
         pendingExplore: null,
+        omenCount: newOmenCount,
+        drawnCard,
         turnPhase,
         message,
       };
     });
   }
 
-  // Draw card (placeholder — just acknowledge it for now)
-  function handleDrawCard() {
+  // Dismiss drawn card and continue
+  function handleDismissCard() {
     setGame((g) => {
-      const tile = getTileAt(currentPlayer.x, currentPlayer.y, currentPlayer.floor);
-      let newOmenCount = g.omenCount;
+      const card = g.drawnCard;
       let message = "";
-
-      if (tile?.cardType === "omen") {
-        newOmenCount++;
-        message = `Omen drawn! (${newOmenCount}/13) — Roll for haunt...`;
-        // Simple haunt check: roll 6 dice, if total < omen count, haunt starts
-        // For now just track oment count
-      } else if (tile?.cardType === "event") {
+      if (card?.type === "omen") {
+        message = `Omen acknowledged! (${g.omenCount}/13)`;
+      } else if (card?.type === "event") {
         message = "Event resolved.";
-      } else if (tile?.cardType === "item") {
+      } else if (card?.type === "item") {
         message = "Item collected!";
       }
-
       return {
         ...g,
-        omenCount: newOmenCount,
+        drawnCard: null,
         turnPhase: "endTurn",
         message,
       };
@@ -768,12 +781,7 @@ export default function GameBoard({ players, onQuit }) {
             </button>
           </>
         )}
-        {game.turnPhase === "card" && (
-          <button className="btn btn-primary" onClick={handleDrawCard}>
-            Draw Card
-          </button>
-        )}
-        {(game.turnPhase === "endTurn" || game.turnPhase === "move" || game.turnPhase === "card") && (
+        {(game.turnPhase === "endTurn" || game.turnPhase === "move") && !game.pendingExplore && (
           <button className="btn btn-primary" onClick={handleEndTurn}>
             End Turn — Pass to {game.players[(game.currentPlayerIndex + 1) % game.players.length].name}
           </button>
@@ -807,6 +815,21 @@ export default function GameBoard({ players, onQuit }) {
           Quit Game
         </button>
       </div>
+
+      {/* Card overlay */}
+      {game.drawnCard && (
+        <div className="card-overlay">
+          <div className={`card-modal card-${game.drawnCard.type}`}>
+            <div className="card-type-label">{game.drawnCard.type.toUpperCase()}</div>
+            <h2 className="card-name">{game.drawnCard.name}</h2>
+            <p className="card-description">{game.drawnCard.description}</p>
+            <p className="card-flavor">{game.drawnCard.flavor}</p>
+            <button className="btn btn-primary" onClick={handleDismissCard}>
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

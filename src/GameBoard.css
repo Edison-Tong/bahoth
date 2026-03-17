@@ -514,3 +514,73 @@
   background: var(--accent);
   color: #fff;
 }
+
+/* ========== CARD OVERLAY ========== */
+.card-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.card-modal {
+  width: 320px;
+  padding: 2rem;
+  border-radius: 12px;
+  text-align: center;
+  border: 3px solid;
+  font-family: Georgia, serif;
+}
+
+.card-omen {
+  background: #2a1a2a;
+  border-color: #8e44ad;
+}
+
+.card-event {
+  background: #2a2219;
+  border-color: #d4a017;
+}
+
+.card-item {
+  background: #1a2a1a;
+  border-color: #27ae60;
+}
+
+.card-type-label {
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+  opacity: 0.7;
+}
+
+.card-omen .card-type-label { color: #8e44ad; }
+.card-event .card-type-label { color: #d4a017; }
+.card-item .card-type-label { color: #27ae60; }
+
+.card-name {
+  font-size: 1.5rem;
+  margin: 0 0 1rem;
+  color: #e8dcc8;
+}
+
+.card-description {
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #c4b69c;
+  margin: 0 0 1rem;
+}
+
+.card-flavor {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: #887a66;
+  margin: 0 0 1.5rem;
+}
