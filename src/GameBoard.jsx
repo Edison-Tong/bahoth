@@ -12,6 +12,28 @@ const DIR = {
 
 const OPPOSITE = { N: "S", S: "N", E: "W", W: "E" };
 
+const DAMAGE_STATS = {
+  physical: ["might", "speed"],
+  mental: ["sanity", "knowledge"],
+  general: ["might", "speed", "sanity", "knowledge"],
+};
+
+const STAT_LABELS = {
+  might: "Might",
+  speed: "Speed",
+  sanity: "Sanity",
+  knowledge: "Knowledge",
+};
+
+const STAT_ICONS = {
+  might: "💪",
+  speed: "🏃",
+  sanity: "🧠",
+  knowledge: "📖",
+};
+
+const PLAYER_STAT_ORDER = ["might", "speed", "sanity", "knowledge"];
+
 const TILE_SIZE = 100;
 const GAP = 4;
 
@@ -29,9 +51,9 @@ function initGameState(players) {
   const tileStack = createTileStack();
 
   // Ground floor starts with 3 tiles in a vertical line:
-  // Entrance Hall (0,0) — Foyer (0,-1) — Grand Staircase (0,-2)
+  // Entrance Hall (0,0) — Hallway (0,-1) — Grand Staircase (0,-2)
   const entrance = { ...STARTING_TILES[0], x: 0, y: 0, floor: "ground" };
-  const foyer = { ...STARTING_TILES[1], x: 0, y: -1, floor: "ground" };
+  const hallway = { ...STARTING_TILES[1], x: 0, y: -1, floor: "ground" };
   const grandStaircase = { ...STARTING_TILES[2], x: 0, y: -2, floor: "ground" };
   const upperLanding = { ...STARTING_TILES[3], x: 0, y: 0, floor: "upper" };
   const basementLanding = { ...STARTING_TILES[4], x: 0, y: 0, floor: "basement" };
@@ -53,7 +75,7 @@ function initGameState(players) {
       };
     }),
     board: {
-      ground: [entrance, foyer, grandStaircase],
+      ground: [entrance, hallway, grandStaircase],
       upper: [upperLanding],
       basement: [basementLanding],
     },
@@ -66,6 +88,8 @@ function initGameState(players) {
     hauntTriggered: false,
     drawnCard: null,
     hauntRoll: null,
+    tileEffect: null,
+    damageChoice: null,
     turnNumber: 1,
     message: `${players[0].name}'s turn — ${players[0].character.speed[players[0].character.startIndex.speed]} moves`,
   };
@@ -101,20 +125,82 @@ export default function GameBoard({ players, onQuit }) {
       const da = diceAnimRef.current;
       if (!da) return;
       const total = da.final.reduce((a, b) => a + b, 0);
-      const hauntTriggered = total >= 5;
-      setGame((g) => ({
-        ...g,
-        hauntRoll: {
-          dice: da.final,
-          total,
-          omenCount: da.omenCount,
-          hauntTriggered,
-        },
-        hauntTriggered: g.hauntTriggered || hauntTriggered,
-        message: hauntTriggered
-          ? `THE HAUNT BEGINS! Rolled ${total} with ${da.omenCount} dice!`
-          : `Safe... Rolled ${total} with ${da.omenCount} dice.`,
-      }));
+
+      if (da.purpose === "haunt") {
+        const hauntTriggered = total >= 5;
+        setGame((g) => ({
+          ...g,
+          hauntRoll: {
+            dice: da.final,
+            total,
+            omenCount: da.omenCount,
+            hauntTriggered,
+          },
+          hauntTriggered: g.hauntTriggered || hauntTriggered,
+          message: hauntTriggered
+            ? `THE HAUNT BEGINS! Rolled ${total} with ${da.omenCount} dice!`
+            : `Safe... Rolled ${total} with ${da.omenCount} dice.`,
+        }));
+      } else if (da.purpose === "collapsed") {
+        const collapsed = total < 5;
+        if (collapsed) {
+          // Show first roll result and wait for user to trigger damage roll
+          setGame((g) => ({
+            ...g,
+            tileEffect: {
+              type: "collapsed-pending",
+              tileName: da.tileName,
+              dice: da.final,
+              total,
+              message: `The floor gives way! Rolled ${total} (needed 5+). Press Roll to roll for damage.`,
+            },
+          }));
+        } else {
+          setGame((g) => ({
+            ...g,
+            tileEffect: {
+              type: "collapsed",
+              tileName: da.tileName,
+              dice: da.final,
+              total,
+              collapsed: false,
+              damageDice: [],
+              damage: 0,
+              message: `The floor holds! Rolled ${total} (needed 5+). Safe!`,
+            },
+          }));
+        }
+      } else if (da.purpose === "collapsed-damage") {
+        const damage = da.final[0];
+        setGame((g) => ({
+          ...g,
+          tileEffect: {
+            type: "collapsed",
+            tileName: da.tileName,
+            dice: da.firstDice,
+            total: da.firstTotal,
+            collapsed: true,
+            damageType: "physical",
+            damageDice: da.final,
+            damage,
+            message: `The floor gives way! Rolled ${da.firstTotal} (needed 5+). Fall to Basement Landing and take ${damage} physical damage.`,
+          },
+        }));
+      } else if (da.purpose === "furnace") {
+        const damage = da.final[0];
+        setGame((g) => ({
+          ...g,
+          tileEffect: {
+            type: "furnace",
+            tileName: da.tileName,
+            dice: da.final,
+            damageType: "physical",
+            damage,
+            message:
+              damage > 0 ? `The furnace burns! Take ${damage} physical damage.` : "The furnace sputters — no damage!",
+          },
+        }));
+      }
     }, 2000);
 
     return () => {
@@ -488,6 +574,7 @@ export default function GameBoard({ players, onQuit }) {
         const numDice = g.omenCount;
         const finalDice = rollDice(numDice);
         setDiceAnimation({
+          purpose: "haunt",
           final: finalDice,
           display: Array.from({ length: numDice }, () => Math.floor(Math.random() * 3)),
           omenCount: g.omenCount,
@@ -596,34 +683,257 @@ export default function GameBoard({ players, onQuit }) {
   // End turn
   function handleEndTurn() {
     setGame((g) => {
-      let next = (g.currentPlayerIndex + 1) % g.players.length;
-      // Skip dead players
-      let attempts = 0;
-      while (!g.players[next].isAlive && attempts < g.players.length) {
-        next = (next + 1) % g.players.length;
-        attempts++;
+      const p = g.players[g.currentPlayerIndex];
+      const tile = g.board[p.floor]?.find((t) => t.x === p.x && t.y === p.y);
+
+      // Check for end-of-turn tile effects
+      if (tile?.endOfTurn && !g.tileEffect) {
+        if (tile.endOfTurn === "furnace") {
+          const finalDice = rollDice(1);
+          setDiceAnimation({
+            purpose: "furnace",
+            final: finalDice,
+            display: Array.from({ length: 1 }, () => Math.floor(Math.random() * 3)),
+            tileName: tile.name,
+            settled: false,
+          });
+          return { ...g, message: `${tile.name} — rolling for damage...` };
+        }
+        if (tile.endOfTurn === "collapsed") {
+          const speedVal = p.character.speed[p.statIndex.speed];
+          const finalDice = rollDice(speedVal);
+          setDiceAnimation({
+            purpose: "collapsed",
+            final: finalDice,
+            display: Array.from({ length: speedVal }, () => Math.floor(Math.random() * 3)),
+            tileName: tile.name,
+            settled: false,
+          });
+          return { ...g, message: `${tile.name} — rolling for stability...` };
+        }
+        if (tile.endOfTurn === "laundry-chute") {
+          return {
+            ...g,
+            tileEffect: {
+              type: "laundry-chute",
+              tileName: tile.name,
+              message: "You slide down the laundry chute to the Basement Landing!",
+            },
+          };
+        }
       }
 
-      const nextPlayer = g.players[next];
-      const speed = nextPlayer.character.speed[nextPlayer.statIndex.speed];
-      const updatedPlayers = g.players.map((pl, i) => (i === next ? { ...pl, movesLeft: speed } : pl));
+      return passTurn(g);
+    });
+  }
 
-      setCameraFloor(nextPlayer.floor);
+  function createDamageChoice(effect, player) {
+    const damageType = effect.damageType || "physical";
+    const allowedStats = DAMAGE_STATS[damageType] || DAMAGE_STATS.physical;
+    const allocation = Object.fromEntries(allowedStats.map((stat) => [stat, 0]));
+
+    return {
+      source: "tile-effect",
+      effect,
+      damageType,
+      adjustmentMode: "decrease",
+      amount: effect.damage,
+      allowedStats,
+      allocation,
+      playerName: player.name,
+    };
+  }
+
+  function applyDamageAllocation(players, playerIndex, allocation) {
+    return players.map((pl, i) => {
+      if (i !== playerIndex) return pl;
+      const newStatIndex = { ...pl.statIndex };
+      for (const [stat, amount] of Object.entries(allocation)) {
+        if (!amount) continue;
+        newStatIndex[stat] = Math.max(0, newStatIndex[stat] - amount);
+      }
+
+      const isAlive = Object.values(newStatIndex).every((value) => value > 0);
+      return { ...pl, statIndex: newStatIndex, isAlive };
+    });
+  }
+
+  function applyTileEffectConsequences(g, players, effect) {
+    let updatedPlayers = [...players];
+    const pi = g.currentPlayerIndex;
+
+    if (effect.type === "collapsed" && effect.collapsed) {
+      const basementLanding = g.board.basement?.find((t) => t.id === "basement-landing");
+      if (basementLanding) {
+        updatedPlayers = updatedPlayers.map((pl, i) =>
+          i === pi ? { ...pl, x: basementLanding.x, y: basementLanding.y, floor: "basement" } : pl
+        );
+      }
+    }
+
+    if (effect.type === "laundry-chute") {
+      const basementLanding = g.board.basement?.find((t) => t.id === "basement-landing");
+      if (basementLanding) {
+        updatedPlayers = updatedPlayers.map((pl, i) =>
+          i === pi ? { ...pl, x: basementLanding.x, y: basementLanding.y, floor: "basement" } : pl
+        );
+      }
+    }
+
+    return updatedPlayers;
+  }
+
+  function handleAdjustDamageAllocation(stat, delta) {
+    setGame((g) => {
+      const choice = g.damageChoice;
+      if (!choice || !choice.allowedStats.includes(stat)) return g;
+
+      const currentPlayerState = g.players[g.currentPlayerIndex];
+      const currentAmount = choice.allocation[stat] || 0;
+      const selectedTotal = Object.values(choice.allocation).reduce((sum, value) => sum + value, 0);
+      const maxForStat = currentPlayerState.statIndex[stat];
+
+      if (delta > 0) {
+        if (selectedTotal >= choice.amount) return g;
+        if (currentAmount >= maxForStat) return g;
+      }
+
+      if (delta < 0 && currentAmount <= 0) return g;
 
       return {
         ...g,
-        players: updatedPlayers,
-        currentPlayerIndex: next,
-        turnPhase: "move",
-        movePath: [{ x: nextPlayer.x, y: nextPlayer.y, floor: nextPlayer.floor }],
-        pendingExplore: null,
-        turnNumber: g.turnNumber + (next === 0 ? 1 : 0),
-        message: `${nextPlayer.name}'s turn — ${speed} moves`,
+        damageChoice: {
+          ...choice,
+          allocation: {
+            ...choice.allocation,
+            [stat]: Math.max(0, currentAmount + delta),
+          },
+        },
       };
     });
   }
 
+  function handleConfirmDamageChoice() {
+    setGame((g) => {
+      const choice = g.damageChoice;
+      if (!choice) return g;
+
+      const selectedTotal = Object.values(choice.allocation).reduce((sum, value) => sum + value, 0);
+      if (selectedTotal !== choice.amount) return g;
+
+      const damagedPlayers = applyDamageAllocation(g.players, g.currentPlayerIndex, choice.allocation);
+      const resolvedPlayers = applyTileEffectConsequences(g, damagedPlayers, choice.effect);
+
+      return passTurn({
+        ...g,
+        players: resolvedPlayers,
+        tileEffect: null,
+        damageChoice: null,
+      });
+    });
+    setDiceAnimation(null);
+  }
+
+  function getDamagePreview(player, choice) {
+    const preview = { ...player.statIndex };
+    if (!choice) return preview;
+
+    for (const [stat, amount] of Object.entries(choice.allocation)) {
+      if (choice.adjustmentMode === "increase") {
+        const maxIndex = player.character[stat].length - 1;
+        preview[stat] = Math.min(maxIndex, preview[stat] + amount);
+      } else {
+        preview[stat] = Math.max(0, preview[stat] - amount);
+      }
+    }
+    return preview;
+  }
+
+  function getStatTrackCellClass(index, currentIndex, previewIndex) {
+    if (index === currentIndex && index === previewIndex) {
+      return "stat-track-cell stat-track-cell-current";
+    }
+    if (index === currentIndex) return "stat-track-cell stat-track-cell-current";
+    if (index === previewIndex) return "stat-track-cell stat-track-cell-preview";
+    if (index < previewIndex) return "stat-track-cell stat-track-cell-spent";
+    return "stat-track-cell";
+  }
+
+  function handleDismissTileEffect() {
+    setGame((g) => {
+      const effect = g.tileEffect;
+      if (!effect) return passTurn(g);
+
+      const pi = g.currentPlayerIndex;
+      const currentPlayerState = g.players[pi];
+
+      if (effect.damage > 0 && effect.damageType) {
+        return {
+          ...g,
+          tileEffect: null,
+          damageChoice: createDamageChoice(effect, currentPlayerState),
+        };
+      }
+
+      const updatedPlayers = applyTileEffectConsequences(g, g.players, effect);
+      return passTurn({ ...g, players: updatedPlayers, tileEffect: null, damageChoice: null });
+    });
+    setDiceAnimation(null);
+  }
+
+  function handleStartCollapsedDamage() {
+    const te = game.tileEffect;
+    if (!te || te.type !== "collapsed-pending") return;
+    const damageFinal = rollDice(1);
+    // clear the pending effect and start the damage animation
+    setGame((g) => ({ ...g, tileEffect: null }));
+    setDiceAnimation({
+      purpose: "collapsed-damage",
+      final: damageFinal,
+      display: Array.from({ length: 1 }, () => Math.floor(Math.random() * 3)),
+      settled: false,
+      tileName: te.tileName,
+      firstDice: te.dice,
+      firstTotal: te.total,
+    });
+  }
+
+  function passTurn(g) {
+    let next = (g.currentPlayerIndex + 1) % g.players.length;
+    // Skip dead players
+    let attempts = 0;
+    while (!g.players[next].isAlive && attempts < g.players.length) {
+      next = (next + 1) % g.players.length;
+      attempts++;
+    }
+
+    const nextPlayer = g.players[next];
+    const speed = nextPlayer.character.speed[nextPlayer.statIndex.speed];
+    const updatedPlayers = g.players.map((pl, i) => (i === next ? { ...pl, movesLeft: speed } : pl));
+
+    setCameraFloor(nextPlayer.floor);
+
+    return {
+      ...g,
+      players: updatedPlayers,
+      currentPlayerIndex: next,
+      turnPhase: "move",
+      movePath: [{ x: nextPlayer.x, y: nextPlayer.y, floor: nextPlayer.floor }],
+      pendingExplore: null,
+      tileEffect: null,
+      damageChoice: null,
+      turnNumber: g.turnNumber + (next === 0 ? 1 : 0),
+      message: `${nextPlayer.name}'s turn — ${speed} moves`,
+    };
+  }
+
   const validMoves = cameraFloor === currentPlayer.floor ? getValidMoves() : [];
+  const damageChoice = game.damageChoice;
+  const damageAllocated = damageChoice
+    ? Object.values(damageChoice.allocation).reduce((sum, value) => sum + value, 0)
+    : 0;
+  const damageRemaining = damageChoice ? damageChoice.amount - damageAllocated : 0;
+  const damagePreview = damageChoice ? getDamagePreview(currentPlayer, damageChoice) : null;
 
   // Check if current player is on a staircase tile
   const currentTileObj = game.board[currentPlayer.floor]?.find(
@@ -884,10 +1194,31 @@ export default function GameBoard({ players, onQuit }) {
               </div>
               <div className="sidebar-char">{p.character.name}</div>
               <div className="sidebar-stats">
-                <span>💪{p.character.might[p.statIndex.might]}</span>
-                <span>🏃{p.character.speed[p.statIndex.speed]}</span>
-                <span>🧠{p.character.sanity[p.statIndex.sanity]}</span>
-                <span>📖{p.character.knowledge[p.statIndex.knowledge]}</span>
+                {PLAYER_STAT_ORDER.map((stat) => (
+                  <div key={`${p.name}-${stat}`} className="sidebar-stat-row">
+                    <div className="sidebar-stat-label">
+                      <span>{STAT_ICONS[stat]}</span>
+                      <span>{STAT_LABELS[stat]}</span>
+                    </div>
+                    <div className="sidebar-stat-track" aria-label={`${p.name} ${STAT_LABELS[stat]} track`}>
+                      {p.character[stat].map((value, index) => (
+                        <div
+                          key={`${p.name}-${stat}-${index}`}
+                          className={[
+                            "sidebar-stat-cell",
+                            index === p.statIndex[stat] ? "sidebar-stat-cell-current" : "",
+                            index === p.character.startIndex[stat] ? "sidebar-stat-cell-start" : "",
+                            value === 0 ? "sidebar-stat-cell-zero" : "",
+                          ]
+                            .filter(Boolean)
+                            .join(" ")}
+                        >
+                          {value}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           );
@@ -912,11 +1243,21 @@ export default function GameBoard({ players, onQuit }) {
         </div>
       )}
 
-      {/* Haunt roll overlay — animating */}
+      {/* Dice roll overlay — animating */}
       {diceAnimation && !diceAnimation.settled && (
         <div className="card-overlay">
-          <div className="card-modal card-haunt-rolling">
-            <div className="card-type-label">HAUNT ROLL</div>
+          <div
+            className={`card-modal ${diceAnimation.purpose === "haunt" ? "card-haunt-rolling" : "card-tile-rolling"}`}
+          >
+            <div className="card-type-label">
+              {diceAnimation.purpose === "haunt"
+                ? "HAUNT ROLL"
+                : diceAnimation.purpose === "collapsed"
+                  ? "COLLAPSED ROOM"
+                  : diceAnimation.purpose === "collapsed-damage"
+                    ? "COLLAPSED ROOM — DAMAGE"
+                    : "FURNACE ROOM"}
+            </div>
             <div className="dice-container">
               {diceAnimation.display.map((d, i) => (
                 <div key={i} className="die die-rolling">
@@ -930,7 +1271,7 @@ export default function GameBoard({ players, onQuit }) {
       )}
 
       {/* Haunt roll overlay — settled */}
-      {game.hauntRoll && diceAnimation?.settled && (
+      {game.hauntRoll && diceAnimation?.settled && diceAnimation.purpose === "haunt" && (
         <div className="card-overlay">
           <div className={`card-modal ${game.hauntRoll.hauntTriggered ? "card-haunt-triggered" : "card-haunt-safe"}`}>
             <div className="card-type-label">HAUNT ROLL</div>
@@ -951,6 +1292,129 @@ export default function GameBoard({ players, onQuit }) {
             </p>
             <button className="btn btn-primary" onClick={handleDismissHauntRoll}>
               Continue
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Tile effect overlay */}
+      {game.tileEffect && (
+        <div className="card-overlay">
+          <div
+            className={`card-modal card-tile-effect ${game.tileEffect.type === "laundry-chute" ? "card-tile-neutral" : game.tileEffect.type === "collapsed-pending" ? "card-tile-danger" : game.tileEffect.damage > 0 || game.tileEffect.collapsed ? "card-tile-danger" : "card-tile-safe"}`}
+          >
+            <div className="card-type-label">{game.tileEffect.tileName}</div>
+            {game.tileEffect.dice && (
+              <div className="dice-container">
+                {game.tileEffect.dice.map((d, i) => (
+                  <div key={i} className="die">
+                    {d}
+                  </div>
+                ))}
+              </div>
+            )}
+            {game.tileEffect.total !== undefined && <div className="dice-total">Total: {game.tileEffect.total}</div>}
+            {game.tileEffect.collapsed && game.tileEffect.damageDice.length > 0 && (
+              <>
+                <div className="dice-total" style={{ marginTop: "0.5rem" }}>
+                  Damage roll:
+                </div>
+                <div className="dice-container">
+                  {game.tileEffect.damageDice.map((d, i) => (
+                    <div key={i} className="die">
+                      {d}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+            <p className="card-description">{game.tileEffect.message}</p>
+            {game.tileEffect.type === "collapsed-pending" ? (
+              <button className="btn btn-primary" onClick={handleStartCollapsedDamage}>
+                Roll for damage
+              </button>
+            ) : (
+              <button className="btn btn-primary" onClick={handleDismissTileEffect}>
+                Continue
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Damage choice overlay */}
+      {damageChoice && (
+        <div className="card-overlay">
+          <div className="card-modal card-damage-choice">
+            <div className="card-type-label">{damageChoice.damageType.toUpperCase()} DAMAGE</div>
+            <h2 className="card-name">Choose where the damage goes</h2>
+            <p className="card-description">
+              Assign {damageChoice.amount} point{damageChoice.amount === 1 ? "" : "s"} of {damageChoice.damageType}{" "}
+              damage to {damageChoice.playerName}.
+            </p>
+            <p className="damage-choice-hint">
+              Use {damageChoice.adjustmentMode === "increase" ? "+" : "-"} to assign this change to a trait.
+            </p>
+            <div className="damage-choice-status">
+              <span>Assigned: {damageAllocated}</span>
+              <span>Remaining: {damageRemaining}</span>
+            </div>
+            <div className="damage-choice-list">
+              {damageChoice.allowedStats.map((stat) => {
+                const assigned = damageChoice.allocation[stat] || 0;
+                const currentIndex = currentPlayer.statIndex[stat];
+                const previewIndex = damagePreview[stat];
+                const maxIncrease = currentPlayer.character[stat].length - 1 - currentIndex;
+                const canAllocate =
+                  damageChoice.adjustmentMode === "increase"
+                    ? damageRemaining > 0 && assigned < maxIncrease
+                    : damageRemaining > 0 && assigned < currentIndex;
+                const canUndo = assigned > 0;
+                const allocateButtonLabel = damageChoice.adjustmentMode === "increase" ? "+" : "-";
+                const undoButtonLabel = damageChoice.adjustmentMode === "increase" ? "-" : "+";
+
+                return (
+                  <div key={stat} className="damage-choice-row">
+                    <div className="damage-choice-stat">
+                      <div className="damage-choice-stat-header">
+                        <div className="damage-choice-stat-name">{STAT_LABELS[stat]}</div>
+                      </div>
+                      <div className="stat-track-numbers" aria-label={`${STAT_LABELS[stat]} track`}>
+                        {currentPlayer.character[stat].map((value, index) => (
+                          <div
+                            key={`${stat}-${index}`}
+                            className={getStatTrackCellClass(index, currentIndex, previewIndex)}
+                          >
+                            {value}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="damage-choice-controls">
+                      <button
+                        className="btn btn-primary damage-choice-button"
+                        onClick={() => handleAdjustDamageAllocation(stat, 1)}
+                        disabled={!canAllocate}
+                        aria-label={`${allocateButtonLabel} ${STAT_LABELS[stat]}`}
+                      >
+                        {allocateButtonLabel}
+                      </button>
+                      <div className="damage-choice-count">{assigned}</div>
+                      <button
+                        className="btn btn-secondary damage-choice-button"
+                        onClick={() => handleAdjustDamageAllocation(stat, -1)}
+                        disabled={!canUndo}
+                        aria-label={`${undoButtonLabel} ${STAT_LABELS[stat]}`}
+                      >
+                        {undoButtonLabel}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <button className="btn btn-primary" onClick={handleConfirmDamageChoice} disabled={damageRemaining !== 0}>
+              Apply damage
             </button>
           </div>
         </div>
