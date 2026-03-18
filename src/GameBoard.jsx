@@ -15,6 +15,15 @@ const OPPOSITE = { N: "S", S: "N", E: "W", W: "E" };
 const TILE_SIZE = 100;
 const GAP = 4;
 
+// Roll n dice (each die: 0, 1, or 2 with equal probability)
+function rollDice(n) {
+  const results = [];
+  for (let i = 0; i < n; i++) {
+    results.push(Math.floor(Math.random() * 3));
+  }
+  return results;
+}
+
 // Initialize game state from players
 function initGameState(players) {
   const tileStack = createTileStack();
@@ -56,6 +65,7 @@ function initGameState(players) {
     omenCount: 0,
     hauntTriggered: false,
     drawnCard: null,
+    hauntRoll: null,
     turnNumber: 1,
     message: `${players[0].name}'s turn — ${players[0].character.speed[players[0].character.startIndex.speed]} moves`,
   };
@@ -64,7 +74,55 @@ function initGameState(players) {
 export default function GameBoard({ players, onQuit }) {
   const [game, setGame] = useState(() => initGameState(players));
   const [cameraFloor, setCameraFloor] = useState("ground");
+  const [diceAnimation, setDiceAnimation] = useState(null);
+  const diceAnimRef = useRef(null);
   const boardRef = useRef(null);
+
+  // Dice rolling animation
+  useEffect(() => {
+    if (!diceAnimation || diceAnimation.settled) return;
+    diceAnimRef.current = diceAnimation;
+
+    const interval = setInterval(() => {
+      setDiceAnimation((prev) => {
+        if (!prev || prev.settled) return prev;
+        return {
+          ...prev,
+          display: Array.from({ length: prev.final.length }, () => Math.floor(Math.random() * 3)),
+        };
+      });
+    }, 80);
+
+    const timeout = setTimeout(() => {
+      setDiceAnimation((prev) => {
+        if (!prev) return prev;
+        return { ...prev, display: prev.final, settled: true };
+      });
+      const da = diceAnimRef.current;
+      if (!da) return;
+      const total = da.final.reduce((a, b) => a + b, 0);
+      const hauntTriggered = total >= 5;
+      setGame((g) => ({
+        ...g,
+        hauntRoll: {
+          dice: da.final,
+          total,
+          omenCount: da.omenCount,
+          hauntTriggered,
+        },
+        hauntTriggered: g.hauntTriggered || hauntTriggered,
+        message: hauntTriggered
+          ? `THE HAUNT BEGINS! Rolled ${total} with ${da.omenCount} dice!`
+          : `Safe... Rolled ${total} with ${da.omenCount} dice.`,
+      }));
+    }, 2000);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diceAnimation?.settled]);
 
   const currentPlayer = game.players[game.currentPlayerIndex];
   const floorTiles = game.board[cameraFloor] || [];
@@ -389,11 +447,12 @@ export default function GameBoard({ players, onQuit }) {
         drawnCard = {
           type: cardType,
           name: cardType === "omen" ? "Bite" : cardType === "event" ? "Angry Being" : "Amulet of the Ages",
-          description: cardType === "omen"
-            ? "Something bit you. You can't see any marks, but you feel different..."
-            : cardType === "event"
-            ? "A force of rage rushes through the room. Every living thing trembles."
-            : "You find a strange amulet glowing with an eerie light.",
+          description:
+            cardType === "omen"
+              ? "Something bit you. You can't see any marks, but you feel different..."
+              : cardType === "event"
+                ? "A force of rage rushes through the room. Every living thing trembles."
+                : "You find a strange amulet glowing with an eerie light.",
           flavor: "(Placeholder card — real cards coming soon)",
         };
         if (cardType === "omen") {
@@ -423,10 +482,26 @@ export default function GameBoard({ players, onQuit }) {
   function handleDismissCard() {
     setGame((g) => {
       const card = g.drawnCard;
-      let message = "";
+
+      // Omen cards trigger a haunt roll animation
       if (card?.type === "omen") {
-        message = `Omen acknowledged! (${g.omenCount}/13)`;
-      } else if (card?.type === "event") {
+        const numDice = g.omenCount;
+        const finalDice = rollDice(numDice);
+        setDiceAnimation({
+          final: finalDice,
+          display: Array.from({ length: numDice }, () => Math.floor(Math.random() * 3)),
+          omenCount: g.omenCount,
+          settled: false,
+        });
+        return {
+          ...g,
+          drawnCard: null,
+          message: "Rolling for haunt...",
+        };
+      }
+
+      let message = "";
+      if (card?.type === "event") {
         message = "Event resolved.";
       } else if (card?.type === "item") {
         message = "Item collected!";
@@ -438,6 +513,15 @@ export default function GameBoard({ players, onQuit }) {
         message,
       };
     });
+  }
+
+  function handleDismissHauntRoll() {
+    setDiceAnimation(null);
+    setGame((g) => ({
+      ...g,
+      hauntRoll: null,
+      turnPhase: "endTurn",
+    }));
   }
 
   // Change floor via staircase
@@ -602,8 +686,6 @@ export default function GameBoard({ players, onQuit }) {
           </span>
         </div>
         <div className="game-header-right">
-          <span className="omen-badge">Omens: {game.omenCount}/13</span>
-          <span className="tile-count">{game.tileStack.length} tiles left</span>
         </div>
       </div>
 
@@ -615,7 +697,7 @@ export default function GameBoard({ players, onQuit }) {
         <div className="board-scroll">
           <div className="board-grid" style={{ width: gridWidth, height: gridHeight }}>
             {/* Movement path line */}
-            {cameraFloor === currentPlayer.floor && game.movePath.length >= 2 && (
+            {game.movePath.filter((p) => p.floor === cameraFloor).length >= 2 && (
               <svg className="path-svg" style={{ width: gridWidth, height: gridHeight }}>
                 <polyline
                   points={game.movePath
@@ -825,6 +907,50 @@ export default function GameBoard({ players, onQuit }) {
             <p className="card-description">{game.drawnCard.description}</p>
             <p className="card-flavor">{game.drawnCard.flavor}</p>
             <button className="btn btn-primary" onClick={handleDismissCard}>
+              {game.drawnCard.type === "omen" ? "Roll for Haunt" : "Continue"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Haunt roll overlay — animating */}
+      {diceAnimation && !diceAnimation.settled && (
+        <div className="card-overlay">
+          <div className="card-modal card-haunt-rolling">
+            <div className="card-type-label">HAUNT ROLL</div>
+            <div className="dice-container">
+              {diceAnimation.display.map((d, i) => (
+                <div key={i} className="die die-rolling">{d}</div>
+              ))}
+            </div>
+            <h2 className="card-name">Rolling...</h2>
+          </div>
+        </div>
+      )}
+
+      {/* Haunt roll overlay — settled */}
+      {game.hauntRoll && diceAnimation?.settled && (
+        <div className="card-overlay">
+          <div className={`card-modal ${game.hauntRoll.hauntTriggered ? "card-haunt-triggered" : "card-haunt-safe"}`}>
+            <div className="card-type-label">HAUNT ROLL</div>
+            <div className="dice-container">
+              {game.hauntRoll.dice.map((d, i) => (
+                <div key={i} className="die">{d}</div>
+              ))}
+            </div>
+            <div className="dice-total">Total: {game.hauntRoll.total}</div>
+            <div className="dice-target">Need less than 5 to be safe</div>
+            <h2 className="card-name">
+              {game.hauntRoll.hauntTriggered
+                ? "THE HAUNT BEGINS!"
+                : "Safe... for now."}
+            </h2>
+            <p className="card-description">
+              {game.hauntRoll.hauntTriggered
+                ? `Rolled ${game.hauntRoll.total} with ${game.hauntRoll.omenCount} dice — 5 or higher! The haunt is upon you!`
+                : `Rolled ${game.hauntRoll.total} with ${game.hauntRoll.omenCount} dice — less than 5. The house spares you... for now.`}
+            </p>
+            <button className="btn btn-primary" onClick={handleDismissHauntRoll}>
               Continue
             </button>
           </div>

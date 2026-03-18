@@ -584,3 +584,81 @@
   color: #887a66;
   margin: 0 0 1.5rem;
 }
+
+/* Haunt roll card styles */
+.card-haunt-safe {
+  background: #1a2a2a;
+  border-color: #2ecc71;
+}
+
+.card-haunt-triggered {
+  background: #2a1010;
+  border-color: #c0392b;
+  animation: haunt-pulse 1s ease-in-out infinite alternate;
+}
+
+@keyframes haunt-pulse {
+  from { box-shadow: 0 0 20px rgba(192, 57, 43, 0.3); }
+  to { box-shadow: 0 0 40px rgba(192, 57, 43, 0.7); }
+}
+
+.card-haunt-safe .card-type-label { color: #2ecc71; }
+.card-haunt-triggered .card-type-label { color: #c0392b; }
+
+/* Dice */
+.dice-container {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin: 1rem 0;
+  flex-wrap: wrap;
+}
+
+.die {
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  font-weight: bold;
+  color: #e8dcc8;
+  background: #1a1210;
+  border: 2px solid #555;
+  border-radius: 8px;
+}
+
+.die-rolling {
+  animation: die-shake 0.1s ease-in-out infinite alternate;
+}
+
+.die-rolling:nth-child(2) { animation-delay: 0.02s; }
+.die-rolling:nth-child(3) { animation-delay: 0.04s; }
+.die-rolling:nth-child(4) { animation-delay: 0.06s; }
+.die-rolling:nth-child(5) { animation-delay: 0.08s; }
+.die-rolling:nth-child(6) { animation-delay: 0.1s; }
+
+@keyframes die-shake {
+  from { transform: translateY(-2px) rotate(-3deg); }
+  to { transform: translateY(2px) rotate(3deg); }
+}
+
+.card-haunt-rolling {
+  background: #1a1a2a;
+  border-color: #887a66;
+}
+
+.card-haunt-rolling .card-type-label { color: #887a66; }
+
+.dice-total {
+  font-size: 1.3rem;
+  font-weight: bold;
+  color: #e8dcc8;
+  margin: 0.5rem 0 0.25rem;
+}
+
+.dice-target {
+  font-size: 1rem;
+  color: #887a66;
+  margin-bottom: 1rem;
+}
