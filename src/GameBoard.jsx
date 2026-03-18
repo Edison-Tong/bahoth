@@ -121,7 +121,7 @@ export default function GameBoard({ players, onQuit }) {
       clearInterval(interval);
       clearTimeout(timeout);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [diceAnimation?.settled]);
 
   const currentPlayer = game.players[game.currentPlayerIndex];
@@ -685,8 +685,7 @@ export default function GameBoard({ players, onQuit }) {
             ))}
           </span>
         </div>
-        <div className="game-header-right">
-        </div>
+        <div className="game-header-right"></div>
       </div>
 
       {/* Message bar */}
@@ -920,7 +919,9 @@ export default function GameBoard({ players, onQuit }) {
             <div className="card-type-label">HAUNT ROLL</div>
             <div className="dice-container">
               {diceAnimation.display.map((d, i) => (
-                <div key={i} className="die die-rolling">{d}</div>
+                <div key={i} className="die die-rolling">
+                  {d}
+                </div>
               ))}
             </div>
             <h2 className="card-name">Rolling...</h2>
@@ -935,16 +936,14 @@ export default function GameBoard({ players, onQuit }) {
             <div className="card-type-label">HAUNT ROLL</div>
             <div className="dice-container">
               {game.hauntRoll.dice.map((d, i) => (
-                <div key={i} className="die">{d}</div>
+                <div key={i} className="die">
+                  {d}
+                </div>
               ))}
             </div>
             <div className="dice-total">Total: {game.hauntRoll.total}</div>
             <div className="dice-target">Need less than 5 to be safe</div>
-            <h2 className="card-name">
-              {game.hauntRoll.hauntTriggered
-                ? "THE HAUNT BEGINS!"
-                : "Safe... for now."}
-            </h2>
+            <h2 className="card-name">{game.hauntRoll.hauntTriggered ? "THE HAUNT BEGINS!" : "Safe... for now."}</h2>
             <p className="card-description">
               {game.hauntRoll.hauntTriggered
                 ? `Rolled ${game.hauntRoll.total} with ${game.hauntRoll.omenCount} dice — 5 or higher! The haunt is upon you!`
