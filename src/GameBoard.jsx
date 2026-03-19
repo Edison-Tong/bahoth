@@ -99,8 +99,17 @@ export default function GameBoard({ players, onQuit }) {
   const [game, setGame] = useState(() => initGameState(players));
   const [cameraFloor, setCameraFloor] = useState("ground");
   const [diceAnimation, setDiceAnimation] = useState(null);
+  const [expandedSidebarPlayers, setExpandedSidebarPlayers] = useState(() => new Set([0]));
   const diceAnimRef = useRef(null);
   const boardRef = useRef(null);
+
+  useEffect(() => {
+    setExpandedSidebarPlayers((prev) => {
+      const next = new Set(prev);
+      next.add(game.currentPlayerIndex);
+      return next;
+    });
+  }, [game.currentPlayerIndex]);
 
   // Dice rolling animation
   useEffect(() => {
@@ -898,6 +907,18 @@ export default function GameBoard({ players, onQuit }) {
     });
   }
 
+  function toggleSidebarPlayer(index) {
+    setExpandedSidebarPlayers((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  }
+
   function passTurn(g) {
     let next = (g.currentPlayerIndex + 1) % g.players.length;
     // Skip dead players
@@ -1183,17 +1204,33 @@ export default function GameBoard({ players, onQuit }) {
       <div className="player-sidebar">
         {game.players.map((p, i) => {
           const isCurrent = i === game.currentPlayerIndex;
+          const isExpanded = expandedSidebarPlayers.has(i);
           return (
             <div
               key={i}
-              className={`sidebar-player ${isCurrent ? "sidebar-current" : ""} ${!p.isAlive ? "sidebar-dead" : ""}`}
+              className={`sidebar-player ${isCurrent ? "sidebar-current" : ""} ${isExpanded ? "sidebar-expanded" : "sidebar-collapsed"} ${!p.isAlive ? "sidebar-dead" : ""}`}
               style={{ borderColor: isCurrent ? p.color : "transparent" }}
             >
-              <div className="sidebar-name" style={{ color: p.color }}>
-                {p.name} {isCurrent && "◄"}
-              </div>
+              <button className="sidebar-header" onClick={() => toggleSidebarPlayer(i)} type="button">
+                <div className="sidebar-name" style={{ color: p.color }}>
+                  {p.name} {isCurrent && "◄"}
+                </div>
+                <span className={`sidebar-toggle ${isExpanded ? "sidebar-toggle-expanded" : ""}`} aria-hidden="true">
+                  ▾
+                </span>
+              </button>
               <div className="sidebar-char">{p.character.name}</div>
-              <div className="sidebar-stats">
+              {!isExpanded && (
+                <div className="sidebar-stats-summary">
+                  {PLAYER_STAT_ORDER.map((stat) => (
+                    <span key={`${p.name}-${stat}-summary`} className="sidebar-stats-summary-item">
+                      <span>{STAT_ICONS[stat]}</span>
+                      <span>{p.character[stat][p.statIndex[stat]]}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+              <div className={`sidebar-stats ${isExpanded ? "sidebar-stats-expanded" : "sidebar-stats-collapsed"}`}>
                 {PLAYER_STAT_ORDER.map((stat) => (
                   <div key={`${p.name}-${stat}`} className="sidebar-stat-row">
                     <div className="sidebar-stat-label">

@@ -470,6 +470,7 @@
   background: var(--bg-card);
   border-left: 3px solid transparent;
   min-width: 0;
+  transition: background 160ms ease, border-color 160ms ease, padding 160ms ease;
 }
 
 .sidebar-current {
@@ -485,6 +486,56 @@
   font-size: 0.8rem;
 }
 
+.sidebar-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.25rem 0.35rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(205, 191, 159, 0.12);
+  border-radius: 8px;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.sidebar-header:hover {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(205, 191, 159, 0.24);
+}
+
+.sidebar-header:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(212, 194, 157, 0.28);
+}
+
+.sidebar-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(205, 191, 159, 0.18);
+  color: #d8c8a5;
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  transition: transform 160ms ease, color 160ms ease, background 160ms ease, border-color 160ms ease;
+}
+
+.sidebar-toggle-expanded {
+  transform: rotate(180deg);
+  color: #fff3dc;
+  background: rgba(212, 194, 157, 0.15);
+  border-color: rgba(212, 194, 157, 0.35);
+}
+
 .sidebar-char {
   font-size: 0.65rem;
   color: var(--text);
@@ -492,11 +543,45 @@
   margin-bottom: 0.35rem;
 }
 
+.sidebar-stats-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.55rem;
+  margin-top: 0.2rem;
+  color: var(--text);
+}
+
+.sidebar-stats-summary-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+  font-size: 0.66rem;
+  font-weight: 700;
+  opacity: 0.92;
+}
+
 .sidebar-stats {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
   margin-top: 2px;
+  overflow: hidden;
+  transition: max-height 180ms ease, opacity 140ms ease, margin-top 180ms ease;
+}
+
+.sidebar-stats-expanded {
+  max-height: 220px;
+  opacity: 1;
+}
+
+.sidebar-stats-collapsed {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+}
+
+.sidebar-collapsed .sidebar-char {
+  margin-bottom: 0;
 }
 
 .sidebar-stat-row {
