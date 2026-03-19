@@ -99,17 +99,9 @@ export default function GameBoard({ players, onQuit }) {
   const [game, setGame] = useState(() => initGameState(players));
   const [cameraFloor, setCameraFloor] = useState("ground");
   const [diceAnimation, setDiceAnimation] = useState(null);
-  const [expandedSidebarPlayers, setExpandedSidebarPlayers] = useState(() => new Set([0]));
+  const [expandedSidebarPlayers, setExpandedSidebarPlayers] = useState(() => new Set());
   const diceAnimRef = useRef(null);
   const boardRef = useRef(null);
-
-  useEffect(() => {
-    setExpandedSidebarPlayers((prev) => {
-      const next = new Set(prev);
-      next.add(game.currentPlayerIndex);
-      return next;
-    });
-  }, [game.currentPlayerIndex]);
 
   // Dice rolling animation
   useEffect(() => {
@@ -1204,7 +1196,7 @@ export default function GameBoard({ players, onQuit }) {
       <div className="player-sidebar">
         {game.players.map((p, i) => {
           const isCurrent = i === game.currentPlayerIndex;
-          const isExpanded = expandedSidebarPlayers.has(i);
+          const isExpanded = isCurrent || expandedSidebarPlayers.has(i);
           return (
             <div
               key={i}
