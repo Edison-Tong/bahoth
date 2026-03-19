@@ -88,6 +88,8 @@ function initGameState(players) {
     movePath: [{ x: 0, y: 0, floor: "ground", cost: 0 }],
     pendingExplore: null,
     pendingSpecialPlacement: null,
+    mysticElevatorReady: false,
+    mysticElevatorUsed: false,
     omenCount: 0,
     hauntTriggered: false,
     drawnCard: null,
@@ -212,6 +214,82 @@ export default function GameBoard({ players, onQuit }) {
               damage > 0 ? `The furnace burns! Take ${damage} physical damage.` : "The furnace sputters — no damage!",
           },
         }));
+      } else if (da.purpose === "mystic-elevator") {
+        setGame((g) => {
+          const player = g.players[g.currentPlayerIndex];
+          const elevatorTile = g.board[player.floor]?.find((tile) => tile.x === player.x && tile.y === player.y);
+          if (!elevatorTile || elevatorTile.id !== "mystic-elevator") {
+            return {
+              ...g,
+              tileEffect: {
+                type: "mystic-elevator-result",
+                tileName: "Mystic Elevator",
+                dice: da.final,
+                total,
+                message: "The Mystic Elevator shudders, but nothing happens.",
+                nextTurnPhase: "move",
+                nextMessage:
+                  player.movesLeft > 0
+                    ? `${player.name} can keep moving. ${player.movesLeft} move${player.movesLeft !== 1 ? "s" : ""} left.`
+                    : `${player.name} has no moves left.`,
+              },
+            };
+          }
+
+          const destination = getMysticElevatorDestination(total);
+          const boardWithoutElevator = {
+            ...g.board,
+            [player.floor]: (g.board[player.floor] || []).filter((tile) => tile !== elevatorTile),
+          };
+          const placements = getPlacementOptions(boardWithoutElevator, {
+            ...elevatorTile,
+            floors: destination.floors,
+          }).filter(
+            (placement) =>
+              !(placement.floor === player.floor && placement.x === elevatorTile.x && placement.y === elevatorTile.y)
+          );
+
+          if (placements.length === 0) {
+            return {
+              ...g,
+              tileEffect: {
+                type: "mystic-elevator-result",
+                tileName: "Mystic Elevator",
+                dice: da.final,
+                total,
+                message: `Rolled ${total}. The elevator can go to ${destination.label}, but there is no open doorway there.`,
+                nextTurnPhase: "move",
+                nextMessage:
+                  player.movesLeft > 0
+                    ? `${player.name} stays on the Mystic Elevator. ${player.movesLeft} move${player.movesLeft !== 1 ? "s" : ""} left.`
+                    : `${player.name} stays on the Mystic Elevator. No moves left.`,
+              },
+            };
+          }
+
+          return {
+            ...g,
+            tileEffect: {
+              type: "mystic-elevator-result",
+              tileName: "Mystic Elevator",
+              dice: da.final,
+              total,
+              message: `Rolled ${total}. Choose an open doorway on ${destination.label}.`,
+              nextTurnPhase: "special-place",
+              nextMessage: "Choose where to move the Mystic Elevator.",
+              pendingSpecialPlacement: {
+                mode: "move-existing",
+                tile: elevatorTile,
+                placements,
+                nextTurnPhase: "move",
+                nextMessage:
+                  player.movesLeft > 0
+                    ? `${player.name} rides the Mystic Elevator. ${player.movesLeft} move${player.movesLeft !== 1 ? "s" : ""} left.`
+                    : `${player.name} rides the Mystic Elevator. No moves left.`,
+              },
+            },
+          };
+        });
       }
     }, 2000);
 
@@ -386,6 +464,34 @@ export default function GameBoard({ players, onQuit }) {
     return null;
   }
 
+  function getMysticElevatorDestination(total) {
+    if (total >= 4) {
+      return {
+        floors: ["upper", "ground", "basement"],
+        label: "any floor",
+      };
+    }
+
+    if (total === 3) {
+      return {
+        floors: ["upper"],
+        label: "the upper floor",
+      };
+    }
+
+    if (total === 2) {
+      return {
+        floors: ["ground"],
+        label: "the ground floor",
+      };
+    }
+
+    return {
+      floors: ["basement"],
+      label: "the basement",
+    };
+  }
+
   // Get valid move directions from current tile
   function getValidMoves() {
     if (game.turnPhase !== "move") return [];
@@ -455,6 +561,7 @@ export default function GameBoard({ players, onQuit }) {
 
       const movesLeft = player.movesLeft - resolvedCost;
       const newPath = [...g.movePath, { x: nx, y: ny, floor: player.floor, cost: resolvedCost }];
+      const destinationTile = g.board[player.floor]?.find((tile) => tile.x === nx && tile.y === ny);
       const updatedPlayers = g.players.map((p, i) =>
         i === g.currentPlayerIndex ? { ...p, x: nx, y: ny, movesLeft } : p
       );
@@ -462,10 +569,14 @@ export default function GameBoard({ players, onQuit }) {
         ...g,
         players: updatedPlayers,
         movePath: newPath,
+        mysticElevatorReady:
+          destinationTile?.enterEffect === "mystic-elevator" && !g.mysticElevatorUsed ? true : g.mysticElevatorReady,
         message:
-          movesLeft > 0
-            ? `${g.players[g.currentPlayerIndex].name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`
-            : `${g.players[g.currentPlayerIndex].name} — no moves left`,
+          destinationTile?.enterEffect === "mystic-elevator" && !g.mysticElevatorUsed
+            ? `${g.players[g.currentPlayerIndex].name} entered the Mystic Elevator. Use Elevator to roll 2 dice.`
+            : movesLeft > 0
+              ? `${g.players[g.currentPlayerIndex].name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`
+              : `${g.players[g.currentPlayerIndex].name} — no moves left`,
       };
     });
   }
@@ -771,6 +882,13 @@ export default function GameBoard({ players, onQuit }) {
         message = armoryMessage;
       }
 
+      const enableMysticElevator = placedTile.enterEffect === "mystic-elevator" && !g.mysticElevatorUsed;
+      if (enableMysticElevator) {
+        tileEffect = null;
+        turnPhase = "move";
+        message = `${p.name} placed Mystic Elevator! Use Elevator to roll 2 dice.`;
+      }
+
       if (placedTile.discoverGain) {
         const { stat, amount } = placedTile.discoverGain;
         const currentIndex = p.statIndex[stat];
@@ -813,6 +931,8 @@ export default function GameBoard({ players, onQuit }) {
         movePath: [{ x: p.x, y: p.y, floor: p.floor, cost: 0 }],
         pendingExplore: null,
         pendingSpecialPlacement: null,
+        mysticElevatorReady: enableMysticElevator ? true : g.mysticElevatorReady,
+        mysticElevatorUsed: g.mysticElevatorUsed,
         omenCount: newOmenCount,
         drawnCard,
         tileEffect,
@@ -1148,7 +1268,7 @@ export default function GameBoard({ players, onQuit }) {
       const effect = g.tileEffect;
       if (!effect) return passTurn(g);
 
-      if (["discover-gain", "armory", "junk-room", "panic-room"].includes(effect.type)) {
+      if (["discover-gain", "armory", "junk-room", "panic-room", "mystic-elevator-result"].includes(effect.type)) {
         if (effect.pendingSpecialPlacement) {
           setCameraFloor(effect.pendingSpecialPlacement.placements[0]?.floor || cameraFloor);
         }
@@ -1178,6 +1298,29 @@ export default function GameBoard({ players, onQuit }) {
       return passTurn({ ...g, players: updatedPlayers, tileEffect: null, damageChoice: null });
     });
     setDiceAnimation(null);
+  }
+
+  function handleRollMysticElevator() {
+    setGame((g) => {
+      const player = g.players[g.currentPlayerIndex];
+      const currentTile = g.board[player.floor]?.find((tile) => tile.x === player.x && tile.y === player.y);
+      if (!g.mysticElevatorReady || g.mysticElevatorUsed || currentTile?.id !== "mystic-elevator") return g;
+
+      return {
+        ...g,
+        mysticElevatorReady: false,
+        mysticElevatorUsed: true,
+        tileEffect: null,
+        message: "Rolling for the Mystic Elevator...",
+      };
+    });
+    setDiceAnimation({
+      purpose: "mystic-elevator",
+      final: rollDice(2),
+      display: Array.from({ length: 2 }, () => Math.floor(Math.random() * 3)),
+      settled: false,
+      tileName: "Mystic Elevator",
+    });
   }
 
   function handleStartCollapsedDamage() {
@@ -1210,6 +1353,34 @@ export default function GameBoard({ players, onQuit }) {
         floor: placement.floor,
         doors: chosenDoors,
       };
+
+      if (pendingPlacement.mode === "move-existing") {
+        const currentPlayerIndex = g.currentPlayerIndex;
+        const oldFloor = pendingPlacement.tile.floor;
+        const updatedBoard = {
+          ...g.board,
+          [oldFloor]: (g.board[oldFloor] || []).filter((tile) => tile !== pendingPlacement.tile),
+          [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
+        };
+        const updatedPlayers = g.players.map((player, index) =>
+          index === currentPlayerIndex
+            ? { ...player, x: placement.x, y: placement.y, floor: placement.floor }
+            : player
+        );
+
+        setCameraFloor(placement.floor);
+
+        return {
+          ...g,
+          board: updatedBoard,
+          players: updatedPlayers,
+          movePath: [{ x: placement.x, y: placement.y, floor: placement.floor, cost: 0 }],
+          pendingSpecialPlacement: null,
+          drawnCard: pendingPlacement.queuedCard || null,
+          turnPhase: pendingPlacement.nextTurnPhase,
+          message: pendingPlacement.nextMessage,
+        };
+      }
 
       return {
         ...g,
@@ -1260,6 +1431,8 @@ export default function GameBoard({ players, onQuit }) {
       movePath: [{ x: nextPlayer.x, y: nextPlayer.y, floor: nextPlayer.floor, cost: 0 }],
       pendingExplore: null,
       pendingSpecialPlacement: null,
+      mysticElevatorReady: false,
+      mysticElevatorUsed: false,
       tileEffect: null,
       damageChoice: null,
       turnNumber: g.turnNumber + (next === 0 ? 1 : 0),
@@ -1282,6 +1455,16 @@ export default function GameBoard({ players, onQuit }) {
   const currentTileObj = game.board[currentPlayer.floor]?.find(
     (t) => t.x === currentPlayer.x && t.y === currentPlayer.y
   );
+  const canUseMysticElevator =
+    game.turnPhase === "move" &&
+    !game.pendingExplore &&
+    !game.pendingSpecialPlacement &&
+    !game.tileEffect &&
+    !game.drawnCard &&
+    !diceAnimation &&
+    currentTileObj?.id === "mystic-elevator" &&
+    game.mysticElevatorReady &&
+    !game.mysticElevatorUsed;
   let stairTarget = null;
   let stairIsBacktrack = false;
   if (game.turnPhase === "move" && !game.pendingExplore) {
@@ -1519,6 +1702,11 @@ export default function GameBoard({ players, onQuit }) {
             {stairIsBacktrack ? `Go back to ${stairTarget.name}` : `Move to ${stairTarget.name}`}
           </button>
         )}
+        {canUseMysticElevator && (
+          <button className="btn btn-stairs" onClick={handleRollMysticElevator}>
+            Use Elevator
+          </button>
+        )}
         {game.turnPhase === "rotate" && (
           <>
             <button className="btn btn-rotate" onClick={() => handleRotateTile(-1)}>
@@ -1628,6 +1816,8 @@ export default function GameBoard({ players, onQuit }) {
             <div className="card-type-label">
               {diceAnimation.purpose === "haunt"
                 ? "HAUNT ROLL"
+                : diceAnimation.purpose === "mystic-elevator"
+                  ? "MYSTIC ELEVATOR"
                 : diceAnimation.purpose === "collapsed"
                   ? "COLLAPSED ROOM"
                   : diceAnimation.purpose === "collapsed-damage"
@@ -1711,7 +1901,9 @@ export default function GameBoard({ players, onQuit }) {
               </button>
             ) : (
               <button className="btn btn-primary" onClick={handleDismissTileEffect}>
-                Continue
+                {game.tileEffect.type === "mystic-elevator-result" && game.tileEffect.pendingSpecialPlacement
+                  ? "Choose doorway"
+                  : "Continue"}
               </button>
             )}
           </div>

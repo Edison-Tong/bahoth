@@ -266,7 +266,8 @@ export const TILES = [
     doors: ["N"],
     cardType: null,
     description:
-      "Once per turn when you enter this tile, you may roll two dice. Move the Mystic Elevator to an open doorway on: 4+: Any region. 3: Upper Floor. 2: Ground Floor. 1-0: Basement",
+      "Once per turn when you enter this tile, you may roll two dice. Move the Mystic Elevator to an open doorway on: 4+: any floor. 3: Upper Floor. 2: Ground Floor. 1-0: Basement. This move is free, and your explorer moves with the elevator.",
+    enterEffect: "mystic-elevator",
   },
   // {
   //   id: "nursery",
