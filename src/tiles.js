@@ -53,15 +53,16 @@ export const STARTING_TILES = [
 ];
 
 export const TILES = [
-  // {
-  //   id: "armory", // SPECIAL TILE. NEEDS ATTENTION
-  //   name: "Armory",
-  //   floors: ["ground", "basement"],
-  //   doors: ["N", "E"],
-  //   cardType: null,
-  //   description:
-  //     "When you discover this tile, reveal cards from the top of the item deck until you reveal a weapon. <br> Take it and bury the rest.",
-  // },
+  {
+    id: "armory", // SPECIAL TILE. NEEDS ATTENTION
+    name: "Armory",
+    floors: ["ground", "basement"],
+    doors: ["N", "E"],
+    cardType: null,
+    description:
+      "When you discover this tile, reveal cards from the top of the item deck until you reveal a weapon. <br> Take it and bury the rest.",
+    discoverEffect: "armory",
+  },
   // {
   //   id: "ballroom",
   //   name: "Ballroom",
@@ -92,7 +93,8 @@ export const TILES = [
   //   floors: ["ground"],
   //   doors: ["N", "S"],
   //   cardType: "omen",
-  //   // description: "Shelves of ancient, moldering books line every wall.",
+  //   description: "When you discover this tile, gain 1 Sanity",
+  //   discoverGain: { stat: "sanity", amount: 1 },
   // },
   // {
   //   id: "charred-room",
@@ -110,16 +112,16 @@ export const TILES = [
   //   cardType: "event",
   //   // description: "Something burned here. The walls are blackened and cracked.",
   // },
-  {
-    id: "collapsed-room", // SPECIAL TILE. NEEDS ATTENTION
-    name: "Collapsed Room",
-    floors: ["ground", "upper"],
-    doors: ["N", "E"],
-    cardType: null,
-    description:
-      "If you end your tur on this tile, make a speed roll. 5+: Nothing happens. 4-0: Place your explorer on the Basement Landing and take one die of Physical damage",
-    endOfTurn: "collapsed",
-  },
+  // {
+  //   id: "collapsed-room", // SPECIAL TILE. NEEDS ATTENTION
+  //   name: "Collapsed Room",
+  //   floors: ["ground", "upper"],
+  //   doors: ["N", "E"],
+  //   cardType: null,
+  //   description:
+  //     "If you end your turn on this tile, make a speed roll. 5+: Nothing happens. 4-0: Place your explorer on the Basement Landing and take one die of Physical damage",
+  //   endOfTurn: "collapsed",
+  // },
   // {
   //   id: "conservatory",
   //   name: "Conservatory",
@@ -152,15 +154,15 @@ export const TILES = [
   //   cardType: "event",
   //   // description: "Dead plants fill crumbling pots along the windows.",
   // },
-  {
-    id: "furnace-room",
-    name: "Furnace Room",
-    floors: ["basement"],
-    doors: ["E", "S", "W"],
-    cardType: "event",
-    description: "If you end your turn on this tile, take one die of Physical damage",
-    endOfTurn: "furnace",
-  },
+  // {
+  //   id: "furnace-room",
+  //   name: "Furnace Room",
+  //   floors: ["basement"],
+  //   doors: ["E", "S", "W"],
+  //   cardType: "event",
+  //   description: "If you end your turn on this tile, take one die of Physical damage",
+  //   endOfTurn: "furnace",
+  // },
   // {
   //   id: "gallery",
   //   name: "Gallery",
@@ -203,15 +205,17 @@ export const TILES = [
   //   doors: ["N", "W"],
   //   cardType: null,
   //   description: "When you discover this tile, gain 1 Speed",
+  //   discoverGain: { stat: "speed", amount: 1 },
   // },
-  // {
-  //   id: "junk-room",
-  //   name: "Junk Room",
-  //   floors: ["ground", "upper"],
-  //   doors: ["N", "E", "S"],
-  //   cardType: "item",
-  //   description: "When you discover this tile, place an Obstacle token on it",
-  // },
+  {
+    id: "junk-room",
+    name: "Junk Room",
+    floors: ["ground", "upper"],
+    doors: ["N", "E", "S"],
+    cardType: "item",
+    description: "When you discover this tile, place an Obstacle token on it",
+    discoverEffect: "junk-room",
+  },
   // {
   //   id: "kitchen",
   //   name: "Kitchen",
@@ -235,6 +239,7 @@ export const TILES = [
   //   doors: ["N", "W"],
   //   cardType: null,
   //   description: "When you discover this tile, gain 1 Might",
+  //   discoverGain: { stat: "might", amount: 1 },
   // },
   {
     id: "laundry-chute",
@@ -253,6 +258,7 @@ export const TILES = [
   //   doors: ["N", "E", "S"],
   //   cardType: "omen",
   //   description: "When you discover this tile, gain 1 Knowledge",
+  //   discoverGain: { stat: "knowledge", amount: 1 },
   // },
   // {
   //   id: "mystic-elevator",
@@ -295,15 +301,16 @@ export const TILES = [
   //   cardType: "event",
   //   // description: "A dark chute leads somewhere you don't want to go.",
   // },
-  // {
-  //   id: "panic-room",
-  //   name: "Panic Room",
-  //   floors: ["basement"],
-  //   doors: ["N"],
-  //   cardType: "omen",
-  //   description:
-  //     "When you discover this tile, if the Secret Stairs tile has not been placed, find it in the tile stack and place it in the Basement. Then, shuffle the tile stack.",
-  // },
+  {
+    id: "panic-room",
+    name: "Panic Room",
+    floors: ["basement"],
+    doors: ["N"],
+    cardType: "omen",
+    description:
+      "When you discover this tile, if the Secret Stairs tile has not been placed, find it in the tile stack and place it at any open doorway in the Basement. Then, shuffle the tile stack.",
+    discoverEffect: "panic-room",
+  },
   // {
   //   id: "primary-bedroom",
   //   name: "Primary Bedroom",
@@ -328,16 +335,15 @@ export const TILES = [
   //   cardType: "event",
   //   // description: "Crates and barrels fill this room.",
   // },
-  // {
-  //   id: "secret-staircase",
-  //   name: "Secret Staircase",
-  //   floors: ["basement"],
-  //   doors: ["N"],
-  //   cardType: null,
-  //   description: "Leads to the Hallway",
-  //       connectsTo: "hallway",
-
-  // },
+  {
+    id: "secret-staircase",
+    name: "Secret Staircase",
+    floors: ["basement"],
+    doors: ["N"],
+    cardType: null,
+    description: "Leads to the Hallway",
+    connectsTo: "hallway",
+  },
   // {
   //   id: "soundproofed-room",
   //   name: "Soundproofed Room",

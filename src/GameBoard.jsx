@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { STARTING_TILES, createTileStack } from "./tiles";
+import { createItemDeck } from "./itemCards";
 import "./GameBoard.css";
 
 // Direction offsets
@@ -49,6 +50,7 @@ function rollDice(n) {
 // Initialize game state from players
 function initGameState(players) {
   const tileStack = createTileStack();
+  const itemDeck = createItemDeck();
 
   // Ground floor starts with 3 tiles in a vertical line:
   // Entrance Hall (0,0) — Hallway (0,-1) — Grand Staircase (0,-2)
@@ -80,10 +82,12 @@ function initGameState(players) {
       basement: [basementLanding],
     },
     tileStack,
+    itemDeck,
     currentPlayerIndex: 0,
     turnPhase: "move",
-    movePath: [{ x: 0, y: 0, floor: "ground" }],
+    movePath: [{ x: 0, y: 0, floor: "ground", cost: 0 }],
     pendingExplore: null,
+    pendingSpecialPlacement: null,
     omenCount: 0,
     hauntTriggered: false,
     drawnCard: null,
@@ -92,6 +96,13 @@ function initGameState(players) {
     damageChoice: null,
     turnNumber: 1,
     message: `${players[0].name}'s turn — ${players[0].character.speed[players[0].character.startIndex.speed]} moves`,
+  };
+}
+
+function createDrawnItemCard(card) {
+  return {
+    type: "item",
+    ...card,
   };
 }
 
@@ -278,14 +289,15 @@ export default function GameBoard({ players, onQuit }) {
         }
       }
 
-      if (currentPlayer.movesLeft <= 0) return;
+      const moveCost = getLeaveMoveCost(tile);
+      if (currentPlayer.movesLeft < moveCost) return;
 
       const neighbor = getTileAt(nx, ny, currentPlayer.floor);
 
       if (neighbor && neighbor.doors.includes(OPPOSITE[dir])) {
-        handleMove(nx, ny);
+        handleMove(nx, ny, moveCost);
       } else if (!neighbor) {
-        handleExplore(dir, nx, ny);
+        handleExplore(dir, nx, ny, moveCost);
       }
     }
 
@@ -296,6 +308,50 @@ export default function GameBoard({ players, onQuit }) {
   // Get tile at position
   function getTileAt(x, y, floor) {
     return game.board[floor]?.find((t) => t.x === x && t.y === y);
+  }
+
+  function getLeaveMoveCost(tile) {
+    return tile?.obstacle ? 2 : 1;
+  }
+
+  function getPlacementOptions(board, tile) {
+    const allDirs = ["N", "E", "S", "W"];
+    const placements = [];
+
+    for (const floor of tile.floors || []) {
+      for (const baseTile of board[floor] || []) {
+        for (const dir of baseTile.doors) {
+          const { dx, dy } = DIR[dir];
+          const x = baseTile.x + dx;
+          const y = baseTile.y + dy;
+          const occupied = board[floor]?.some((placedTile) => placedTile.x === x && placedTile.y === y);
+          if (occupied) continue;
+
+          const neededDoor = OPPOSITE[dir];
+          const validRotations = [];
+          for (let rot = 0; rot < 4; rot++) {
+            const rotatedDoors = tile.doors.map((door) => {
+              const doorIndex = allDirs.indexOf(door);
+              return allDirs[(doorIndex + rot) % 4];
+            });
+            if (rotatedDoors.includes(neededDoor)) {
+              validRotations.push(rotatedDoors);
+            }
+          }
+
+          if (validRotations.length === 0) continue;
+
+          placements.push({
+            floor,
+            x,
+            y,
+            validRotations,
+          });
+        }
+      }
+    }
+
+    return placements;
   }
 
   // Get valid move directions from current tile
@@ -329,6 +385,7 @@ export default function GameBoard({ players, onQuit }) {
     }
 
     const moves = [];
+    const moveCost = getLeaveMoveCost(tile);
     for (const dir of tile.doors) {
       const { dx, dy } = DIR[dir];
       const nx = currentPlayer.x + dx;
@@ -345,22 +402,27 @@ export default function GameBoard({ players, onQuit }) {
             backtrackPos.floor === currentPlayer.floor;
           if (isBacktrack) {
             moves.push({ dir, x: nx, y: ny, type: "backtrack" });
-          } else if (currentPlayer.movesLeft > 0) {
-            moves.push({ dir, x: nx, y: ny, type: "move" });
+          } else if (currentPlayer.movesLeft >= moveCost) {
+            moves.push({ dir, x: nx, y: ny, type: "move", cost: moveCost });
           }
         }
-      } else if (currentPlayer.movesLeft > 0) {
-        moves.push({ dir, x: nx, y: ny, type: "explore" });
+      } else if (currentPlayer.movesLeft >= moveCost) {
+        moves.push({ dir, x: nx, y: ny, type: "explore", cost: moveCost });
       }
     }
     return moves;
   }
 
-  // Move player to an existing tile (costs 1 move, extends path)
-  function handleMove(nx, ny) {
+  // Move player to an existing tile and extend the current path.
+  function handleMove(nx, ny, cost) {
     setGame((g) => {
-      const movesLeft = g.players[g.currentPlayerIndex].movesLeft - 1;
-      const newPath = [...g.movePath, { x: nx, y: ny, floor: g.players[g.currentPlayerIndex].floor }];
+      const player = g.players[g.currentPlayerIndex];
+      const currentTile = g.board[player.floor]?.find((t) => t.x === player.x && t.y === player.y);
+      const resolvedCost = cost ?? getLeaveMoveCost(currentTile);
+      if (player.movesLeft < resolvedCost) return g;
+
+      const movesLeft = player.movesLeft - resolvedCost;
+      const newPath = [...g.movePath, { x: nx, y: ny, floor: player.floor, cost: resolvedCost }];
       const updatedPlayers = g.players.map((p, i) =>
         i === g.currentPlayerIndex ? { ...p, x: nx, y: ny, movesLeft } : p
       );
@@ -376,14 +438,15 @@ export default function GameBoard({ players, onQuit }) {
     });
   }
 
-  // Backtrack to previous tile in path (refunds 1 move)
+  // Backtrack to previous tile in path and refund the cost of the undone step.
   function handleBacktrack() {
     setGame((g) => {
       const path = g.movePath;
       if (path.length < 2) return g;
       const prev = path[path.length - 2];
+      const lastStep = path[path.length - 1];
       const newPath = path.slice(0, -1);
-      const movesLeft = g.players[g.currentPlayerIndex].movesLeft + 1;
+      const movesLeft = g.players[g.currentPlayerIndex].movesLeft + (lastStep.cost ?? 1);
       const updatedPlayers = g.players.map((p, i) =>
         i === g.currentPlayerIndex ? { ...p, x: prev.x, y: prev.y, floor: prev.floor || p.floor, movesLeft } : p
       );
@@ -403,10 +466,14 @@ export default function GameBoard({ players, onQuit }) {
     });
   }
 
-  // Explore — move player onto placeholder, don't reveal tile yet
-  function handleExplore(dir, nx, ny) {
+  // Explore — move player onto placeholder, don't reveal tile yet.
+  function handleExplore(dir, nx, ny, cost) {
     setGame((g) => {
-      const floor = g.players[g.currentPlayerIndex].floor;
+      const player = g.players[g.currentPlayerIndex];
+      const floor = player.floor;
+      const currentTile = g.board[floor]?.find((t) => t.x === player.x && t.y === player.y);
+      const resolvedCost = cost ?? getLeaveMoveCost(currentTile);
+      if (player.movesLeft < resolvedCost) return g;
 
       // Find a tile that fits this floor
       const tileIndex = g.tileStack.findIndex((t) => t.floors.includes(floor));
@@ -430,8 +497,8 @@ export default function GameBoard({ players, onQuit }) {
         }
       }
 
-      const movesLeft = g.players[g.currentPlayerIndex].movesLeft - 1;
-      const newPath = [...g.movePath, { x: nx, y: ny, floor }];
+      const movesLeft = player.movesLeft - resolvedCost;
+      const newPath = [...g.movePath, { x: nx, y: ny, floor, cost: resolvedCost }];
       const updatedPlayers = g.players.map((p, i) =>
         i === g.currentPlayerIndex ? { ...p, x: nx, y: ny, movesLeft } : p
       );
@@ -460,9 +527,9 @@ export default function GameBoard({ players, onQuit }) {
     if (move.type === "backtrack") {
       handleBacktrack();
     } else if (move.type === "move") {
-      handleMove(move.x, move.y);
+      handleMove(move.x, move.y, move.cost);
     } else {
-      handleExplore(move.dir, move.x, move.y);
+      handleExplore(move.dir, move.x, move.y, move.cost);
     }
   }
 
@@ -482,7 +549,7 @@ export default function GameBoard({ players, onQuit }) {
 
       return {
         ...g,
-        movePath: [{ x: p.x, y: p.y, floor: p.floor }],
+        movePath: [{ x: p.x, y: p.y, floor: p.floor, cost: 0 }],
         message: `${p.name} moved — ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left`,
       };
     });
@@ -523,42 +590,200 @@ export default function GameBoard({ players, onQuit }) {
 
       const newStack = [...g.tileStack];
       newStack.splice(pe.tileIndex, 1);
+      let newItemDeck = [...g.itemDeck];
 
       let message = `${p.name} placed ${pe.tile.name}!`;
       let turnPhase = "move";
       let drawnCard = null;
       let newOmenCount = g.omenCount;
+      let updatedPlayers = g.players;
+      let tileEffect = null;
 
       if (pe.tile.cardType) {
         const cardType = pe.tile.cardType;
-        drawnCard = {
-          type: cardType,
-          name: cardType === "omen" ? "Bite" : cardType === "event" ? "Angry Being" : "Amulet of the Ages",
-          description:
-            cardType === "omen"
-              ? "Something bit you. You can't see any marks, but you feel different..."
-              : cardType === "event"
-                ? "A force of rage rushes through the room. Every living thing trembles."
-                : "You find a strange amulet glowing with an eerie light.",
-          flavor: "(Placeholder card — real cards coming soon)",
-        };
+        if (cardType === "item") {
+          const nextItem = newItemDeck.shift();
+          drawnCard = nextItem ? createDrawnItemCard(nextItem) : null;
+        } else {
+          drawnCard = {
+            type: cardType,
+            name: cardType === "omen" ? "Bite" : "Angry Being",
+            description:
+              cardType === "omen"
+                ? "Something bit you. You can't see any marks, but you feel different..."
+                : "A force of rage rushes through the room. Every living thing trembles.",
+            flavor: "(Placeholder card — real cards coming soon)",
+          };
+        }
         if (cardType === "omen") {
           newOmenCount++;
         }
-        message += ` A${cardType === "omen" || cardType === "event" ? "n" : ""} ${cardType} card appears...`;
+        if (drawnCard) {
+          message += ` A${cardType === "omen" || cardType === "event" ? "n" : "n"} ${cardType} card appears...`;
+        }
         turnPhase = "card";
       } else {
         message += ` ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`;
+      }
+
+      if (placedTile.discoverEffect === "junk-room") {
+        newBoard[pe.floor] = newBoard[pe.floor].map((tile) =>
+          tile.x === placedTile.x && tile.y === placedTile.y ? { ...tile, obstacle: true } : tile
+        );
+
+        const junkMessage = `${p.name} places an obstacle token in the Junk Room.`;
+        tileEffect = {
+          type: "junk-room",
+          tileName: placedTile.name,
+          message: junkMessage,
+          queuedCard: drawnCard,
+          nextTurnPhase: drawnCard ? "card" : "move",
+          nextMessage: drawnCard
+            ? `${junkMessage} ${drawnCard.type.toUpperCase()} card appears...`
+            : `${junkMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
+        };
+
+        drawnCard = null;
+        turnPhase = "card";
+        message = junkMessage;
+      }
+
+      if (placedTile.discoverEffect === "panic-room") {
+        const secretAlreadyPlaced = Object.values(newBoard).some((tiles) =>
+          tiles.some((tile) => tile.id === "secret-staircase")
+        );
+        const secretIndex = newStack.findIndex((tile) => tile.id === "secret-staircase");
+
+        let panicMessage = "";
+        if (!secretAlreadyPlaced && secretIndex !== -1) {
+          const secretTile = newStack[secretIndex];
+          const placements = getPlacementOptions(newBoard, secretTile);
+
+          if (placements.length > 0) {
+            newStack.splice(secretIndex, 1);
+            panicMessage = `${p.name} reveals the Secret Staircase. Choose any open doorway to place it.`;
+
+            tileEffect = {
+              type: "panic-room",
+              tileName: placedTile.name,
+              message: `${panicMessage} The tile stack is shuffled.`,
+              queuedCard: drawnCard,
+              nextTurnPhase: "special-place",
+              nextMessage: "Place the Secret Staircase on any open doorway.",
+              pendingSpecialPlacement: {
+                tile: secretTile,
+                placements,
+                queuedCard: drawnCard,
+                nextTurnPhase: drawnCard ? "card" : "move",
+                nextMessage: drawnCard
+                  ? `${p.name} placed the Secret Staircase. An omen card appears...`
+                  : `${p.name} placed the Secret Staircase. ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
+              },
+            };
+          } else {
+            panicMessage = `${p.name} found the Secret Staircase, but there was nowhere to place it.`;
+
+            tileEffect = {
+              type: "panic-room",
+              tileName: placedTile.name,
+              message: `${panicMessage} The tile stack is shuffled.`,
+              queuedCard: drawnCard,
+              nextTurnPhase: drawnCard ? "card" : "move",
+              nextMessage: drawnCard
+                ? `${panicMessage} An omen card appears...`
+                : `${panicMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
+            };
+          }
+        } else {
+          panicMessage = "The Secret Staircase is already in play.";
+
+          tileEffect = {
+            type: "panic-room",
+            tileName: placedTile.name,
+            message: `${panicMessage} The tile stack is shuffled.`,
+            queuedCard: drawnCard,
+            nextTurnPhase: drawnCard ? "card" : "move",
+            nextMessage: drawnCard
+              ? `${panicMessage} An omen card appears...`
+              : `${panicMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
+          };
+        }
+
+        newStack.sort(() => Math.random() - 0.5);
+        drawnCard = null;
+        turnPhase = tileEffect?.nextTurnPhase || "card";
+        message = panicMessage;
+      }
+
+      if (placedTile.discoverEffect === "armory") {
+        const { weaponCard, remainingDeck } = drawWeaponItem(newItemDeck);
+        newItemDeck = remainingDeck;
+
+        const armoryMessage = weaponCard
+          ? `${p.name} searched the Armory and found ${weaponCard.name}.`
+          : `${p.name} searched the Armory but found no weapon.`;
+
+        tileEffect = {
+          type: "armory",
+          tileName: placedTile.name,
+          message: armoryMessage,
+          queuedCard: weaponCard ? createDrawnItemCard(weaponCard) : null,
+          nextTurnPhase: weaponCard ? "card" : "move",
+          nextMessage: weaponCard
+            ? `${armoryMessage} A weapon item is taken.`
+            : `${armoryMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
+        };
+
+        drawnCard = null;
+        turnPhase = weaponCard ? "card" : "move";
+        message = armoryMessage;
+      }
+
+      if (placedTile.discoverGain) {
+        const { stat, amount } = placedTile.discoverGain;
+        const currentIndex = p.statIndex[stat];
+        const maxIndex = p.character[stat].length - 1;
+        const appliedAmount = Math.min(amount, maxIndex - currentIndex);
+
+        updatedPlayers = applyStatChange(g.players, g.currentPlayerIndex, stat, appliedAmount);
+
+        const nextValue =
+          updatedPlayers[g.currentPlayerIndex].character[stat][updatedPlayers[g.currentPlayerIndex].statIndex[stat]];
+        const gainMessage =
+          appliedAmount > 0
+            ? `${p.name} gains ${appliedAmount} ${STAT_LABELS[stat]} from ${placedTile.name}. ${STAT_LABELS[stat]} is now ${nextValue}.`
+            : `${p.name} cannot gain more ${STAT_LABELS[stat]} from ${placedTile.name}.`;
+
+        tileEffect = {
+          type: "discover-gain",
+          tileName: placedTile.name,
+          gainStat: stat,
+          gainAmount: appliedAmount,
+          message: gainMessage,
+          queuedCard: drawnCard,
+          nextTurnPhase: drawnCard ? "card" : "move",
+          nextMessage: drawnCard
+            ? `${gainMessage} ${drawnCard.type.toUpperCase()} card appears...`
+            : `${gainMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
+        };
+
+        drawnCard = null;
+        turnPhase = "card";
+        message = gainMessage;
       }
 
       return {
         ...g,
         board: newBoard,
         tileStack: newStack,
-        movePath: [{ x: p.x, y: p.y, floor: p.floor }],
+        itemDeck: newItemDeck,
+        players: updatedPlayers,
+        movePath: [{ x: p.x, y: p.y, floor: p.floor, cost: 0 }],
         pendingExplore: null,
+        pendingSpecialPlacement: null,
         omenCount: newOmenCount,
         drawnCard,
+        tileEffect,
         turnPhase,
         message,
       };
@@ -592,7 +817,16 @@ export default function GameBoard({ players, onQuit }) {
       if (card?.type === "event") {
         message = "Event resolved.";
       } else if (card?.type === "item") {
-        message = "Item collected!";
+        const updatedPlayers = g.players.map((pl, i) =>
+          i === g.currentPlayerIndex ? { ...pl, inventory: [...pl.inventory, card] } : pl
+        );
+        return {
+          ...g,
+          players: updatedPlayers,
+          drawnCard: null,
+          turnPhase: "endTurn",
+          message: `${g.players[g.currentPlayerIndex].name} collected ${card.name}!`,
+        };
       }
       return {
         ...g,
@@ -640,7 +874,8 @@ export default function GameBoard({ players, onQuit }) {
       const isBacktrack = prev && prev.x === targetTile.x && prev.y === targetTile.y && prev.floor === targetFloor;
 
       if (isBacktrack) {
-        const movesLeft = p.movesLeft + 1;
+        const lastStep = path[path.length - 1];
+        const movesLeft = p.movesLeft + (lastStep.cost ?? 1);
         const updatedPlayers = g.players.map((pl, i) =>
           i === g.currentPlayerIndex ? { ...pl, x: targetTile.x, y: targetTile.y, floor: targetFloor, movesLeft } : pl
         );
@@ -653,8 +888,9 @@ export default function GameBoard({ players, onQuit }) {
         };
       }
 
-      if (p.movesLeft <= 0) return g;
-      const movesLeft = p.movesLeft - 1;
+      const moveCost = getLeaveMoveCost(currentTile);
+      if (p.movesLeft < moveCost) return g;
+      const movesLeft = p.movesLeft - moveCost;
       const updatedPlayers = g.players.map((pl, i) =>
         i === g.currentPlayerIndex ? { ...pl, x: targetTile.x, y: targetTile.y, floor: targetFloor, movesLeft } : pl
       );
@@ -662,7 +898,7 @@ export default function GameBoard({ players, onQuit }) {
       return {
         ...g,
         players: updatedPlayers,
-        movePath: [...g.movePath, { x: targetTile.x, y: targetTile.y, floor: targetFloor }],
+        movePath: [...g.movePath, { x: targetTile.x, y: targetTile.y, floor: targetFloor, cost: moveCost }],
         message:
           movesLeft > 0
             ? `${p.name} moved to ${targetTile.name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`
@@ -742,6 +978,38 @@ export default function GameBoard({ players, onQuit }) {
       allowedStats,
       allocation,
       playerName: player.name,
+    };
+  }
+
+  function applyStatChange(players, playerIndex, stat, amount) {
+    if (!amount) return players;
+
+    return players.map((pl, i) => {
+      if (i !== playerIndex) return pl;
+
+      const maxIndex = pl.character[stat].length - 1;
+      const nextIndex = Math.max(0, Math.min(maxIndex, pl.statIndex[stat] + amount));
+      const newStatIndex = { ...pl.statIndex, [stat]: nextIndex };
+      const isAlive = Object.values(newStatIndex).every((value) => value > 0);
+
+      return { ...pl, statIndex: newStatIndex, isAlive };
+    });
+  }
+
+  function drawWeaponItem(itemDeck) {
+    const weaponIndex = itemDeck.findIndex((card) => card.isWeapon);
+    if (weaponIndex === -1) {
+      return {
+        weaponCard: null,
+        remainingDeck: [...itemDeck],
+      };
+    }
+
+    const remainingDeck = [...itemDeck];
+    const [weaponCard] = remainingDeck.splice(weaponIndex, 1);
+    return {
+      weaponCard,
+      remainingDeck,
     };
   }
 
@@ -865,6 +1133,21 @@ export default function GameBoard({ players, onQuit }) {
       const effect = g.tileEffect;
       if (!effect) return passTurn(g);
 
+      if (["discover-gain", "armory", "junk-room", "panic-room"].includes(effect.type)) {
+        if (effect.pendingSpecialPlacement) {
+          setCameraFloor(effect.pendingSpecialPlacement.placements[0]?.floor || cameraFloor);
+        }
+
+        return {
+          ...g,
+          tileEffect: null,
+          drawnCard: effect.pendingSpecialPlacement ? null : effect.queuedCard || null,
+          pendingSpecialPlacement: effect.pendingSpecialPlacement || null,
+          turnPhase: effect.nextTurnPhase,
+          message: effect.nextMessage,
+        };
+      }
+
       const pi = g.currentPlayerIndex;
       const currentPlayerState = g.players[pi];
 
@@ -896,6 +1179,34 @@ export default function GameBoard({ players, onQuit }) {
       tileName: te.tileName,
       firstDice: te.dice,
       firstTotal: te.total,
+    });
+  }
+
+  function handlePlacePendingSpecialTile(placement) {
+    setGame((g) => {
+      const pendingPlacement = g.pendingSpecialPlacement;
+      if (!pendingPlacement) return g;
+
+      const chosenDoors = placement.validRotations[0];
+      const placedTile = {
+        ...pendingPlacement.tile,
+        x: placement.x,
+        y: placement.y,
+        floor: placement.floor,
+        doors: chosenDoors,
+      };
+
+      return {
+        ...g,
+        board: {
+          ...g.board,
+          [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
+        },
+        pendingSpecialPlacement: null,
+        drawnCard: pendingPlacement.queuedCard || null,
+        turnPhase: pendingPlacement.nextTurnPhase,
+        message: pendingPlacement.nextMessage,
+      };
     });
   }
 
@@ -931,8 +1242,9 @@ export default function GameBoard({ players, onQuit }) {
       players: updatedPlayers,
       currentPlayerIndex: next,
       turnPhase: "move",
-      movePath: [{ x: nextPlayer.x, y: nextPlayer.y, floor: nextPlayer.floor }],
+      movePath: [{ x: nextPlayer.x, y: nextPlayer.y, floor: nextPlayer.floor, cost: 0 }],
       pendingExplore: null,
+      pendingSpecialPlacement: null,
       tileEffect: null,
       damageChoice: null,
       turnNumber: g.turnNumber + (next === 0 ? 1 : 0),
@@ -941,6 +1253,9 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   const validMoves = cameraFloor === currentPlayer.floor ? getValidMoves() : [];
+  const pendingSpecialPlacementTargets = (game.pendingSpecialPlacement?.placements || []).filter(
+    (placement) => placement.floor === cameraFloor
+  );
   const damageChoice = game.damageChoice;
   const damageAllocated = damageChoice
     ? Object.values(damageChoice.allocation).reduce((sum, value) => sum + value, 0)
@@ -961,7 +1276,8 @@ export default function GameBoard({ players, onQuit }) {
         const path = game.movePath;
         const prev = path.length >= 2 ? path[path.length - 2] : null;
         stairIsBacktrack = prev && prev.x === found.x && prev.y === found.y && prev.floor === floor;
-        if (currentPlayer.movesLeft > 0 || stairIsBacktrack) {
+        const moveCost = getLeaveMoveCost(currentTileObj);
+        if (currentPlayer.movesLeft >= moveCost || stairIsBacktrack) {
           stairTarget = found;
         }
         break;
@@ -978,6 +1294,10 @@ export default function GameBoard({ players, onQuit }) {
       allXs.push(m.x);
       allYs.push(m.y);
     }
+  });
+  pendingSpecialPlacementTargets.forEach((placement) => {
+    allXs.push(placement.x);
+    allYs.push(placement.y);
   });
   const minX = Math.min(...allXs, 0) - 1;
   const maxX = Math.max(...allXs, 0) + 1;
@@ -1055,6 +1375,7 @@ export default function GameBoard({ players, onQuit }) {
                 >
                   <div className="tile-name">{tile.name}</div>
                   {tile.cardType && <div className={`tile-type tile-type-${tile.cardType}`}>{tile.cardType}</div>}
+                  {tile.obstacle && <div className="tile-obstacle">Obstacle</div>}
                   {/* Door indicators */}
                   <div className="tile-doors">
                     {tile.doors.map((d) => (
@@ -1137,6 +1458,22 @@ export default function GameBoard({ players, onQuit }) {
                     onClick={() => handleAction(m)}
                   >
                     <span className="explore-icon">?</span>
+                  </button>
+                );
+              })}
+
+            {game.pendingSpecialPlacement &&
+              pendingSpecialPlacementTargets.map((placement) => {
+                const left = (placement.x - minX) * (TILE_SIZE + GAP);
+                const top = (placement.y - minY) * (TILE_SIZE + GAP);
+                return (
+                  <button
+                    key={`special-placement-${placement.floor}-${placement.x}-${placement.y}`}
+                    className="explore-target"
+                    style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
+                    onClick={() => handlePlacePendingSpecialTile(placement)}
+                  >
+                    <span className="explore-icon">⇵</span>
                   </button>
                 );
               })}

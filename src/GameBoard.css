@@ -191,6 +191,19 @@
   color: #f0d8c0;
 }
 
+.tile-obstacle {
+  margin-top: 3px;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(192, 57, 43, 0.18);
+  border: 1px solid rgba(192, 57, 43, 0.45);
+  color: #ffd3ce;
+  font-size: 0.52rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* Door indicators */
 .tile-doors {
   position: absolute;
