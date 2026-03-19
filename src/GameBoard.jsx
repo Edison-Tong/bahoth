@@ -354,6 +354,38 @@ export default function GameBoard({ players, onQuit }) {
     return placements;
   }
 
+  function getConnectedMoveTarget(board, currentTile, path) {
+    if (!currentTile) return null;
+
+    const prev = path.length >= 2 ? path[path.length - 2] : null;
+
+    if (currentTile.connectsTo) {
+      for (const floor of ["ground", "upper", "basement"]) {
+        const found = board[floor]?.find((tile) => tile.id === currentTile.connectsTo);
+        if (found) {
+          return {
+            targetTile: found,
+            targetFloor: floor,
+            isBacktrack: Boolean(prev && prev.x === found.x && prev.y === found.y && prev.floor === floor),
+          };
+        }
+      }
+    }
+
+    if (prev) {
+      const previousTile = board[prev.floor]?.find((tile) => tile.x === prev.x && tile.y === prev.y);
+      if (previousTile?.connectsTo === currentTile.id) {
+        return {
+          targetTile: previousTile,
+          targetFloor: prev.floor,
+          isBacktrack: true,
+        };
+      }
+    }
+
+    return null;
+  }
+
   // Get valid move directions from current tile
   function getValidMoves() {
     if (game.turnPhase !== "move") return [];
@@ -853,25 +885,11 @@ export default function GameBoard({ players, onQuit }) {
 
       // Find current tile
       const currentTile = g.board[p.floor]?.find((t) => t.x === p.x && t.y === p.y);
-      if (!currentTile || !currentTile.connectsTo) return g;
-
-      // Find the target tile on the board
-      let targetTile = null;
-      let targetFloor = null;
-      for (const floor of ["ground", "upper", "basement"]) {
-        const found = g.board[floor]?.find((t) => t.id === currentTile.connectsTo);
-        if (found) {
-          targetTile = found;
-          targetFloor = floor;
-          break;
-        }
-      }
-      if (!targetTile) return g;
-
-      // Check if this is a backtrack (target matches previous path position)
       const path = g.movePath;
-      const prev = path.length >= 2 ? path[path.length - 2] : null;
-      const isBacktrack = prev && prev.x === targetTile.x && prev.y === targetTile.y && prev.floor === targetFloor;
+      const connectedMove = getConnectedMoveTarget(g.board, currentTile, path);
+      if (!connectedMove) return g;
+
+      const { targetTile, targetFloor, isBacktrack } = connectedMove;
 
       if (isBacktrack) {
         const lastStep = path[path.length - 1];
@@ -909,11 +927,8 @@ export default function GameBoard({ players, onQuit }) {
     setCameraFloor((prev) => {
       const p = game.players[game.currentPlayerIndex];
       const currentTile = game.board[p.floor]?.find((t) => t.x === p.x && t.y === p.y);
-      if (!currentTile?.connectsTo) return prev;
-      for (const floor of ["ground", "upper", "basement"]) {
-        if (game.board[floor]?.find((t) => t.id === currentTile.connectsTo)) return floor;
-      }
-      return prev;
+      const connectedMove = getConnectedMoveTarget(game.board, currentTile, game.movePath);
+      return connectedMove?.targetFloor || prev;
     });
   }
 
@@ -1269,18 +1284,13 @@ export default function GameBoard({ players, onQuit }) {
   );
   let stairTarget = null;
   let stairIsBacktrack = false;
-  if (currentTileObj?.connectsTo && game.turnPhase === "move" && !game.pendingExplore) {
-    for (const floor of ["ground", "upper", "basement"]) {
-      const found = game.board[floor]?.find((t) => t.id === currentTileObj.connectsTo);
-      if (found) {
-        const path = game.movePath;
-        const prev = path.length >= 2 ? path[path.length - 2] : null;
-        stairIsBacktrack = prev && prev.x === found.x && prev.y === found.y && prev.floor === floor;
-        const moveCost = getLeaveMoveCost(currentTileObj);
-        if (currentPlayer.movesLeft >= moveCost || stairIsBacktrack) {
-          stairTarget = found;
-        }
-        break;
+  if (game.turnPhase === "move" && !game.pendingExplore) {
+    const connectedMove = getConnectedMoveTarget(game.board, currentTileObj, game.movePath);
+    if (connectedMove) {
+      stairIsBacktrack = connectedMove.isBacktrack;
+      const moveCost = getLeaveMoveCost(currentTileObj);
+      if (currentPlayer.movesLeft >= moveCost || stairIsBacktrack) {
+        stairTarget = connectedMove.targetTile;
       }
     }
   }
@@ -1506,7 +1516,7 @@ export default function GameBoard({ players, onQuit }) {
         )}
         {stairTarget && (
           <button className="btn btn-stairs" onClick={handleChangeFloor}>
-            Move to {stairTarget.name}
+            {stairIsBacktrack ? `Go back to ${stairTarget.name}` : `Move to ${stairTarget.name}`}
           </button>
         )}
         {game.turnPhase === "rotate" && (

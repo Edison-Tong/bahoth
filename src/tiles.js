@@ -53,24 +53,24 @@ export const STARTING_TILES = [
 ];
 
 export const TILES = [
-  {
-    id: "armory", // SPECIAL TILE. NEEDS ATTENTION
-    name: "Armory",
-    floors: ["ground", "basement"],
-    doors: ["N", "E"],
-    cardType: null,
-    description:
-      "When you discover this tile, reveal cards from the top of the item deck until you reveal a weapon. <br> Take it and bury the rest.",
-    discoverEffect: "armory",
-  },
   // {
-  //   id: "ballroom",
-  //   name: "Ballroom",
-  //   floors: ["ground"],
-  //   doors: ["N", "E", "S", "W"],
-  //   cardType: "omen",
-  //   // description: "The floorboards groan beneath your feet.",
+  //   id: "armory", 
+  //   name: "Armory",
+  //   floors: ["ground", "basement"],
+  //   doors: ["N", "E"],
+  //   cardType: null,
+  //   description:
+  //     "When you discover this tile, reveal cards from the top of the item deck until you reveal a weapon. <br> Take it and bury the rest.",
+  //   discoverEffect: "armory",
   // },
+  {
+    id: "ballroom",
+    name: "Ballroom",
+    floors: ["ground"],
+    doors: ["N", "E", "S", "W"],
+    cardType: "omen",
+    // description: "The floorboards groan beneath your feet.",
+  },
   // {
   //   id: "bloody-room",
   //   name: "Bloody Room",
@@ -113,7 +113,7 @@ export const TILES = [
   //   // description: "Something burned here. The walls are blackened and cracked.",
   // },
   // {
-  //   id: "collapsed-room", // SPECIAL TILE. NEEDS ATTENTION
+  //   id: "collapsed-room",
   //   name: "Collapsed Room",
   //   floors: ["ground", "upper"],
   //   doors: ["N", "E"],
@@ -163,15 +163,15 @@ export const TILES = [
   //   description: "If you end your turn on this tile, take one die of Physical damage",
   //   endOfTurn: "furnace",
   // },
-  // {
-  //   id: "gallery",
-  //   name: "Gallery",
-  //   floors: ["upper"],
-  //   doors: ["N", "S"],
-  //   cardType: "event",
-  //   description: "Leads to Ballroom",
-  //   connectsTo: "ballroom",
-  // },
+  {
+    id: "gallery",
+    name: "Gallery",
+    floors: ["upper"],
+    doors: ["N", "S"],
+    cardType: "event",
+    description: "Leads to Ballroom",
+    connectsTo: "ballroom",
+  },
   // {
   //   id: "game-room",
   //   name: "Game Room",
@@ -180,16 +180,15 @@ export const TILES = [
   //   cardType: "item",
   //   // description: "Overgrown and wild, with strange plants.",
   // },
-  // {
-  //   id: "graveyard",
-  //   name: "Graveyard",
-  //   floors: ["ground"],
-  //   doors: ["N", "E"],
-  //   cardType: "omen",
-  //   description: "Leads to the Underground Cavern",
-  //   connectsTo: "underground-cavern",
-
-  // },
+  {
+    id: "graveyard",
+    name: "Graveyard",
+    floors: ["ground"],
+    doors: ["N", "E"],
+    cardType: "omen",
+    description: "Leads to the Underground Cavern",
+    connectsTo: "underground-cavern",
+  },
   // {
   //   id: "guest-quarters",
   //   name: "Guest Quarters",
@@ -207,15 +206,15 @@ export const TILES = [
   //   description: "When you discover this tile, gain 1 Speed",
   //   discoverGain: { stat: "speed", amount: 1 },
   // },
-  {
-    id: "junk-room",
-    name: "Junk Room",
-    floors: ["ground", "upper"],
-    doors: ["N", "E", "S"],
-    cardType: "item",
-    description: "When you discover this tile, place an Obstacle token on it",
-    discoverEffect: "junk-room",
-  },
+  // {
+  //   id: "junk-room",
+  //   name: "Junk Room",
+  //   floors: ["ground", "upper"],
+  //   doors: ["N", "E", "S"],
+  //   cardType: "item",
+  //   description: "When you discover this tile, place an Obstacle token on it",
+  //   discoverEffect: "junk-room",
+  // },
   // {
   //   id: "kitchen",
   //   name: "Kitchen",
@@ -260,15 +259,15 @@ export const TILES = [
   //   description: "When you discover this tile, gain 1 Knowledge",
   //   discoverGain: { stat: "knowledge", amount: 1 },
   // },
-  // {
-  //   id: "mystic-elevator",
-  //   name: "Mystic Elevator",
-  //   floors: ["ground", "upper", "basement"],
-  //   doors: ["N"],
-  //   cardType: null,
-  //   description:
-  //     "Once per turn when you enter this tile, you may roll two dice. Move the Mystic Elevator to an open doorway on: 4+: Any region. 3: Upper Floor. 2: Ground Floor. 1-0: Basement",
-  // },
+  {
+    id: "mystic-elevator",
+    name: "Mystic Elevator",
+    floors: ["ground", "upper", "basement"],
+    doors: ["N"],
+    cardType: null,
+    description:
+      "Once per turn when you enter this tile, you may roll two dice. Move the Mystic Elevator to an open doorway on: 4+: Any region. 3: Upper Floor. 2: Ground Floor. 1-0: Basement",
+  },
   // {
   //   id: "nursery",
   //   name: "Nursery",
@@ -301,16 +300,16 @@ export const TILES = [
   //   cardType: "event",
   //   // description: "A dark chute leads somewhere you don't want to go.",
   // },
-  {
-    id: "panic-room",
-    name: "Panic Room",
-    floors: ["basement"],
-    doors: ["N"],
-    cardType: "omen",
-    description:
-      "When you discover this tile, if the Secret Stairs tile has not been placed, find it in the tile stack and place it at any open doorway in the Basement. Then, shuffle the tile stack.",
-    discoverEffect: "panic-room",
-  },
+  // {
+  //   id: "panic-room",
+  //   name: "Panic Room",
+  //   floors: ["basement"],
+  //   doors: ["N"],
+  //   cardType: "omen",
+  //   description:
+  //     "When you discover this tile, if the Secret Stairs tile has not been placed, find it in the tile stack and place it at any open doorway in the Basement. Then, shuffle the tile stack.",
+  //   discoverEffect: "panic-room",
+  // },
   // {
   //   id: "primary-bedroom",
   //   name: "Primary Bedroom",
@@ -376,15 +375,15 @@ export const TILES = [
   //   cardType: "event",
   //   // description: "A dark chute leads somewhere you don't want to go.",
   // },
-  // {
-  //   id: "underground-cavern",
-  //   name: "Underground Cavern",
-  //   floors: ["basement"],
-  //   doors: ["N", "E", "S", "W"],
-  //   cardType: "event",
-  //   description: "Leads to the Graveyard",
-  //   connectsTo: "graveyard",
-  // },
+  {
+    id: "underground-cavern",
+    name: "Underground Cavern",
+    floors: ["basement"],
+    doors: ["N", "E", "S", "W"],
+    cardType: "event",
+    description: "Leads to the Graveyard",
+    connectsTo: "graveyard",
+  },
   // {
   //   id: "underground-lake",
   //   name: "Underground Lake",
