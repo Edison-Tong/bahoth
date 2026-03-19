@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { STARTING_TILES, createTileStack } from "./tiles";
-import { createItemDeck } from "./itemCards";
+import { createItemDeck, createOmenDeck } from "./cards";
 import "./GameBoard.css";
 
 // Direction offsets
@@ -47,10 +47,79 @@ function rollDice(n) {
   return results;
 }
 
+function formatSourceNames(names) {
+  if (names.length === 0) return "";
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return `${names[0]} and ${names[1]}`;
+  return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
+function getPassiveEffects(player) {
+  return (player?.omens ?? []).flatMap((omen) =>
+    (omen.passiveEffects ?? []).map((effect) => ({
+      ...effect,
+      sourceName: omen.name,
+    }))
+  );
+}
+
+function getTraitRollBonus(player, stat) {
+  const matchingEffects = getPassiveEffects(player).filter(
+    (effect) => effect.type === "trait-roll-bonus" && effect.stat === stat
+  );
+
+  return {
+    amount: matchingEffects.reduce((sum, effect) => sum + (effect.amount || 0), 0),
+    sourceNames: matchingEffects.map((effect) => effect.sourceName),
+  };
+}
+
+function getDamageReduction(player, damageType) {
+  const matchingEffects = getPassiveEffects(player).filter(
+    (effect) => effect.type === "damage-reduction" && effect.damageTypes?.includes(damageType)
+  );
+
+  return {
+    amount: matchingEffects.reduce((sum, effect) => sum + (effect.amount || 0), 0),
+    sourceNames: matchingEffects.map((effect) => effect.sourceName),
+  };
+}
+
+function createDiceModifier({ amount, sourceNames, sign = "+", labelPrefix = "from", tone = "positive" }) {
+  if (!amount || sourceNames.length === 0) return null;
+
+  return {
+    value: `${sign}${amount}`,
+    label: `${labelPrefix} ${formatSourceNames(sourceNames)}`,
+    tone,
+  };
+}
+
+function DiceRow({ dice, modifier = null, rolling = false }) {
+  return (
+    <div className="dice-row">
+      <div className="dice-container">
+        {dice.map((d, i) => (
+          <div key={i} className={rolling ? "die die-rolling" : "die"}>
+            {d}
+          </div>
+        ))}
+      </div>
+      {modifier && (
+        <div className={`dice-modifier dice-modifier-${modifier.tone}`}>
+          <div className="dice-modifier-value">{modifier.value}</div>
+          <div className="dice-modifier-label">{modifier.label}</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Initialize game state from players
 function initGameState(players) {
   const tileStack = createTileStack();
   const itemDeck = createItemDeck();
+  const omenDeck = createOmenDeck();
 
   // Ground floor starts with 3 tiles in a vertical line:
   // Entrance Hall (0,0) — Hallway (0,-1) — Grand Staircase (0,-2)
@@ -83,6 +152,7 @@ function initGameState(players) {
     },
     tileStack,
     itemDeck,
+    omenDeck,
     currentPlayerIndex: 0,
     turnPhase: "move",
     movePath: [{ x: 0, y: 0, floor: "ground", cost: 0 }],
@@ -104,6 +174,13 @@ function initGameState(players) {
 function createDrawnItemCard(card) {
   return {
     type: "item",
+    ...card,
+  };
+}
+
+function createDrawnOmenCard(card) {
+  return {
+    type: "omen",
     ...card,
   };
 }
@@ -138,82 +215,127 @@ export default function GameBoard({ players, onQuit }) {
       });
       const da = diceAnimRef.current;
       if (!da) return;
-      const total = da.final.reduce((a, b) => a + b, 0);
+      const baseTotal = da.final.reduce((a, b) => a + b, 0);
+      const total = baseTotal;
 
       if (da.purpose === "haunt") {
-        const hauntTriggered = total >= 5;
+        const hauntTriggered = baseTotal >= 5;
         setGame((g) => ({
           ...g,
           hauntRoll: {
             dice: da.final,
-            total,
+            total: baseTotal,
             omenCount: da.omenCount,
             hauntTriggered,
           },
           hauntTriggered: g.hauntTriggered || hauntTriggered,
           message: hauntTriggered
-            ? `THE HAUNT BEGINS! Rolled ${total} with ${da.omenCount} dice!`
-            : `Safe... Rolled ${total} with ${da.omenCount} dice.`,
+            ? `THE HAUNT BEGINS! Rolled ${baseTotal} with ${da.omenCount} dice!`
+            : `Safe... Rolled ${baseTotal} with ${da.omenCount} dice.`,
         }));
       } else if (da.purpose === "collapsed") {
-        const collapsed = total < 5;
-        if (collapsed) {
-          // Show first roll result and wait for user to trigger damage roll
-          setGame((g) => ({
-            ...g,
-            tileEffect: {
-              type: "collapsed-pending",
-              tileName: da.tileName,
-              dice: da.final,
-              total,
-              message: `The floor gives way! Rolled ${total} (needed 5+). Press Roll to roll for damage.`,
-            },
-          }));
-        } else {
-          setGame((g) => ({
+        setGame((g) => {
+          const player = g.players[da.playerIndex ?? g.currentPlayerIndex];
+          const speedBonus = getTraitRollBonus(player, "speed");
+          const total = baseTotal + speedBonus.amount;
+          const collapsed = total < 5;
+          const diceModifier = createDiceModifier({
+            amount: speedBonus.amount,
+            sourceNames: speedBonus.sourceNames,
+          });
+
+          if (collapsed) {
+            return {
+              ...g,
+              tileEffect: {
+                type: "collapsed-pending",
+                tileName: da.tileName,
+                dice: da.final,
+                diceModifier,
+                total,
+                message: `The floor gives way! Rolled ${total} (needed 5+). Press Roll to roll for damage.`,
+              },
+            };
+          }
+
+          return {
             ...g,
             tileEffect: {
               type: "collapsed",
               tileName: da.tileName,
               dice: da.final,
+              diceModifier,
               total,
               collapsed: false,
               damageDice: [],
               damage: 0,
               message: `The floor holds! Rolled ${total} (needed 5+). Safe!`,
             },
-          }));
-        }
+          };
+        });
       } else if (da.purpose === "collapsed-damage") {
-        const damage = da.final[0];
-        setGame((g) => ({
-          ...g,
-          tileEffect: {
-            type: "collapsed",
-            tileName: da.tileName,
-            dice: da.firstDice,
-            total: da.firstTotal,
-            collapsed: true,
-            damageType: "physical",
-            damageDice: da.final,
-            damage,
-            message: `The floor gives way! Rolled ${da.firstTotal} (needed 5+). Fall to Basement Landing and take ${damage} physical damage.`,
-          },
-        }));
+        setGame((g) => {
+          const player = g.players[da.playerIndex ?? g.currentPlayerIndex];
+          const baseDamage = da.final[0];
+          const damageReduction = getDamageReduction(player, "physical");
+          const damage = Math.max(0, baseDamage - damageReduction.amount);
+          const damageDiceModifier = createDiceModifier({
+            amount: damageReduction.amount,
+            sourceNames: damageReduction.sourceNames,
+            sign: "-",
+            labelPrefix: "blocked by",
+          });
+
+          return {
+            ...g,
+            tileEffect: {
+              type: "collapsed",
+              tileName: da.tileName,
+              dice: da.firstDice,
+              total: da.firstTotal,
+              collapsed: true,
+              damageType: "physical",
+              damageDice: da.final,
+              damageDiceModifier,
+              damage,
+              message:
+                damage > 0
+                  ? `The floor gives way! Rolled ${da.firstTotal} (needed 5+). Fall to Basement Landing and take ${damage} physical damage.`
+                  : `The floor gives way! Rolled ${da.firstTotal} (needed 5+). Fall to Basement Landing, but the damage is reduced to 0.`,
+            },
+          };
+        });
       } else if (da.purpose === "furnace") {
-        const damage = da.final[0];
-        setGame((g) => ({
-          ...g,
-          tileEffect: {
-            type: "furnace",
-            tileName: da.tileName,
-            dice: da.final,
-            damageType: "physical",
-            damage,
-            message:
-              damage > 0 ? `The furnace burns! Take ${damage} physical damage.` : "The furnace sputters — no damage!",
-          },
-        }));
+        setGame((g) => {
+          const player = g.players[da.playerIndex ?? g.currentPlayerIndex];
+          const baseDamage = da.final[0];
+          const damageReduction = getDamageReduction(player, "physical");
+          const damage = Math.max(0, baseDamage - damageReduction.amount);
+          const diceModifier = createDiceModifier({
+            amount: damageReduction.amount,
+            sourceNames: damageReduction.sourceNames,
+            sign: "-",
+            labelPrefix: "blocked by",
+          });
+
+          return {
+            ...g,
+            tileEffect: {
+              type: "furnace",
+              tileName: da.tileName,
+              dice: da.final,
+              diceModifier,
+              damageType: "physical",
+              damage,
+              message:
+                damage > 0
+                  ? `The furnace burns! Take ${damage} physical damage.`
+                  : baseDamage > 0 && damageReduction.amount > 0
+                    ? `The furnace burns, but the damage is reduced to 0.`
+                    : "The furnace sputters — no damage!",
+            },
+          };
+        });
       } else if (da.purpose === "mystic-elevator") {
         setGame((g) => {
           const player = g.players[g.currentPlayerIndex];
@@ -734,6 +856,7 @@ export default function GameBoard({ players, onQuit }) {
       const newStack = [...g.tileStack];
       newStack.splice(pe.tileIndex, 1);
       let newItemDeck = [...g.itemDeck];
+      let newOmenDeck = [...g.omenDeck];
 
       let message = `${p.name} placed ${pe.tile.name}!`;
       let turnPhase = "move";
@@ -747,14 +870,14 @@ export default function GameBoard({ players, onQuit }) {
         if (cardType === "item") {
           const nextItem = newItemDeck.shift();
           drawnCard = nextItem ? createDrawnItemCard(nextItem) : null;
+        } else if (cardType === "omen") {
+          const nextOmen = newOmenDeck.shift();
+          drawnCard = nextOmen ? createDrawnOmenCard(nextOmen) : null;
         } else {
           drawnCard = {
             type: cardType,
-            name: cardType === "omen" ? "Bite" : "Angry Being",
-            description:
-              cardType === "omen"
-                ? "Something bit you. You can't see any marks, but you feel different..."
-                : "A force of rage rushes through the room. Every living thing trembles.",
+            name: "Angry Being",
+            description: "A force of rage rushes through the room. Every living thing trembles.",
             flavor: "(Placeholder card — real cards coming soon)",
           };
         }
@@ -927,6 +1050,7 @@ export default function GameBoard({ players, onQuit }) {
         board: newBoard,
         tileStack: newStack,
         itemDeck: newItemDeck,
+        omenDeck: newOmenDeck,
         players: updatedPlayers,
         movePath: [{ x: p.x, y: p.y, floor: p.floor, cost: 0 }],
         pendingExplore: null,
@@ -951,6 +1075,9 @@ export default function GameBoard({ players, onQuit }) {
       if (card?.type === "omen") {
         const numDice = g.omenCount;
         const finalDice = rollDice(numDice);
+        const updatedPlayers = g.players.map((pl, i) =>
+          i === g.currentPlayerIndex ? { ...pl, omens: [...pl.omens, card] } : pl
+        );
         setDiceAnimation({
           purpose: "haunt",
           final: finalDice,
@@ -960,6 +1087,7 @@ export default function GameBoard({ players, onQuit }) {
         });
         return {
           ...g,
+          players: updatedPlayers,
           drawnCard: null,
           message: "Rolling for haunt...",
         };
@@ -1062,11 +1190,19 @@ export default function GameBoard({ players, onQuit }) {
       if (tile?.endOfTurn && !g.tileEffect) {
         if (tile.endOfTurn === "furnace") {
           const finalDice = rollDice(1);
+          const damageReduction = getDamageReduction(p, "physical");
           setDiceAnimation({
             purpose: "furnace",
             final: finalDice,
             display: Array.from({ length: 1 }, () => Math.floor(Math.random() * 3)),
             tileName: tile.name,
+            playerIndex: g.currentPlayerIndex,
+            modifier: createDiceModifier({
+              amount: damageReduction.amount,
+              sourceNames: damageReduction.sourceNames,
+              sign: "-",
+              labelPrefix: "blocked by",
+            }),
             settled: false,
           });
           return { ...g, message: `${tile.name} — rolling for damage...` };
@@ -1074,11 +1210,17 @@ export default function GameBoard({ players, onQuit }) {
         if (tile.endOfTurn === "collapsed") {
           const speedVal = p.character.speed[p.statIndex.speed];
           const finalDice = rollDice(speedVal);
+          const speedBonus = getTraitRollBonus(p, "speed");
           setDiceAnimation({
             purpose: "collapsed",
             final: finalDice,
             display: Array.from({ length: speedVal }, () => Math.floor(Math.random() * 3)),
             tileName: tile.name,
+            playerIndex: g.currentPlayerIndex,
+            modifier: createDiceModifier({
+              amount: speedBonus.amount,
+              sourceNames: speedBonus.sourceNames,
+            }),
             settled: false,
           });
           return { ...g, message: `${tile.name} — rolling for stability...` };
@@ -1327,6 +1469,7 @@ export default function GameBoard({ players, onQuit }) {
     const te = game.tileEffect;
     if (!te || te.type !== "collapsed-pending") return;
     const damageFinal = rollDice(1);
+    const damageReduction = getDamageReduction(game.players[game.currentPlayerIndex], "physical");
     // clear the pending effect and start the damage animation
     setGame((g) => ({ ...g, tileEffect: null }));
     setDiceAnimation({
@@ -1335,6 +1478,13 @@ export default function GameBoard({ players, onQuit }) {
       display: Array.from({ length: 1 }, () => Math.floor(Math.random() * 3)),
       settled: false,
       tileName: te.tileName,
+      playerIndex: game.currentPlayerIndex,
+      modifier: createDiceModifier({
+        amount: damageReduction.amount,
+        sourceNames: damageReduction.sourceNames,
+        sign: "-",
+        labelPrefix: "blocked by",
+      }),
       firstDice: te.dice,
       firstTotal: te.total,
     });
@@ -1796,8 +1946,15 @@ export default function GameBoard({ players, onQuit }) {
           <div className={`card-modal card-${game.drawnCard.type}`}>
             <div className="card-type-label">{game.drawnCard.type.toUpperCase()}</div>
             <h2 className="card-name">{game.drawnCard.name}</h2>
-            <p className="card-description">{game.drawnCard.description}</p>
-            <p className="card-flavor">{game.drawnCard.flavor}</p>
+            <p className="card-description">
+              {game.drawnCard.type === "omen" ? game.drawnCard.passiveAbility : game.drawnCard.description}
+            </p>
+            {(game.drawnCard.type === "omen" ? game.drawnCard.activeAbility : game.drawnCard.special) && (
+              <div className="card-special">
+                {game.drawnCard.type === "omen" ? game.drawnCard.activeAbility : game.drawnCard.special}
+              </div>
+            )}
+            {game.drawnCard.flavor && <p className="card-flavor">{game.drawnCard.flavor}</p>}
             <button className="btn btn-primary" onClick={handleDismissCard}>
               {game.drawnCard.type === "omen" ? "Roll for Haunt" : "Continue"}
             </button>
@@ -1822,13 +1979,7 @@ export default function GameBoard({ players, onQuit }) {
                       ? "COLLAPSED ROOM — DAMAGE"
                       : "FURNACE ROOM"}
             </div>
-            <div className="dice-container">
-              {diceAnimation.display.map((d, i) => (
-                <div key={i} className="die die-rolling">
-                  {d}
-                </div>
-              ))}
-            </div>
+              <DiceRow dice={diceAnimation.display} modifier={diceAnimation.modifier} rolling />
             <h2 className="card-name">Rolling...</h2>
           </div>
         </div>
@@ -1839,13 +1990,7 @@ export default function GameBoard({ players, onQuit }) {
         <div className="card-overlay">
           <div className={`card-modal ${game.hauntRoll.hauntTriggered ? "card-haunt-triggered" : "card-haunt-safe"}`}>
             <div className="card-type-label">HAUNT ROLL</div>
-            <div className="dice-container">
-              {game.hauntRoll.dice.map((d, i) => (
-                <div key={i} className="die">
-                  {d}
-                </div>
-              ))}
-            </div>
+            <DiceRow dice={game.hauntRoll.dice} />
             <div className="dice-total">Total: {game.hauntRoll.total}</div>
             <div className="dice-target">Need less than 5 to be safe</div>
             <h2 className="card-name">{game.hauntRoll.hauntTriggered ? "THE HAUNT BEGINS!" : "Safe... for now."}</h2>
@@ -1869,13 +2014,7 @@ export default function GameBoard({ players, onQuit }) {
           >
             <div className="card-type-label">{game.tileEffect.tileName}</div>
             {game.tileEffect.dice && (
-              <div className="dice-container">
-                {game.tileEffect.dice.map((d, i) => (
-                  <div key={i} className="die">
-                    {d}
-                  </div>
-                ))}
-              </div>
+              <DiceRow dice={game.tileEffect.dice} modifier={game.tileEffect.diceModifier} />
             )}
             {game.tileEffect.total !== undefined && <div className="dice-total">Total: {game.tileEffect.total}</div>}
             {game.tileEffect.collapsed && game.tileEffect.damageDice.length > 0 && (
@@ -1883,13 +2022,7 @@ export default function GameBoard({ players, onQuit }) {
                 <div className="dice-total" style={{ marginTop: "0.5rem" }}>
                   Damage roll:
                 </div>
-                <div className="dice-container">
-                  {game.tileEffect.damageDice.map((d, i) => (
-                    <div key={i} className="die">
-                      {d}
-                    </div>
-                  ))}
-                </div>
+                <DiceRow dice={game.tileEffect.damageDice} modifier={game.tileEffect.damageDiceModifier} />
               </>
             )}
             <p className="card-description">{game.tileEffect.message}</p>
