@@ -121,7 +121,45 @@
   align-items: center;
   justify-content: center;
   transition: border-color 0.15s;
-  overflow: hidden;
+  overflow: visible;
+}
+
+.tile-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 10px);
+  transform: translateX(-50%) translateY(4px);
+  width: max-content;
+  max-width: 220px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(15, 12, 9, 0.96);
+  border: 1px solid rgba(216, 188, 127, 0.4);
+  color: var(--text-bright);
+  font-size: 0.72rem;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 30;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.tile-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: rgba(15, 12, 9, 0.96) transparent transparent transparent;
+}
+
+.board-tile:hover .tile-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
 }
 
 .board-tile-current {

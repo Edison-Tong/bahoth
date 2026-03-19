@@ -1363,9 +1363,7 @@ export default function GameBoard({ players, onQuit }) {
           [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
         };
         const updatedPlayers = g.players.map((player, index) =>
-          index === currentPlayerIndex
-            ? { ...player, x: placement.x, y: placement.y, floor: placement.floor }
-            : player
+          index === currentPlayerIndex ? { ...player, x: placement.x, y: placement.y, floor: placement.floor } : player
         );
 
         setCameraFloor(placement.floor);
@@ -1564,8 +1562,8 @@ export default function GameBoard({ players, onQuit }) {
                     tile.cardType ? "board-tile-" + tile.cardType : ""
                   }`}
                   style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
-                  title={tile.description}
                 >
+                  {tile.description && <div className="tile-tooltip">{tile.description}</div>}
                   <div className="tile-name">{tile.name}</div>
                   {tile.cardType && <div className={`tile-type tile-type-${tile.cardType}`}>{tile.cardType}</div>}
                   {tile.obstacle && <div className="tile-obstacle">Obstacle</div>}
@@ -1818,11 +1816,11 @@ export default function GameBoard({ players, onQuit }) {
                 ? "HAUNT ROLL"
                 : diceAnimation.purpose === "mystic-elevator"
                   ? "MYSTIC ELEVATOR"
-                : diceAnimation.purpose === "collapsed"
-                  ? "COLLAPSED ROOM"
-                  : diceAnimation.purpose === "collapsed-damage"
-                    ? "COLLAPSED ROOM — DAMAGE"
-                    : "FURNACE ROOM"}
+                  : diceAnimation.purpose === "collapsed"
+                    ? "COLLAPSED ROOM"
+                    : diceAnimation.purpose === "collapsed-damage"
+                      ? "COLLAPSED ROOM — DAMAGE"
+                      : "FURNACE ROOM"}
             </div>
             <div className="dice-container">
               {diceAnimation.display.map((d, i) => (
