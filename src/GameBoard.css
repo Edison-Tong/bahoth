@@ -242,6 +242,38 @@
   letter-spacing: 0.04em;
 }
 
+.tile-token-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  align-items: center;
+}
+
+.tile-token {
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-size: 0.5rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #fdf7ea;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.tile-token-blessing {
+  background: rgba(241, 196, 15, 0.18);
+  border-color: rgba(241, 196, 15, 0.4);
+  color: #ffefb3;
+}
+
+.tile-token-secret-passage {
+  background: rgba(52, 152, 219, 0.18);
+  border-color: rgba(52, 152, 219, 0.42);
+  color: #d2ecff;
+}
+
 /* Door indicators */
 .tile-doors {
   position: absolute;
@@ -328,6 +360,31 @@
 .explore-target:hover {
   background: rgba(192, 57, 43, 0.25);
   border-color: var(--accent);
+}
+
+.event-target-overlay {
+  position: absolute;
+  border-radius: 6px;
+  background: rgba(52, 152, 219, 0.14);
+  border: 2px dashed rgba(52, 152, 219, 0.72);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 6;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+
+.event-target-overlay:hover {
+  background: rgba(52, 152, 219, 0.24);
+  border-color: rgba(133, 202, 255, 0.92);
+  transform: translateY(-1px);
+}
+
+.event-target-overlay-selected {
+  background: rgba(52, 152, 219, 0.34);
+  border-color: rgba(187, 229, 255, 1);
+  box-shadow: 0 0 0 2px rgba(187, 229, 255, 0.38) inset, 0 0 16px rgba(52, 152, 219, 0.45);
 }
 
 .explore-icon {
@@ -692,6 +749,18 @@
   font-size: 0.68rem;
   color: #8f8167;
   font-style: italic;
+}
+
+.event-option-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  justify-content: center;
+  margin-top: 0.85rem;
+}
+
+.card-event-resolution {
+  max-width: min(560px, 92vw);
 }
 
 .sidebar-collapsed .sidebar-char {

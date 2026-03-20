@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { STARTING_TILES, createTileStack } from "./tiles";
-import { createItemDeck, createOmenDeck } from "./cards";
+import { createEventDeck, createItemDeck, createOmenDeck } from "./cards";
 import "./GameBoard.css";
 
 // Direction offsets
@@ -52,6 +52,20 @@ function formatSourceNames(names) {
   if (names.length === 1) return names[0];
   if (names.length === 2) return `${names[0]} and ${names[1]}`;
   return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
+}
+
+function getTileAtPosition(board, x, y, floor) {
+  return board?.[floor]?.find((tile) => tile.x === x && tile.y === y) || null;
+}
+
+function getBoardTraitRollDiceBonus(board, player) {
+  const tile = getTileAtPosition(board, player?.x, player?.y, player?.floor);
+  const blessingCount = tile?.tokens?.filter((token) => token.type === "blessing").length || 0;
+
+  return {
+    amount: blessingCount,
+    sourceNames: blessingCount > 0 ? Array.from({ length: blessingCount }, () => "Blessing") : [],
+  };
 }
 
 function getPassiveEffects(player) {
@@ -115,12 +129,12 @@ function getDamageConversionOptions(player, damageType) {
 }
 
 function createTraitRollModifier(traitBonus, diceBonus) {
-  const sourceNames = [...new Set([...traitBonus.sourceNames, ...diceBonus.sourceNames])];
+  const sourceNames = [...new Set([...(traitBonus?.sourceNames || []), ...(diceBonus?.sourceNames || [])])];
   if (sourceNames.length === 0) return null;
 
   const parts = [];
-  if (diceBonus.amount > 0) parts.push(`+${diceBonus.amount} dice`);
-  if (traitBonus.amount > 0) parts.push(`+${traitBonus.amount}`);
+  if ((diceBonus?.amount || 0) > 0) parts.push(`+${diceBonus.amount} dice`);
+  if ((traitBonus?.amount || 0) > 0) parts.push(`+${traitBonus.amount}`);
 
   return {
     value: parts.join(" "),
@@ -129,9 +143,14 @@ function createTraitRollModifier(traitBonus, diceBonus) {
   };
 }
 
-function resolveTraitRoll(player, { stat, baseDiceCount, context }) {
-  const diceBonus = getTraitRollDiceBonus(player, context);
-  const traitBonus = getTraitRollBonus(player, stat);
+function resolveTraitRoll(player, { stat, baseDiceCount, context, board = null, usePassives = true }) {
+  const passiveDiceBonus = usePassives ? getTraitRollDiceBonus(player, context) : { amount: 0, sourceNames: [] };
+  const boardDiceBonus = board ? getBoardTraitRollDiceBonus(board, player) : { amount: 0, sourceNames: [] };
+  const diceBonus = {
+    amount: passiveDiceBonus.amount + boardDiceBonus.amount,
+    sourceNames: [...passiveDiceBonus.sourceNames, ...boardDiceBonus.sourceNames],
+  };
+  const traitBonus = usePassives ? getTraitRollBonus(player, stat) : { amount: 0, sourceNames: [] };
   const dice = rollDice(baseDiceCount + diceBonus.amount);
 
   return {
@@ -168,6 +187,47 @@ function describePostDamageEffects(effects) {
   return effects
     .map((effect) => `gain ${effect.amount} ${STAT_LABELS[effect.stat]} from ${effect.sourceName}`)
     .join(" and ");
+}
+
+function getEventRollButtonLabel(diceCount) {
+  return diceCount === 1 ? "Roll Die" : "Roll Dice";
+}
+
+function describeEventEffect(effect) {
+  if (!effect) return "";
+
+  if (effect.type === "damage") {
+    const amount = effect.resolvedAmount ?? effect.amount ?? 0;
+    return `Take ${amount} ${effect.damageType} damage.`;
+  }
+  if (effect.type === "stat-change") {
+    if (effect.mode === "heal") {
+      return effect.stat === "chosen" ? "Heal the chosen trait." : `Heal ${STAT_LABELS[effect.stat]}.`;
+    }
+    const verb = effect.mode === "lose" ? "Lose" : "Gain";
+    if (effect.stat === "all") return `${verb} ${effect.amount} in each trait.`;
+    if (effect.stat === "chosen") return `${verb} ${effect.amount} in the chosen trait.`;
+    return `${verb} ${effect.amount} ${STAT_LABELS[effect.stat]}.`;
+  }
+  if (effect.type === "stat-choice") {
+    return `${effect.mode === "lose" ? "Lose" : "Gain"} ${effect.amount} in any listed trait.`;
+  }
+  if (effect.type === "move") return "Move to a valid destination.";
+  if (effect.type === "draw-card")
+    return `Draw ${effect.amount || 1} ${effect.deck} card${(effect.amount || 1) === 1 ? "" : "s"}.`;
+  if (effect.type === "place-token") return `Place a ${effect.token.replace(/-/g, " ")} token.`;
+  if (effect.type === "start-haunt") return `Start haunt ${effect.hauntNumber}.`;
+  if (effect.type === "discard-item") return "Discard an item.";
+  if (effect.type === "bury-item") return "Bury an item.";
+  return "Resolve effect.";
+}
+
+function describeEventEffects(effects) {
+  if (!effects || effects.length === 0) return "Nothing happens.";
+  return effects
+    .map((effect) => describeEventEffect(effect))
+    .filter(Boolean)
+    .join(" ");
 }
 
 function getDamageTypesFromAllocation(choice) {
@@ -226,7 +286,30 @@ function DiceRow({ dice, modifier = null, rolling = false }) {
   );
 }
 
+function EventCardContent({ card }) {
+  return (
+    <>
+      {card.todo && (
+        <div className="card-ability-block">
+          <div className="card-ability-label">To Do</div>
+          <p className="card-description">{card.todo}</p>
+        </div>
+      )}
+      {card.result && (
+        <div className="card-special">
+          <div className="card-ability-label">Result</div>
+          {card.result}
+        </div>
+      )}
+    </>
+  );
+}
+
 function CardAbilityContent({ card }) {
+  if (card.type === "event") {
+    return <EventCardContent card={card} />;
+  }
+
   const primaryAbility = card.passiveAbility || card.activeAbility || card.description;
   const primaryLabel = card.passiveAbility ? "Passive Ability" : card.activeAbility ? "Active Ability" : null;
   const secondaryAbility = card.passiveAbility && card.activeAbility ? card.activeAbility : card.special;
@@ -255,6 +338,7 @@ function initGameState(players) {
   const tileStack = createTileStack();
   const itemDeck = createItemDeck();
   const omenDeck = createOmenDeck();
+  const eventDeck = createEventDeck();
 
   // Ground floor starts with 3 tiles in a vertical line:
   // Entrance Hall (0,0) — Hallway (0,-1) — Grand Staircase (0,-2)
@@ -288,6 +372,7 @@ function initGameState(players) {
     tileStack,
     itemDeck,
     omenDeck,
+    eventDeck,
     currentPlayerIndex: 0,
     turnPhase: "move",
     movePath: [{ x: 0, y: 0, floor: "ground", cost: 0 }],
@@ -301,6 +386,7 @@ function initGameState(players) {
     hauntRoll: null,
     tileEffect: null,
     damageChoice: null,
+    eventState: null,
     turnNumber: 1,
     message: `${players[0].name}'s turn — ${players[0].character.speed[players[0].character.startIndex.speed]} moves`,
   };
@@ -320,19 +406,25 @@ function createDrawnOmenCard(card) {
   };
 }
 
+function createDrawnEventCard(card) {
+  return {
+    type: "event",
+    ...card,
+  };
+}
+
 export default function GameBoard({ players, onQuit }) {
   const [game, setGame] = useState(() => initGameState(players));
   const [cameraFloor, setCameraFloor] = useState("ground");
   const [diceAnimation, setDiceAnimation] = useState(null);
   const [expandedSidebarPlayers, setExpandedSidebarPlayers] = useState(() => new Set());
   const [viewedCard, setViewedCard] = useState(null);
-  const diceAnimRef = useRef(null);
   const boardRef = useRef(null);
 
   // Dice rolling animation
   useEffect(() => {
     if (!diceAnimation || diceAnimation.settled) return;
-    diceAnimRef.current = diceAnimation;
+    const activeAnimation = diceAnimation;
 
     const interval = setInterval(() => {
       setDiceAnimation((prev) => {
@@ -349,7 +441,7 @@ export default function GameBoard({ players, onQuit }) {
         if (!prev) return prev;
         return { ...prev, display: prev.final, settled: true };
       });
-      const da = diceAnimRef.current;
+      const da = activeAnimation;
       if (!da) return;
       const baseTotal = da.final.reduce((a, b) => a + b, 0);
       const total = baseTotal;
@@ -369,6 +461,39 @@ export default function GameBoard({ players, onQuit }) {
             ? `THE HAUNT BEGINS! Rolled ${baseTotal} with ${da.omenCount} dice!`
             : `Safe... Rolled ${baseTotal} with ${da.omenCount} dice.`,
         }));
+      } else if (da.purpose === "event-roll") {
+        setGame((g) => {
+          if (!g.eventState) return g;
+
+          const resolvedEffects = (da.effects || []).map((effect) => {
+            if (effect.type === "damage" && effect.amountType === "dice" && effect.resolvedAmount === undefined) {
+              const resolvedAmount = rollDice(effect.dice || 1).reduce((sum, die) => sum + die, 0);
+              return {
+                ...effect,
+                resolvedAmount,
+              };
+            }
+            return effect;
+          });
+
+          return {
+            ...g,
+            eventState: {
+              ...g.eventState,
+              awaiting: null,
+              lastRoll: {
+                label: da.label,
+                dice: da.final,
+                total: da.total,
+                modifier: da.modifier || null,
+              },
+              summary: `Rolled ${da.total}${da.label ? ` on ${da.label}` : ""}. ${describeEventEffects(resolvedEffects)}`,
+              pendingEffects: resolvedEffects,
+            },
+            message: `${g.eventState.card.name}: roll resolved.`,
+          };
+        });
+        setDiceAnimation(null);
       } else if (da.purpose === "collapsed") {
         setGame((g) => {
           const total = da.resolvedTotal ?? baseTotal;
@@ -553,7 +678,25 @@ export default function GameBoard({ players, onQuit }) {
       clearTimeout(timeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diceAnimation?.settled]);
+  }, [diceAnimation?.purpose, diceAnimation?.settled]);
+
+  // Guard against edge cases where event state is "rolling" but the event-roll
+  // animation is missing; restart the roll animation so the flow can continue.
+  useEffect(() => {
+    const awaiting = game.eventState?.awaiting;
+    if (!awaiting || awaiting.type !== "rolling") return;
+    if (diceAnimation) return;
+    if (awaiting.rollKind !== "trait-roll" && awaiting.rollKind !== "dice-roll" && awaiting.rollKind !== "haunt-roll") {
+      return;
+    }
+
+    const rollReady = resolveRollReadyAwaiting(game, { ...awaiting, type: "roll-ready" });
+    if (rollReady.animation) {
+      setGame(rollReady.game);
+      setDiceAnimation(rollReady.animation);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game.eventState?.awaiting, diceAnimation]);
 
   const currentPlayer = game.players[game.currentPlayerIndex];
   const floorTiles = game.board[cameraFloor] || [];
@@ -990,6 +1133,7 @@ export default function GameBoard({ players, onQuit }) {
       newStack.splice(pe.tileIndex, 1);
       let newItemDeck = [...g.itemDeck];
       let newOmenDeck = [...g.omenDeck];
+      let newEventDeck = [...g.eventDeck];
 
       let message = `${p.name} placed ${pe.tile.name}!`;
       let turnPhase = "move";
@@ -1007,12 +1151,8 @@ export default function GameBoard({ players, onQuit }) {
           const nextOmen = newOmenDeck.shift();
           drawnCard = nextOmen ? createDrawnOmenCard(nextOmen) : null;
         } else {
-          drawnCard = {
-            type: cardType,
-            name: "Angry Being",
-            description: "A force of rage rushes through the room. Every living thing trembles.",
-            flavor: "(Placeholder card — real cards coming soon)",
-          };
+          const nextEvent = newEventDeck.shift();
+          drawnCard = nextEvent ? createDrawnEventCard(nextEvent) : null;
         }
         if (cardType === "omen") {
           newOmenCount++;
@@ -1184,6 +1324,7 @@ export default function GameBoard({ players, onQuit }) {
         tileStack: newStack,
         itemDeck: newItemDeck,
         omenDeck: newOmenDeck,
+        eventDeck: newEventDeck,
         players: updatedPlayers,
         movePath: [{ x: p.x, y: p.y, floor: p.floor, cost: 0 }],
         pendingExplore: null,
@@ -1200,7 +1341,10 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   // Dismiss drawn card and continue
-  function handleDismissCard() {
+  function handleDismissCard(options = {}) {
+    const { autoRollIfReady = false } = options;
+    let nextCameraFloor = null;
+    let nextDiceAnimation = null;
     setGame((g) => {
       const card = g.drawnCard;
 
@@ -1228,7 +1372,35 @@ export default function GameBoard({ players, onQuit }) {
 
       let message = "";
       if (card?.type === "event") {
-        message = "Event resolved.";
+        const eventGame = {
+          ...g,
+          drawnCard: null,
+          turnPhase: "event",
+          eventState: {
+            card,
+            stepIndex: 0,
+            context: {
+              choices: {},
+              selectedStats: {},
+            },
+            pendingEffects: [],
+            awaiting: null,
+            summary: null,
+            lastRoll: null,
+          },
+          message: `${card.name} begins...`,
+        };
+        const result = advanceEventResolution(eventGame);
+        let nextState = result.game;
+        nextCameraFloor = result.cameraFloor || null;
+
+        if (autoRollIfReady && nextState.eventState?.awaiting?.type === "roll-ready") {
+          const rollReady = resolveRollReadyAwaiting(nextState, nextState.eventState.awaiting);
+          nextState = rollReady.game;
+          nextDiceAnimation = rollReady.animation;
+        }
+
+        return nextState;
       } else if (card?.type === "item") {
         const updatedPlayers = g.players.map((pl, i) =>
           i === g.currentPlayerIndex ? { ...pl, inventory: [...pl.inventory, card] } : pl
@@ -1248,6 +1420,12 @@ export default function GameBoard({ players, onQuit }) {
         message,
       };
     });
+    if (nextCameraFloor) {
+      setCameraFloor(nextCameraFloor);
+    }
+    if (nextDiceAnimation) {
+      setDiceAnimation(nextDiceAnimation);
+    }
   }
 
   function handleDismissHauntRoll() {
@@ -1487,6 +1665,746 @@ export default function GameBoard({ players, onQuit }) {
     return updatedPlayers;
   }
 
+  function appendEventSummary(summary, text) {
+    if (!text) return summary || "";
+    if (!summary) return text;
+    return `${summary} ${text}`;
+  }
+
+  function getDiscoveredTileOptions(board, player, destination, tokenType = null) {
+    const currentTile = getTileAtPosition(board, player.x, player.y, player.floor);
+    const allTiles = Object.entries(board).flatMap(([floor, tiles]) =>
+      tiles.map((tile) => ({
+        tile,
+        floor,
+      }))
+    );
+
+    const withoutToken = (entries) =>
+      tokenType
+        ? entries.filter(({ tile }) => !(tile.tokens || []).some((token) => token.type === tokenType))
+        : entries;
+
+    switch (destination) {
+      case "current-tile":
+        return currentTile ? [{ tile: currentTile, floor: player.floor }] : [];
+      case "adjacent-tile":
+        return Object.entries(DIR)
+          .map(([, dir]) => getTileAtPosition(board, player.x + dir.dx, player.y + dir.dy, player.floor))
+          .filter(Boolean)
+          .map((tile) => ({ tile, floor: player.floor }));
+      case "entrance-hall":
+      case "basement-landing":
+      case "upper-landing":
+      case "conservatory": {
+        const target = allTiles.find(({ tile }) => tile.id === destination);
+        return target ? [target] : [];
+      }
+      case "any-tile-in-current-region":
+        return allTiles.filter(({ floor }) => floor === player.floor);
+      case "any-tile-in-different-region":
+        return allTiles.filter(({ floor }) => floor !== player.floor);
+      case "any-tile":
+        return allTiles;
+      case "any-other-tile":
+        return withoutToken(
+          allTiles.filter(({ tile, floor }) => !(floor === player.floor && tile.x === player.x && tile.y === player.y))
+        );
+      case "any-ground-floor-tile":
+        return withoutToken(allTiles.filter(({ floor }) => floor === "ground"));
+      case "any-basement-tile":
+        return withoutToken(allTiles.filter(({ floor }) => floor === "basement"));
+      case "any-basement-or-ground-floor-tile":
+        return allTiles.filter(({ floor }) => floor === "basement" || floor === "ground");
+      case "any-upper-or-ground-floor-tile":
+        return allTiles.filter(({ floor }) => floor === "upper" || floor === "ground");
+      case "graveyard-or-catacombs":
+        return allTiles.filter(({ tile }) => tile.id === "graveyard" || tile.id === "catacombs");
+      default:
+        return [];
+    }
+  }
+
+  function matchesEventCondition(condition, g, eventState) {
+    if (!condition) return true;
+
+    if (condition.anyOf) {
+      return condition.anyOf.some((entry) => matchesEventCondition(entry, g, eventState));
+    }
+
+    if (condition.choice) {
+      return eventState.context.choices?.[condition.choice.step] === condition.choice.equals;
+    }
+
+    if (condition.hauntStarted !== undefined) {
+      return g.hauntTriggered === condition.hauntStarted;
+    }
+
+    if (condition.currentFloor) {
+      return g.players[g.currentPlayerIndex].floor === condition.currentFloor;
+    }
+
+    if (condition.discovered) {
+      return Object.values(g.board).some((tiles) => tiles.some((tile) => tile.id === condition.discovered));
+    }
+
+    if (condition.notDiscovered) {
+      return !Object.values(g.board).some((tiles) => tiles.some((tile) => tile.id === condition.notDiscovered));
+    }
+
+    if (condition.discoveredAny) {
+      return condition.discoveredAny.some((id) =>
+        Object.values(g.board).some((tiles) => tiles.some((tile) => tile.id === id))
+      );
+    }
+
+    return true;
+  }
+
+  function matchesRollCondition(rollCondition, total) {
+    if (!rollCondition) return true;
+    if (rollCondition.exact !== undefined) return total === rollCondition.exact;
+    if (rollCondition.min !== undefined && total < rollCondition.min) return false;
+    if (rollCondition.max !== undefined && total > rollCondition.max) return false;
+    return true;
+  }
+
+  function getMatchingOutcome(outcomes, total) {
+    return outcomes.find((outcome) => matchesRollCondition(outcome.when?.roll, total)) || null;
+  }
+
+  function getInitialEventPrimaryAction(g, card) {
+    const tempEventState = {
+      card,
+      stepIndex: 0,
+      context: {
+        choices: {},
+        selectedStats: {},
+      },
+    };
+
+    const steps = card.steps || [];
+    let stepIndex = 0;
+    while (stepIndex < steps.length) {
+      const step = steps[stepIndex];
+      if (matchesEventCondition(step.onlyIf || step.when, g, tempEventState)) {
+        if (step.kind === "trait-roll" && step.stat) {
+          const player = g.players[g.currentPlayerIndex];
+          const baseDiceCount = player.character[step.stat][player.statIndex[step.stat]];
+          return {
+            label: getEventRollButtonLabel(baseDiceCount),
+            autoRoll: true,
+          };
+        }
+
+        if (step.kind === "dice-roll" || step.kind === "haunt-roll") {
+          const diceCount = step.kind === "haunt-roll" ? g.omenCount : step.dice || 0;
+          return {
+            label: getEventRollButtonLabel(diceCount),
+            autoRoll: true,
+          };
+        }
+
+        return {
+          label: "Continue",
+          autoRoll: false,
+        };
+      }
+      stepIndex += 1;
+    }
+
+    return {
+      label: "Continue",
+      autoRoll: false,
+    };
+  }
+
+  function resolveRollReadyAwaiting(g, awaiting) {
+    const currentPlayerState = g.players[g.currentPlayerIndex];
+
+    if (awaiting.rollKind === "trait-roll") {
+      const roll = resolveTraitRoll(currentPlayerState, {
+        stat: awaiting.rollStat,
+        baseDiceCount: awaiting.baseDiceCount,
+        context: "event",
+        board: g.board,
+        usePassives: awaiting.usePassives !== false,
+      });
+      const outcome = getMatchingOutcome(awaiting.outcomes || [], roll.total);
+
+      return {
+        game: {
+          ...g,
+          eventState: {
+            ...g.eventState,
+            awaiting: {
+              ...awaiting,
+              type: "rolling",
+            },
+          },
+        },
+        animation: {
+          purpose: "event-roll",
+          final: roll.dice,
+          display: Array.from({ length: roll.dice.length }, () => Math.floor(Math.random() * 3)),
+          settled: false,
+          label: STAT_LABELS[awaiting.rollStat],
+          total: roll.total,
+          modifier: roll.modifier,
+          effects: [...(outcome?.effects || [])],
+        },
+      };
+    }
+
+    if (awaiting.rollKind === "dice-roll" || awaiting.rollKind === "haunt-roll") {
+      const dice = rollDice(awaiting.baseDiceCount || 0);
+      const total = dice.reduce((sum, die) => sum + die, 0);
+      const outcome = getMatchingOutcome(awaiting.outcomes || [], total);
+
+      return {
+        game: {
+          ...g,
+          eventState: {
+            ...g.eventState,
+            awaiting: {
+              ...awaiting,
+              type: "rolling",
+            },
+          },
+        },
+        animation: {
+          purpose: "event-roll",
+          final: dice,
+          display: Array.from({ length: dice.length }, () => Math.floor(Math.random() * 3)),
+          settled: false,
+          label: awaiting.label || `${dice.length} dice`,
+          total,
+          modifier: null,
+          effects: [...(outcome?.effects || [])],
+        },
+      };
+    }
+
+    return { game: g, animation: null };
+  }
+
+  function applyEventStatChange(players, playerIndex, effect, chosenStat = null) {
+    const targetStat = effect.stat === "chosen" ? chosenStat : effect.stat;
+    if (!targetStat) return players;
+
+    if (targetStat === "all") {
+      return PLAYER_STAT_ORDER.reduce((updatedPlayers, stat) => {
+        const delta = effect.mode === "lose" ? -(effect.amount || 0) : effect.amount || 0;
+        return effect.mode === "heal"
+          ? updatedPlayers.map((player, index) => {
+              if (index !== playerIndex) return player;
+              const nextIndex = Math.max(player.statIndex[stat], player.character.startIndex[stat]);
+              const statIndex = { ...player.statIndex, [stat]: nextIndex };
+              const isAlive = Object.values(statIndex).every((value) => value > 0);
+              return { ...player, statIndex, isAlive };
+            })
+          : applyStatChange(updatedPlayers, playerIndex, stat, delta);
+      }, players);
+    }
+
+    if (effect.mode === "heal") {
+      return players.map((player, index) => {
+        if (index !== playerIndex) return player;
+        const healedIndex = Math.max(player.statIndex[targetStat], player.character.startIndex[targetStat]);
+        const statIndex = { ...player.statIndex, [targetStat]: healedIndex };
+        const isAlive = Object.values(statIndex).every((value) => value > 0);
+        return { ...player, statIndex, isAlive };
+      });
+    }
+
+    const delta = effect.mode === "lose" ? -(effect.amount || 0) : effect.amount || 0;
+    return applyStatChange(players, playerIndex, targetStat, delta);
+  }
+
+  function finalizeEventState(g, message) {
+    return {
+      game: {
+        ...g,
+        eventState: null,
+        turnPhase: g.drawnCard ? "card" : "endTurn",
+        message,
+      },
+    };
+  }
+
+  function applyResolvedEventEffect(g, effect, selectedValue = null) {
+    const player = g.players[g.currentPlayerIndex];
+    const eventState = g.eventState;
+    const chosenStat = selectedValue || eventState?.context?.selectedStats?.[effect.stepKey] || null;
+
+    if (effect.type === "grant-bonus") {
+      return {
+        game: {
+          ...g,
+          eventState: {
+            ...eventState,
+            summary: appendEventSummary(eventState.summary, "A blessing now empowers trait rolls on this tile."),
+          },
+        },
+      };
+    }
+
+    if (effect.type === "stat-choice") {
+      return {
+        game: {
+          ...g,
+          eventState: {
+            ...eventState,
+            awaiting: {
+              type: "stat-choice",
+              prompt: "Choose a trait.",
+              options: effect.options,
+              effect,
+            },
+          },
+        },
+      };
+    }
+
+    if (effect.type === "discard-item" || effect.type === "bury-item") {
+      const matchingItems = player.inventory
+        .map((card, index) => ({ card, index }))
+        .filter(({ card }) => {
+          if (effect.filter === "non-weapon-item") return !card.isWeapon;
+          return true;
+        });
+
+      if (matchingItems.length === 0) {
+        return { game: g };
+      }
+
+      if (matchingItems.length === 1) {
+        const [{ index }] = matchingItems;
+        return {
+          game: {
+            ...g,
+            players: g.players.map((current, currentIndex) =>
+              currentIndex === g.currentPlayerIndex
+                ? { ...current, inventory: current.inventory.filter((_, cardIndex) => cardIndex !== index) }
+                : current
+            ),
+          },
+        };
+      }
+
+      return {
+        game: {
+          ...g,
+          eventState: {
+            ...eventState,
+            awaiting: {
+              type: "item-choice",
+              prompt: effect.type === "bury-item" ? "Choose an Item to bury." : "Choose an Item to discard.",
+              options: matchingItems.map(({ card, index }) => ({ label: card.name, value: index })),
+              effect,
+            },
+          },
+        },
+      };
+    }
+
+    if (effect.type === "move") {
+      const options = getDiscoveredTileOptions(g.board, player, effect.destination);
+      if (options.length === 0) {
+        return {
+          game: {
+            ...g,
+            eventState: {
+              ...eventState,
+              summary: appendEventSummary(eventState.summary, "No valid destination is available."),
+            },
+          },
+        };
+      }
+
+      if (options.length === 1) {
+        const [{ tile, floor }] = options;
+        return {
+          game: {
+            ...g,
+            players: g.players.map((current, currentIndex) =>
+              currentIndex === g.currentPlayerIndex ? { ...current, x: tile.x, y: tile.y, floor } : current
+            ),
+            movePath: [{ x: tile.x, y: tile.y, floor, cost: 0 }],
+          },
+          cameraFloor: floor,
+        };
+      }
+
+      return {
+        game: {
+          ...g,
+          eventState: {
+            ...eventState,
+            awaiting: {
+              type: "tile-choice",
+              prompt: "Choose a tile.",
+              effect,
+              selectedOptionId: null,
+              options: options.map(({ tile, floor }) => ({
+                id: `${tile.id}-${floor}-${tile.x}-${tile.y}`,
+                floor,
+                x: tile.x,
+                y: tile.y,
+                label: tile.name,
+                tileId: tile.id,
+              })),
+            },
+          },
+        },
+      };
+    }
+
+    if (effect.type === "place-token") {
+      const placeTokenOnTile = (board, floor, x, y) => ({
+        ...board,
+        [floor]: board[floor].map((tile) =>
+          tile.x === x && tile.y === y
+            ? {
+                ...tile,
+                obstacle: effect.token === "obstacle" ? true : tile.obstacle,
+                tokens:
+                  effect.token === "obstacle" ? tile.tokens || [] : [...(tile.tokens || []), { type: effect.token }],
+              }
+            : tile
+        ),
+      });
+
+      const options = getDiscoveredTileOptions(g.board, player, effect.location, effect.token);
+      if (options.length === 0) {
+        return { game: g };
+      }
+
+      if (options.length === 1) {
+        const [{ tile, floor }] = options;
+        return {
+          game: {
+            ...g,
+            board: placeTokenOnTile(g.board, floor, tile.x, tile.y),
+          },
+        };
+      }
+
+      return {
+        game: {
+          ...g,
+          eventState: {
+            ...eventState,
+            awaiting: {
+              type: "tile-choice",
+              prompt: `Choose where to place the ${effect.token.replace(/-/g, " ")} token.`,
+              effect,
+              selectedOptionId: null,
+              options: options.map(({ tile, floor }) => ({
+                id: `${tile.id}-${floor}-${tile.x}-${tile.y}`,
+                floor,
+                x: tile.x,
+                y: tile.y,
+                label: tile.name,
+                tileId: tile.id,
+              })),
+            },
+          },
+        },
+      };
+    }
+
+    if (effect.type === "stat-change") {
+      const nextPlayers = applyEventStatChange(g.players, g.currentPlayerIndex, effect, chosenStat);
+      return { game: { ...g, players: nextPlayers } };
+    }
+
+    if (effect.type === "draw-card") {
+      if (effect.deck !== "item") return { game: g };
+      const nextDeck = [...g.itemDeck];
+      const nextItem = nextDeck.shift();
+      return finalizeEventState(
+        {
+          ...g,
+          itemDeck: nextDeck,
+          drawnCard: nextItem ? createDrawnItemCard(nextItem) : null,
+        },
+        nextItem
+          ? `${player.name} draws ${nextItem.name}.`
+          : `${player.name} tried to draw an Item card, but the deck is empty.`
+      );
+    }
+
+    if (effect.type === "damage") {
+      const rolledDamage =
+        effect.resolvedAmount ??
+        (effect.amountType === "dice" ? rollDice(effect.dice || 1).reduce((sum, die) => sum + die, 0) : null);
+      const effectAmount = rolledDamage ?? effect.amount ?? 0;
+      const resolved = resolveDamageEffect(player, {
+        type: "event-damage",
+        damageType: effect.damageType,
+        damage: effectAmount,
+      });
+
+      if (resolved.damage <= 0) {
+        return {
+          game: {
+            ...g,
+            eventState: {
+              ...eventState,
+              summary: appendEventSummary(eventState.summary, `${player.name} blocks all damage.`),
+            },
+          },
+        };
+      }
+
+      return {
+        game: {
+          ...g,
+          damageChoice: {
+            ...createDamageChoice(resolved, player),
+            source: "event-effect",
+          },
+          eventState: {
+            ...eventState,
+            summary: appendEventSummary(
+              eventState.summary,
+              rolledDamage !== null
+                ? `${player.name} rolls ${rolledDamage} for ${effect.damageType} damage.`
+                : `${player.name} takes ${resolved.damage} ${effect.damageType} damage.`
+            ),
+          },
+          turnPhase: "event",
+        },
+      };
+    }
+
+    if (effect.type === "start-haunt") {
+      return {
+        game: {
+          ...g,
+          hauntTriggered: true,
+          eventState: {
+            ...eventState,
+            summary: appendEventSummary(
+              eventState.summary,
+              `The haunt begins. Use haunt ${effect.hauntNumber} from ${effect.book.replace(/-/g, " ")}.`
+            ),
+          },
+        },
+      };
+    }
+
+    return { game: g };
+  }
+
+  function advanceEventResolution(g) {
+    let nextGame = g;
+    let eventState = g.eventState;
+
+    if (!eventState) return { game: g };
+
+    if (
+      eventState.summary &&
+      !eventState.awaiting &&
+      (!eventState.pendingEffects || eventState.pendingEffects.length === 0)
+    ) {
+      return { game: nextGame };
+    }
+
+    while (eventState) {
+      if (eventState.pendingEffects?.length > 0) {
+        const [currentEffect, ...remainingEffects] = eventState.pendingEffects;
+        nextGame = {
+          ...nextGame,
+          eventState: {
+            ...eventState,
+            pendingEffects: remainingEffects,
+          },
+        };
+        const effectResult = applyResolvedEventEffect(nextGame, currentEffect);
+        nextGame = effectResult.game;
+        eventState = nextGame.eventState;
+
+        if (effectResult.cameraFloor) {
+          return { game: nextGame, cameraFloor: effectResult.cameraFloor };
+        }
+
+        if (nextGame.drawnCard || nextGame.damageChoice || eventState?.awaiting) {
+          return { game: nextGame };
+        }
+
+        continue;
+      }
+
+      const steps = eventState.card.steps || [];
+      let stepIndex = eventState.stepIndex;
+      while (stepIndex < steps.length) {
+        const step = steps[stepIndex];
+        if (matchesEventCondition(step.onlyIf || step.when, nextGame, eventState)) {
+          break;
+        }
+        stepIndex += 1;
+      }
+
+      if (stepIndex >= steps.length) {
+        return finalizeEventState(nextGame, eventState.summary || `${eventState.card.name} resolved.`);
+      }
+
+      const step = steps[stepIndex];
+      const player = nextGame.players[nextGame.currentPlayerIndex];
+      const nextEventStateBase = {
+        ...eventState,
+        stepIndex: stepIndex + 1,
+        awaiting: null,
+      };
+
+      if (step.kind === "choice") {
+        return {
+          game: {
+            ...nextGame,
+            eventState: {
+              ...nextEventStateBase,
+              awaiting: {
+                type: "choice",
+                prompt: step.prompt,
+                options: step.options,
+                stepId: step.id,
+              },
+            },
+          },
+        };
+      }
+
+      if (step.kind === "effect") {
+        nextGame = {
+          ...nextGame,
+          eventState: {
+            ...nextEventStateBase,
+            pendingEffects: [...(step.effects || [])],
+          },
+        };
+        eventState = nextGame.eventState;
+        continue;
+      }
+
+      if (step.kind === "trait-roll") {
+        const stepKey = step.id || `${eventState.card.id}-${stepIndex}`;
+        const selectedStat = step.stat || eventState.context.selectedStats?.[stepKey];
+        if (!selectedStat && step.chooseFrom?.length) {
+          return {
+            game: {
+              ...nextGame,
+              eventState: {
+                ...nextEventStateBase,
+                awaiting: {
+                  type: "step-stat-choice",
+                  prompt: "Choose a trait to roll.",
+                  options: step.chooseFrom,
+                  stepKey,
+                },
+              },
+            },
+          };
+        }
+
+        const stat = selectedStat || step.stat;
+        const baseDiceCount = player.character[stat][player.statIndex[stat]];
+        return {
+          game: {
+            ...nextGame,
+            eventState: {
+              ...nextEventStateBase,
+              awaiting: {
+                type: "roll-ready",
+                prompt: `${getEventRollButtonLabel(baseDiceCount)} for ${STAT_LABELS[stat]}.`,
+                rollKind: "trait-roll",
+                rollStat: stat,
+                baseDiceCount,
+                usePassives: step.usePassives !== false,
+                stepKey,
+                outcomes: (step.outcomes || []).map((outcome) => ({
+                  ...outcome,
+                  effects: [...(outcome.effects || [])].map((effect) => ({ ...effect, stepKey })),
+                })),
+              },
+            },
+          },
+        };
+      }
+
+      if (step.kind === "dice-roll" || step.kind === "haunt-roll") {
+        const diceCount = step.kind === "haunt-roll" ? nextGame.omenCount : step.dice || 0;
+        return {
+          game: {
+            ...nextGame,
+            eventState: {
+              ...nextEventStateBase,
+              awaiting: {
+                type: "roll-ready",
+                prompt: getEventRollButtonLabel(diceCount),
+                rollKind: step.kind,
+                label: step.kind === "haunt-roll" ? "Haunt" : `${diceCount} dice`,
+                baseDiceCount: diceCount,
+                outcomes: [...(step.outcomes || [])],
+              },
+            },
+          },
+        };
+      }
+
+      if (step.kind === "trait-roll-sequence") {
+        let updatedPlayers = nextGame.players;
+        const rollSummaries = [];
+        const failedStats = [];
+        let allSucceeded = true;
+
+        for (const stat of step.stats || []) {
+          const currentPlayerState = updatedPlayers[nextGame.currentPlayerIndex];
+          const baseDiceCount = currentPlayerState.character[stat][currentPlayerState.statIndex[stat]];
+          const roll = resolveTraitRoll(currentPlayerState, {
+            stat,
+            baseDiceCount,
+            context: "event",
+            board: nextGame.board,
+          });
+
+          rollSummaries.push(`${STAT_LABELS[stat]} ${roll.total}`);
+          if (roll.total <= 1) {
+            failedStats.push(stat);
+            updatedPlayers = applyStatChange(updatedPlayers, nextGame.currentPlayerIndex, stat, -1);
+            allSucceeded = false;
+          }
+        }
+
+        const rewardOutcome = allSucceeded
+          ? (step.outcomes || []).find((outcome) => outcome.when?.allRolls?.min !== undefined)
+          : null;
+
+        nextGame = {
+          ...nextGame,
+          players: updatedPlayers,
+          eventState: {
+            ...nextEventStateBase,
+            lastRoll: null,
+            summary: `Rolls: ${rollSummaries.join(", ")}.`,
+            pendingEffects: [...(rewardOutcome?.effects || [])],
+          },
+        };
+        eventState = nextGame.eventState;
+        return { game: nextGame };
+      }
+
+      nextGame = {
+        ...nextGame,
+        eventState: nextEventStateBase,
+      };
+      eventState = nextGame.eventState;
+    }
+
+    return { game: nextGame };
+  }
+
   function handleAdjustDamageAllocation(stat, delta) {
     setGame((g) => {
       const choice = g.damageChoice;
@@ -1566,6 +2484,7 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleConfirmDamageChoice() {
+    let nextCameraFloor = null;
     setGame((g) => {
       const choice = g.damageChoice;
       if (!choice) return g;
@@ -1576,12 +2495,25 @@ export default function GameBoard({ players, onQuit }) {
       const damagedPlayers = applyDamageAllocation(g.players, g.currentPlayerIndex, choice.allocation);
       const postDamageResult = applyPostDamagePassiveEffects(damagedPlayers, g.currentPlayerIndex, choice);
       const resolvedPlayers = applyTileEffectConsequences(g, postDamageResult.players, choice.effect);
-      const nextState = passTurn({
+      const baseState = {
         ...g,
         players: resolvedPlayers,
         tileEffect: null,
         damageChoice: null,
-      });
+      };
+
+      if (choice.source === "event-effect") {
+        const finalized = finalizeEventState(
+          {
+            ...baseState,
+            eventState: null,
+          },
+          postDamageResult.message || g.message
+        );
+        return finalized.game;
+      }
+
+      const nextState = passTurn(baseState);
 
       return postDamageResult.message
         ? {
@@ -1591,6 +2523,240 @@ export default function GameBoard({ players, onQuit }) {
         : nextState;
     });
     setDiceAnimation(null);
+    if (nextCameraFloor) {
+      setCameraFloor(nextCameraFloor);
+    }
+  }
+
+  function handleContinueEvent() {
+    let nextCameraFloor = null;
+    setGame((g) => {
+      if (!g.eventState) return g;
+      const result = advanceEventResolution({
+        ...g,
+        eventState: {
+          ...g.eventState,
+          summary: null,
+          lastRoll: null,
+        },
+      });
+      nextCameraFloor = result.cameraFloor || null;
+      return result.game;
+    });
+    if (nextCameraFloor) {
+      setCameraFloor(nextCameraFloor);
+    }
+  }
+
+  function handleEventAwaitingChoice(value) {
+    const immediateAwaiting = game.eventState?.awaiting;
+    if (immediateAwaiting?.type === "roll-ready") {
+      const rollReady = resolveRollReadyAwaiting(game, immediateAwaiting);
+      setGame(rollReady.game);
+      if (rollReady.animation) {
+        setDiceAnimation(rollReady.animation);
+      }
+      return;
+    }
+
+    let nextCameraFloor = null;
+    let nextDiceAnimation = null;
+    setGame((g) => {
+      const awaiting = g.eventState?.awaiting;
+      if (!awaiting) return g;
+
+      if (awaiting.type === "choice") {
+        const nextState = {
+          ...g,
+          eventState: {
+            ...g.eventState,
+            awaiting: null,
+            context: {
+              ...g.eventState.context,
+              choices: {
+                ...g.eventState.context.choices,
+                [awaiting.stepId]: value,
+              },
+            },
+          },
+        };
+        const result = advanceEventResolution(nextState);
+        nextCameraFloor = result.cameraFloor || null;
+        return result.game;
+      }
+
+      if (awaiting.type === "step-stat-choice") {
+        const nextState = {
+          ...g,
+          eventState: {
+            ...g.eventState,
+            awaiting: null,
+            context: {
+              ...g.eventState.context,
+              selectedStats: {
+                ...g.eventState.context.selectedStats,
+                [awaiting.stepKey]: value,
+              },
+            },
+            stepIndex: Math.max(0, g.eventState.stepIndex - 1),
+          },
+        };
+        let result = advanceEventResolution(nextState);
+        if (result.game.eventState?.awaiting?.type === "roll-ready") {
+          const rollReady = resolveRollReadyAwaiting(result.game, result.game.eventState.awaiting);
+          result = {
+            ...result,
+            game: rollReady.game,
+          };
+          nextDiceAnimation = rollReady.animation;
+        }
+        nextCameraFloor = result.cameraFloor || null;
+        return result.game;
+      }
+
+      if (awaiting.type === "stat-choice") {
+        const applied = applyResolvedEventEffect(g, awaiting.effect, value);
+        const resumed = advanceEventResolution({
+          ...applied.game,
+          eventState: {
+            ...applied.game.eventState,
+            awaiting: null,
+          },
+        });
+        nextCameraFloor = applied.cameraFloor || resumed.cameraFloor || null;
+        return resumed.game;
+      }
+
+      if (awaiting.type === "item-choice") {
+        const nextPlayers = g.players.map((player, index) =>
+          index === g.currentPlayerIndex
+            ? { ...player, inventory: player.inventory.filter((_, itemIndex) => itemIndex !== Number(value)) }
+            : player
+        );
+        const resumed = advanceEventResolution({
+          ...g,
+          players: nextPlayers,
+          eventState: {
+            ...g.eventState,
+            awaiting: null,
+          },
+        });
+        nextCameraFloor = resumed.cameraFloor || null;
+        return resumed.game;
+      }
+
+      return g;
+    });
+    if (nextCameraFloor) {
+      setCameraFloor(nextCameraFloor);
+    }
+    if (nextDiceAnimation) {
+      setDiceAnimation(nextDiceAnimation);
+    }
+  }
+
+  function handleEventTileChoice(option) {
+    setGame((g) => {
+      const awaiting = g.eventState?.awaiting;
+      if (awaiting?.type !== "tile-choice") return g;
+
+      if (awaiting.effect?.type === "move") {
+        const tile = getTileAtPosition(g.board, option.x, option.y, option.floor);
+        if (!tile) return g;
+
+        return {
+          ...g,
+          players: g.players.map((player, index) =>
+            index === g.currentPlayerIndex ? { ...player, x: tile.x, y: tile.y, floor: option.floor } : player
+          ),
+          movePath: [{ x: tile.x, y: tile.y, floor: option.floor, cost: 0 }],
+          eventState: {
+            ...g.eventState,
+            awaiting: {
+              ...awaiting,
+              selectedOptionId: option.id,
+            },
+          },
+        };
+      }
+
+      return {
+        ...g,
+        eventState: {
+          ...g.eventState,
+          awaiting: {
+            ...awaiting,
+            selectedOptionId: option.id,
+          },
+        },
+      };
+    });
+    setCameraFloor(option.floor);
+  }
+
+  function handleConfirmEventTileChoice() {
+    let nextCameraFloor = null;
+    setGame((g) => {
+      const awaiting = g.eventState?.awaiting;
+      if (awaiting?.type !== "tile-choice") return g;
+
+      const selectedOption =
+        awaiting.options?.find((option) => option.id === awaiting.selectedOptionId) ||
+        (awaiting.options?.length === 1 ? awaiting.options[0] : null);
+      if (!selectedOption) return g;
+
+      const tile = getTileAtPosition(g.board, selectedOption.x, selectedOption.y, selectedOption.floor);
+      if (!tile) return g;
+
+      if (awaiting.effect.type === "move") {
+        const resumed = advanceEventResolution({
+          ...g,
+          players: g.players.map((player, index) =>
+            index === g.currentPlayerIndex ? { ...player, x: tile.x, y: tile.y, floor: selectedOption.floor } : player
+          ),
+          movePath: [{ x: tile.x, y: tile.y, floor: selectedOption.floor, cost: 0 }],
+          eventState: {
+            ...g.eventState,
+            awaiting: null,
+          },
+        });
+        nextCameraFloor = selectedOption.floor;
+        return resumed.game;
+      }
+
+      if (awaiting.effect.type === "place-token") {
+        const nextBoard = {
+          ...g.board,
+          [selectedOption.floor]: g.board[selectedOption.floor].map((currentTile) =>
+            currentTile.x === tile.x && currentTile.y === tile.y
+              ? {
+                  ...currentTile,
+                  obstacle: awaiting.effect.token === "obstacle" ? true : currentTile.obstacle,
+                  tokens:
+                    awaiting.effect.token === "obstacle"
+                      ? currentTile.tokens || []
+                      : [...(currentTile.tokens || []), { type: awaiting.effect.token }],
+                }
+              : currentTile
+          ),
+        };
+        const resumed = advanceEventResolution({
+          ...g,
+          board: nextBoard,
+          eventState: {
+            ...g.eventState,
+            awaiting: null,
+          },
+        });
+        nextCameraFloor = selectedOption.floor;
+        return resumed.game;
+      }
+
+      return g;
+    });
+    if (nextCameraFloor) {
+      setCameraFloor(nextCameraFloor);
+    }
   }
 
   function getDamagePreview(player, choice) {
@@ -1808,6 +2974,7 @@ export default function GameBoard({ players, onQuit }) {
       mysticElevatorUsed: false,
       tileEffect: null,
       damageChoice: null,
+      eventState: null,
       turnNumber: g.turnNumber + (next === 0 ? 1 : 0),
       message: `${nextPlayer.name}'s turn — ${speed} moves`,
     };
@@ -1818,6 +2985,13 @@ export default function GameBoard({ players, onQuit }) {
     (placement) => placement.floor === cameraFloor
   );
   const damageChoice = game.damageChoice;
+  const eventState = game.eventState;
+  const drawnEventPrimaryAction =
+    game.drawnCard?.type === "event" ? getInitialEventPrimaryAction(game, game.drawnCard) : null;
+  const eventTileChoiceOptions = eventState?.awaiting?.type === "tile-choice" ? eventState.awaiting.options || [] : [];
+  const selectedEventTileChoiceId =
+    eventState?.awaiting?.type === "tile-choice" ? eventState.awaiting.selectedOptionId || null : null;
+  const showEventResolutionModal = !!eventState && eventState.awaiting?.type !== "tile-choice";
   const damageAllocated = damageChoice
     ? Object.values(damageChoice.allocation).reduce((sum, value) => sum + value, 0)
     : 0;
@@ -1942,6 +3116,18 @@ export default function GameBoard({ players, onQuit }) {
                   <div className="tile-name">{tile.name}</div>
                   {tile.cardType && <div className={`tile-type tile-type-${tile.cardType}`}>{tile.cardType}</div>}
                   {tile.obstacle && <div className="tile-obstacle">Obstacle</div>}
+                  {tile.tokens?.length > 0 && (
+                    <div className="tile-token-list">
+                      {tile.tokens.map((token, tokenIndex) => (
+                        <div
+                          key={`${tile.id}-token-${token.type}-${tokenIndex}`}
+                          className={`tile-token tile-token-${token.type}`}
+                        >
+                          {token.type.replace(/-/g, " ")}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   {/* Door indicators */}
                   <div className="tile-doors">
                     {tile.doors.map((d) => (
@@ -2044,6 +3230,24 @@ export default function GameBoard({ players, onQuit }) {
                 );
               })}
 
+            {eventTileChoiceOptions
+              .filter((option) => option.floor === cameraFloor)
+              .map((option) => {
+                const left = (option.x - minX) * (TILE_SIZE + GAP);
+                const top = (option.y - minY) * (TILE_SIZE + GAP);
+                return (
+                  <button
+                    key={`event-target-${option.id}`}
+                    className={`event-target-overlay ${selectedEventTileChoiceId === option.id ? "event-target-overlay-selected" : ""}`}
+                    style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
+                    onClick={() => handleEventTileChoice(option)}
+                    title={option.label}
+                  >
+                    <span className="explore-icon">✦</span>
+                  </button>
+                );
+              })}
+
             {/* Clickable overlay on existing tiles for movement/backtrack */}
             {validMoves
               .filter((m) => m.type === "move" || m.type === "backtrack")
@@ -2065,6 +3269,15 @@ export default function GameBoard({ players, onQuit }) {
 
       {/* Action buttons */}
       <div className="game-actions">
+        {eventState?.awaiting?.type === "tile-choice" && (
+          <button
+            className="btn btn-confirm"
+            onClick={handleConfirmEventTileChoice}
+            disabled={!selectedEventTileChoiceId}
+          >
+            Confirm Placement
+          </button>
+        )}
         {game.turnPhase === "move" && game.movePath.length > 1 && (
           <button className="btn btn-confirm" onClick={handleConfirmMove}>
             Move Here
@@ -2219,8 +3432,19 @@ export default function GameBoard({ players, onQuit }) {
             <h2 className="card-name">{game.drawnCard.name}</h2>
             <CardAbilityContent card={game.drawnCard} />
             {game.drawnCard.flavor && <p className="card-flavor">{game.drawnCard.flavor}</p>}
-            <button className="btn btn-primary" onClick={handleDismissCard}>
-              {game.drawnCard.type === "omen" ? "Roll for Haunt" : "Continue"}
+            <button
+              className="btn btn-primary"
+              onClick={() =>
+                handleDismissCard({
+                  autoRollIfReady: game.drawnCard.type === "event" && drawnEventPrimaryAction?.autoRoll,
+                })
+              }
+            >
+              {game.drawnCard.type === "omen"
+                ? "Roll for Haunt"
+                : game.drawnCard.type === "event"
+                  ? drawnEventPrimaryAction?.label || "Continue"
+                  : "Continue"}
             </button>
           </div>
         </div>
@@ -2244,6 +3468,103 @@ export default function GameBoard({ players, onQuit }) {
         </div>
       )}
 
+      {showEventResolutionModal && (
+        <div className="card-overlay">
+          <div className="card-modal card-event-resolution">
+            <div className="card-type-label">EVENT</div>
+            <h2 className="card-name">{eventState.card.name}</h2>
+            {eventState.summary && <p className="card-description">{eventState.summary}</p>}
+            {eventState.lastRoll && (
+              <>
+                <DiceRow dice={eventState.lastRoll.dice} modifier={eventState.lastRoll.modifier} />
+                <div className="dice-total">
+                  {eventState.lastRoll.label}: {eventState.lastRoll.total}
+                </div>
+              </>
+            )}
+            {eventState.awaiting?.prompt && <p className="card-description">{eventState.awaiting.prompt}</p>}
+            {eventState.awaiting?.type === "choice" && (
+              <div className="event-option-list">
+                {eventState.awaiting.options.map((option) => (
+                  <button
+                    key={`event-choice-${option}`}
+                    className="btn btn-primary"
+                    onClick={() => handleEventAwaitingChoice(option)}
+                  >
+                    {option}
+                  </button>
+                ))}
+              </div>
+            )}
+            {eventState.awaiting?.type === "step-stat-choice" && (
+              <div className="event-option-list">
+                {eventState.awaiting.options.map((option) => (
+                  <button
+                    key={`event-step-stat-${option}`}
+                    className="btn btn-primary"
+                    onClick={() => handleEventAwaitingChoice(option)}
+                  >
+                    {`${STAT_LABELS[option]} (${currentPlayer.character[option]?.[currentPlayer.statIndex[option]] ?? 0})`}
+                  </button>
+                ))}
+              </div>
+            )}
+            {eventState.awaiting?.type === "stat-choice" && (
+              <div className="event-option-list">
+                {eventState.awaiting.options.map((option) => (
+                  <button
+                    key={`event-stat-${option}`}
+                    className="btn btn-primary"
+                    onClick={() => handleEventAwaitingChoice(option)}
+                  >
+                    {`${STAT_LABELS[option]} (${currentPlayer.character[option]?.[currentPlayer.statIndex[option]] ?? 0})`}
+                  </button>
+                ))}
+              </div>
+            )}
+            {eventState.awaiting?.type === "item-choice" && (
+              <div className="event-option-list">
+                {eventState.awaiting.options.map((option) => (
+                  <button
+                    key={`event-item-${option.value}`}
+                    className="btn btn-primary"
+                    onClick={() => handleEventAwaitingChoice(String(option.value))}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {eventState.awaiting?.type === "tile-choice" && (
+              <p className="card-description">Select a highlighted tile on the board.</p>
+            )}
+            {eventState.awaiting?.type === "roll-ready" && (
+              <button className="btn btn-primary" onClick={() => handleEventAwaitingChoice("roll")}>
+                {getEventRollButtonLabel(eventState.awaiting.baseDiceCount || 0)}
+              </button>
+            )}
+            {eventState.awaiting?.type === "rolling" && (
+              <>
+                {diceAnimation?.purpose === "event-roll" && (
+                  <DiceRow dice={diceAnimation.display} modifier={diceAnimation.modifier} rolling />
+                )}
+                <p className="card-description">Rolling...</p>
+                {diceAnimation?.settled && (
+                  <button className="btn btn-primary" onClick={handleContinueEvent}>
+                    Recover
+                  </button>
+                )}
+              </>
+            )}
+            {!eventState.awaiting && (
+              <button className="btn btn-primary" onClick={handleContinueEvent}>
+                Continue
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Dice roll overlay — animating */}
       {diceAnimation && !diceAnimation.settled && (
         <div className="card-overlay">
@@ -2253,13 +3574,15 @@ export default function GameBoard({ players, onQuit }) {
             <div className="card-type-label">
               {diceAnimation.purpose === "haunt"
                 ? "HAUNT ROLL"
-                : diceAnimation.purpose === "mystic-elevator"
-                  ? "MYSTIC ELEVATOR"
-                  : diceAnimation.purpose === "collapsed"
-                    ? "COLLAPSED ROOM"
-                    : diceAnimation.purpose === "collapsed-damage"
-                      ? "COLLAPSED ROOM — DAMAGE"
-                      : "FURNACE ROOM"}
+                : diceAnimation.purpose === "event-roll"
+                  ? "EVENT ROLL"
+                  : diceAnimation.purpose === "mystic-elevator"
+                    ? "MYSTIC ELEVATOR"
+                    : diceAnimation.purpose === "collapsed"
+                      ? "COLLAPSED ROOM"
+                      : diceAnimation.purpose === "collapsed-damage"
+                        ? "COLLAPSED ROOM — DAMAGE"
+                        : "FURNACE ROOM"}
             </div>
             <DiceRow dice={diceAnimation.display} modifier={diceAnimation.modifier} rolling />
             <h2 className="card-name">Rolling...</h2>
