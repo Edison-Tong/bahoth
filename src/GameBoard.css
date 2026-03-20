@@ -1276,6 +1276,22 @@
   cursor: not-allowed;
 }
 
+.dev-roll-tools { /* FOR DEV ONLY. DELETE EVENTUALLY! */
+  margin-top: 0.5rem; /* FOR DEV ONLY. DELETE EVENTUALLY! */
+  display: flex; /* FOR DEV ONLY. DELETE EVENTUALLY! */
+  align-items: center; /* FOR DEV ONLY. DELETE EVENTUALLY! */
+  justify-content: center; /* FOR DEV ONLY. DELETE EVENTUALLY! */
+  gap: 0.5rem; /* FOR DEV ONLY. DELETE EVENTUALLY! */
+} /* FOR DEV ONLY. DELETE EVENTUALLY! */
+
+.dev-roll-tools-label { /* FOR DEV ONLY. DELETE EVENTUALLY! */
+  font-size: 0.72rem; /* FOR DEV ONLY. DELETE EVENTUALLY! */
+  text-transform: uppercase; /* FOR DEV ONLY. DELETE EVENTUALLY! */
+  letter-spacing: 0.08em; /* FOR DEV ONLY. DELETE EVENTUALLY! */
+  color: #d4c6ad; /* FOR DEV ONLY. DELETE EVENTUALLY! */
+  margin-right: 0.15rem; /* FOR DEV ONLY. DELETE EVENTUALLY! */
+} /* FOR DEV ONLY. DELETE EVENTUALLY! */
+
 @media (max-width: 700px) {
   .player-sidebar {
     width: min(360px, 42vw);

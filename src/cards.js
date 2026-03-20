@@ -402,25 +402,25 @@ export const EVENT_CARDS = [
   //     }),
   //   ],
   // }),
-  createEventCard({
-    id: "a-moment-of-hope",
-    name: "A Moment of Hope",
-    todo: "Place a blessing token on your tile.",
-    result: "A hero on the same tile as the blessing token must roll an extra die on all trait rolls.",
-    steps: [
-      createEventStep("effect", {
-        effects: [
-          createEventEffect("place-token", { token: "blessing", location: "current-tile" }),
-          createEventEffect("grant-bonus", {
-            bonusType: "extra-die",
-            amount: 1,
-            appliesTo: "trait-rolls",
-            whileOnTileWithToken: "blessing",
-          }),
-        ],
-      }),
-    ],
-  }),
+  // createEventCard({
+  //   id: "a-moment-of-hope",
+  //   name: "A Moment of Hope",
+  //   todo: "Place a blessing token on your tile.",
+  //   result: "A hero on the same tile as the blessing token must roll an extra die on all trait rolls.",
+  //   steps: [
+  //     createEventStep("effect", {
+  //       effects: [
+  //         createEventEffect("place-token", { token: "blessing", location: "current-tile" }),
+  //         createEventEffect("grant-bonus", {
+  //           bonusType: "extra-die",
+  //           amount: 1,
+  //           appliesTo: "trait-rolls",
+  //           whileOnTileWithToken: "blessing",
+  //         }),
+  //       ],
+  //     }),
+  //   ],
+  // }),
   // createEventCard({
   //   id: "an-eerie-feeling",
   //   name: "An Eerie Feeling",
@@ -453,35 +453,35 @@ export const EVENT_CARDS = [
   //     }),
   //   ],
   // }),
-  // createEventCard({
-  //   id: "a-secret-passage",
-  //   name: "A Secret Passage",
-  //   todo: "Place a secret passage token on your tile. Make a Knowledge roll.",
-  //   result:
-  //     "5+: Place another Secret Passage token on any other tile and gain 1 Knowledge. 3-4: Place another Secret Passage token on any Ground Floor tile. 0-2: Place another Secret Passage token on any Basement tile and lose 1 Sanity.",
-  //   steps: [
-  //     createEventStep("effect", {
-  //       effects: [createEventEffect("place-token", { token: "secret-passage", location: "current-tile" })],
-  //     }),
-  //     createEventStep("trait-roll", {
-  //       stat: "knowledge",
-  //       outcomes: [
-  //         createEventOutcome({ roll: { min: 5 } }, [
-  //           createEventEffect("place-token", { token: "secret-passage", location: "any-other-tile" }),
-  //           createEventEffect("stat-change", { mode: "gain", stat: "knowledge", amount: 1 }),
-  //         ]),
-  //         createEventOutcome(
-  //           { roll: { min: 3, max: 4 } },
-  //           createEventEffect("place-token", { token: "secret-passage", location: "any-ground-floor-tile" })
-  //         ),
-  //         createEventOutcome({ roll: { max: 2 } }, [
-  //           createEventEffect("place-token", { token: "secret-passage", location: "any-basement-tile" }),
-  //           createEventEffect("stat-change", { mode: "lose", stat: "sanity", amount: 1 }),
-  //         ]),
-  //       ],
-  //     }),
-  //   ],
-  // }),
+  createEventCard({
+    id: "a-secret-passage",
+    name: "A Secret Passage",
+    todo: "Place a secret passage token on your tile. Make a Knowledge roll.",
+    result:
+      "5+: Place another Secret Passage token on any other tile and gain 1 Knowledge. 3-4: Place another Secret Passage token on any Ground Floor tile. 0-2: Place another Secret Passage token on any Basement tile and lose 1 Sanity.",
+    steps: [
+      createEventStep("effect", {
+        effects: [createEventEffect("place-token", { token: "secret-passage", location: "current-tile" })],
+      }),
+      createEventStep("trait-roll", {
+        stat: "knowledge",
+        outcomes: [
+          createEventOutcome({ roll: { min: 5 } }, [
+            createEventEffect("place-token", { token: "secret-passage", location: "any-other-tile" }),
+            createEventEffect("stat-change", { mode: "gain", stat: "knowledge", amount: 1 }),
+          ]),
+          createEventOutcome(
+            { roll: { min: 3, max: 4 } },
+            createEventEffect("place-token", { token: "secret-passage", location: "any-ground-floor-tile" })
+          ),
+          createEventOutcome({ roll: { max: 2 } }, [
+            createEventEffect("place-token", { token: "secret-passage", location: "any-basement-tile" }),
+            createEventEffect("stat-change", { mode: "lose", stat: "sanity", amount: 1 }),
+          ]),
+        ],
+      }),
+    ],
+  }),
   // createEventCard({
   //   id: "a-splash-of-crimson",
   //   name: "A Splash of Crimson",

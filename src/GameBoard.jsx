@@ -465,7 +465,9 @@ export default function GameBoard({ players, onQuit }) {
         setGame((g) => {
           if (!g.eventState) return g;
 
-          const resolvedEffects = (da.effects || []).map((effect) => {
+          const matchedOutcome = getMatchingOutcome(da.outcomes || [], da.total); // FOR DEV ONLY. DELETE EVENTUALLY!
+
+          const resolvedEffects = (matchedOutcome?.effects || []).map((effect) => {
             if (effect.type === "damage" && effect.amountType === "dice" && effect.resolvedAmount === undefined) {
               const resolvedAmount = rollDice(effect.dice || 1).reduce((sum, die) => sum + die, 0);
               return {
@@ -486,6 +488,7 @@ export default function GameBoard({ players, onQuit }) {
                 dice: da.final,
                 total: da.total,
                 modifier: da.modifier || null,
+                outcomes: [...(da.outcomes || [])], // FOR DEV ONLY. DELETE EVENTUALLY!
               },
               summary: `Rolled ${da.total}${da.label ? ` on ${da.label}` : ""}. ${describeEventEffects(resolvedEffects)}`,
               pendingEffects: resolvedEffects,
@@ -1520,7 +1523,12 @@ export default function GameBoard({ players, onQuit }) {
         }
         if (tile.endOfTurn === "collapsed") {
           const speedVal = p.character.speed[p.statIndex.speed];
-          const roll = resolveTraitRoll(p, { stat: "speed", baseDiceCount: speedVal, context: "end-of-turn" });
+          const roll = resolveTraitRoll(p, {
+            stat: "speed",
+            baseDiceCount: speedVal,
+            context: "end-of-turn",
+            board: g.board,
+          });
           setDiceAnimation({
             purpose: "collapsed",
             final: roll.dice,
@@ -1830,7 +1838,6 @@ export default function GameBoard({ players, onQuit }) {
         board: g.board,
         usePassives: awaiting.usePassives !== false,
       });
-      const outcome = getMatchingOutcome(awaiting.outcomes || [], roll.total);
 
       return {
         game: {
@@ -1851,7 +1858,7 @@ export default function GameBoard({ players, onQuit }) {
           label: STAT_LABELS[awaiting.rollStat],
           total: roll.total,
           modifier: roll.modifier,
-          effects: [...(outcome?.effects || [])],
+          outcomes: [...(awaiting.outcomes || [])], // FOR DEV ONLY. DELETE EVENTUALLY!
         },
       };
     }
@@ -1859,7 +1866,6 @@ export default function GameBoard({ players, onQuit }) {
     if (awaiting.rollKind === "dice-roll" || awaiting.rollKind === "haunt-roll") {
       const dice = rollDice(awaiting.baseDiceCount || 0);
       const total = dice.reduce((sum, die) => sum + die, 0);
-      const outcome = getMatchingOutcome(awaiting.outcomes || [], total);
 
       return {
         game: {
@@ -1880,7 +1886,7 @@ export default function GameBoard({ players, onQuit }) {
           label: awaiting.label || `${dice.length} dice`,
           total,
           modifier: null,
-          effects: [...(outcome?.effects || [])],
+          outcomes: [...(awaiting.outcomes || [])], // FOR DEV ONLY. DELETE EVENTUALLY!
         },
       };
     }
@@ -2547,6 +2553,49 @@ export default function GameBoard({ players, onQuit }) {
       setCameraFloor(nextCameraFloor);
     }
   }
+
+  function handleAdjustEventRollTotal(delta) {
+    // FOR DEV ONLY. DELETE EVENTUALLY!
+    setGame((g) => {
+      // FOR DEV ONLY. DELETE EVENTUALLY!
+      const eventState = g.eventState; // FOR DEV ONLY. DELETE EVENTUALLY!
+      const lastRoll = eventState?.lastRoll; // FOR DEV ONLY. DELETE EVENTUALLY!
+      if (!eventState || !lastRoll || !Array.isArray(lastRoll.outcomes)) return g; // FOR DEV ONLY. DELETE EVENTUALLY!
+
+      const nextTotal = Math.max(0, (lastRoll.total || 0) + delta); // FOR DEV ONLY. DELETE EVENTUALLY!
+      const matchedOutcome = getMatchingOutcome(lastRoll.outcomes, nextTotal); // FOR DEV ONLY. DELETE EVENTUALLY!
+      const resolvedEffects = (matchedOutcome?.effects || []).map((effect) => {
+        // FOR DEV ONLY. DELETE EVENTUALLY!
+        if (effect.type === "damage" && effect.amountType === "dice" && effect.resolvedAmount === undefined) {
+          // FOR DEV ONLY. DELETE EVENTUALLY!
+          const resolvedAmount = rollDice(effect.dice || 1).reduce((sum, die) => sum + die, 0); // FOR DEV ONLY. DELETE EVENTUALLY!
+          return {
+            // FOR DEV ONLY. DELETE EVENTUALLY!
+            ...effect, // FOR DEV ONLY. DELETE EVENTUALLY!
+            resolvedAmount, // FOR DEV ONLY. DELETE EVENTUALLY!
+          }; // FOR DEV ONLY. DELETE EVENTUALLY!
+        } // FOR DEV ONLY. DELETE EVENTUALLY!
+        return effect; // FOR DEV ONLY. DELETE EVENTUALLY!
+      }); // FOR DEV ONLY. DELETE EVENTUALLY!
+
+      return {
+        // FOR DEV ONLY. DELETE EVENTUALLY!
+        ...g, // FOR DEV ONLY. DELETE EVENTUALLY!
+        eventState: {
+          // FOR DEV ONLY. DELETE EVENTUALLY!
+          ...eventState, // FOR DEV ONLY. DELETE EVENTUALLY!
+          lastRoll: {
+            // FOR DEV ONLY. DELETE EVENTUALLY!
+            ...lastRoll, // FOR DEV ONLY. DELETE EVENTUALLY!
+            total: nextTotal, // FOR DEV ONLY. DELETE EVENTUALLY!
+          }, // FOR DEV ONLY. DELETE EVENTUALLY!
+          summary: `Rolled ${nextTotal}${lastRoll.label ? ` on ${lastRoll.label}` : ""}. ${describeEventEffects(resolvedEffects)}`, // FOR DEV ONLY. DELETE EVENTUALLY!
+          pendingEffects: resolvedEffects, // FOR DEV ONLY. DELETE EVENTUALLY!
+        }, // FOR DEV ONLY. DELETE EVENTUALLY!
+        message: `${eventState.card.name}: roll adjusted to ${nextTotal}.`, // FOR DEV ONLY. DELETE EVENTUALLY!
+      }; // FOR DEV ONLY. DELETE EVENTUALLY!
+    }); // FOR DEV ONLY. DELETE EVENTUALLY!
+  } // FOR DEV ONLY. DELETE EVENTUALLY!
 
   function handleEventAwaitingChoice(value) {
     const immediateAwaiting = game.eventState?.awaiting;
@@ -3479,6 +3528,21 @@ export default function GameBoard({ players, onQuit }) {
                 <DiceRow dice={eventState.lastRoll.dice} modifier={eventState.lastRoll.modifier} />
                 <div className="dice-total">
                   {eventState.lastRoll.label}: {eventState.lastRoll.total}
+                </div>
+                <div className="dev-roll-tools">
+                  {" "}
+                  {/* FOR DEV ONLY. DELETE EVENTUALLY! */}
+                  <span className="dev-roll-tools-label">Dev Roll</span> {/* FOR DEV ONLY. DELETE EVENTUALLY! */}
+                  <button className="btn btn-secondary" onClick={() => handleAdjustEventRollTotal(-1)}>
+                    {" "}
+                    {/* FOR DEV ONLY. DELETE EVENTUALLY! */}
+                    -1
+                  </button>
+                  <button className="btn btn-secondary" onClick={() => handleAdjustEventRollTotal(1)}>
+                    {" "}
+                    {/* FOR DEV ONLY. DELETE EVENTUALLY! */}
+                    +1
+                  </button>
                 </div>
               </>
             )}
