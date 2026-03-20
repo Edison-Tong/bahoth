@@ -621,14 +621,77 @@
 }
 
 .sidebar-stats-expanded {
-  max-height: 220px;
+  max-height: min(420px, 48vh);
   opacity: 1;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .sidebar-stats-collapsed {
   max-height: 0;
   opacity: 0;
   margin-top: 0;
+}
+
+.sidebar-card-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.45rem;
+}
+
+.sidebar-card-group {
+  padding-top: 0.35rem;
+  border-top: 1px solid rgba(205, 191, 159, 0.1);
+}
+
+.sidebar-card-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.35rem;
+  font-size: 0.66rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #b8aa8d;
+}
+
+.sidebar-card-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.sidebar-card-chip {
+  padding: 0.3rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid rgba(205, 191, 159, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  color: #f4e8d2;
+  font: inherit;
+  font-size: 0.68rem;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.sidebar-card-chip:hover {
+  transform: translateY(-1px);
+}
+
+.sidebar-card-chip-item {
+  border-color: rgba(39, 174, 96, 0.34);
+  background: rgba(39, 174, 96, 0.12);
+}
+
+.sidebar-card-chip-omen {
+  border-color: rgba(142, 68, 173, 0.34);
+  background: rgba(142, 68, 173, 0.12);
+}
+
+.sidebar-card-empty {
+  font-size: 0.68rem;
+  color: #8f8167;
+  font-style: italic;
 }
 
 .sidebar-collapsed .sidebar-char {
@@ -797,6 +860,19 @@
   color: #e8dcc8;
 }
 
+.card-ability-block {
+  margin: 0 0 1rem;
+  text-align: left;
+}
+
+.card-ability-label {
+  margin-bottom: 0.35rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #a99876;
+}
+
 .card-description {
   font-size: 1rem;
   line-height: 1.5;
@@ -809,6 +885,17 @@
   font-style: italic;
   color: #887a66;
   margin: 0 0 1.5rem;
+}
+
+.card-viewer {
+  width: min(360px, calc(100vw - 2rem));
+}
+
+.card-owner-label {
+  margin: -0.45rem 0 1rem;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  color: #a99876;
 }
 
 /* Haunt roll card styles */
@@ -975,6 +1062,29 @@
   margin: -0.3rem 0 0;
   color: #a99876;
   font-size: 0.85rem;
+}
+
+.damage-conversion-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0.85rem 0 0.45rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(205, 191, 159, 0.18);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  text-align: left;
+}
+
+.damage-conversion-copy {
+  color: #d8c8a5;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.damage-conversion-button {
+  flex-shrink: 0;
 }
 
 .damage-choice-status {

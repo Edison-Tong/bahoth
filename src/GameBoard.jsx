@@ -55,10 +55,12 @@ function formatSourceNames(names) {
 }
 
 function getPassiveEffects(player) {
-  return (player?.omens ?? []).flatMap((omen) =>
-    (omen.passiveEffects ?? []).map((effect) => ({
+  const ownedCards = [...(player?.omens ?? []), ...(player?.inventory ?? [])];
+
+  return ownedCards.flatMap((card) =>
+    (card.passiveEffects ?? []).map((effect) => ({
       ...effect,
-      sourceName: omen.name,
+      sourceName: card.name,
     }))
   );
 }
@@ -83,6 +85,115 @@ function getDamageReduction(player, damageType) {
     amount: matchingEffects.reduce((sum, effect) => sum + (effect.amount || 0), 0),
     sourceNames: matchingEffects.map((effect) => effect.sourceName),
   };
+}
+
+function getTraitRollDiceBonus(player, context) {
+  const matchingEffects = getPassiveEffects(player).filter(
+    (effect) =>
+      effect.type === "trait-roll-dice-bonus" &&
+      (!effect.contexts || effect.contexts.length === 0 || effect.contexts.includes(context))
+  );
+
+  return {
+    amount: matchingEffects.reduce((sum, effect) => sum + (effect.amount || 0), 0),
+    sourceNames: matchingEffects.map((effect) => effect.sourceName),
+  };
+}
+
+function getDamageConversionOptions(player, damageType) {
+  const matchingEffects = getPassiveEffects(player).filter(
+    (effect) =>
+      effect.type === "damage-conversion-option" &&
+      effect.damageTypes?.includes(damageType) &&
+      effect.convertTo === "general"
+  );
+
+  return {
+    canConvertToGeneral: matchingEffects.length > 0,
+    sourceNames: matchingEffects.map((effect) => effect.sourceName),
+  };
+}
+
+function createTraitRollModifier(traitBonus, diceBonus) {
+  const sourceNames = [...new Set([...traitBonus.sourceNames, ...diceBonus.sourceNames])];
+  if (sourceNames.length === 0) return null;
+
+  const parts = [];
+  if (diceBonus.amount > 0) parts.push(`+${diceBonus.amount} dice`);
+  if (traitBonus.amount > 0) parts.push(`+${traitBonus.amount}`);
+
+  return {
+    value: parts.join(" "),
+    label: `from ${formatSourceNames(sourceNames)}`,
+    tone: "positive",
+  };
+}
+
+function resolveTraitRoll(player, { stat, baseDiceCount, context }) {
+  const diceBonus = getTraitRollDiceBonus(player, context);
+  const traitBonus = getTraitRollBonus(player, stat);
+  const dice = rollDice(baseDiceCount + diceBonus.amount);
+
+  return {
+    dice,
+    total: dice.reduce((sum, value) => sum + value, 0) + traitBonus.amount,
+    modifier: createTraitRollModifier(traitBonus, diceBonus),
+  };
+}
+
+function resolveDamageEffect(player, effect) {
+  if (!effect?.damageType || effect.damage === undefined || effect.damageResolved) return effect;
+
+  const damageReduction = getDamageReduction(player, effect.damageType);
+
+  return {
+    ...effect,
+    damage: Math.max(0, effect.damage - damageReduction.amount),
+    damageResolved: true,
+    damageModifier:
+      damageReduction.amount > 0
+        ? createDiceModifier({
+            amount: damageReduction.amount,
+            sourceNames: damageReduction.sourceNames,
+            sign: "-",
+            labelPrefix: "blocked by",
+          })
+        : null,
+  };
+}
+
+function describePostDamageEffects(effects) {
+  if (!effects || effects.length === 0) return "";
+
+  return effects
+    .map((effect) => `gain ${effect.amount} ${STAT_LABELS[effect.stat]} from ${effect.sourceName}`)
+    .join(" and ");
+}
+
+function getDamageTypesFromAllocation(choice) {
+  if (!choice) return [];
+
+  if (choice.damageType !== "general") {
+    return [choice.damageType];
+  }
+
+  const damageTypes = new Set();
+  for (const [stat, amount] of Object.entries(choice.allocation || {})) {
+    if (!amount) continue;
+    if (stat === "might" || stat === "speed") damageTypes.add("physical");
+    if (stat === "sanity" || stat === "knowledge") damageTypes.add("mental");
+  }
+
+  return [...damageTypes];
+}
+
+function getPostDamageEffectsForChoice(player, choice) {
+  const damageTypes = getDamageTypesFromAllocation(choice);
+  if (damageTypes.length === 0) return [];
+
+  return getPassiveEffects(player).filter(
+    (effect) => effect.type === "stat-gain-on-damage" && effect.damageTypes?.some((type) => damageTypes.includes(type))
+  );
 }
 
 function createDiceModifier({ amount, sourceNames, sign = "+", labelPrefix = "from", tone = "positive" }) {
@@ -112,6 +223,30 @@ function DiceRow({ dice, modifier = null, rolling = false }) {
         </div>
       )}
     </div>
+  );
+}
+
+function CardAbilityContent({ card }) {
+  const primaryAbility = card.passiveAbility || card.activeAbility || card.description;
+  const primaryLabel = card.passiveAbility ? "Passive Ability" : card.activeAbility ? "Active Ability" : null;
+  const secondaryAbility = card.passiveAbility && card.activeAbility ? card.activeAbility : card.special;
+  const secondaryLabel = card.passiveAbility && card.activeAbility ? "Active Ability" : card.special ? "Special" : null;
+
+  return (
+    <>
+      {primaryAbility && (
+        <div className="card-ability-block">
+          {primaryLabel && <div className="card-ability-label">{primaryLabel}</div>}
+          <p className="card-description">{primaryAbility}</p>
+        </div>
+      )}
+      {secondaryAbility && (
+        <div className="card-special">
+          {secondaryLabel && <div className="card-ability-label">{secondaryLabel}</div>}
+          {secondaryAbility}
+        </div>
+      )}
+    </>
   );
 }
 
@@ -190,6 +325,7 @@ export default function GameBoard({ players, onQuit }) {
   const [cameraFloor, setCameraFloor] = useState("ground");
   const [diceAnimation, setDiceAnimation] = useState(null);
   const [expandedSidebarPlayers, setExpandedSidebarPlayers] = useState(() => new Set());
+  const [viewedCard, setViewedCard] = useState(null);
   const diceAnimRef = useRef(null);
   const boardRef = useRef(null);
 
@@ -235,14 +371,9 @@ export default function GameBoard({ players, onQuit }) {
         }));
       } else if (da.purpose === "collapsed") {
         setGame((g) => {
-          const player = g.players[da.playerIndex ?? g.currentPlayerIndex];
-          const speedBonus = getTraitRollBonus(player, "speed");
-          const total = baseTotal + speedBonus.amount;
+          const total = da.resolvedTotal ?? baseTotal;
           const collapsed = total < 5;
-          const diceModifier = createDiceModifier({
-            amount: speedBonus.amount,
-            sourceNames: speedBonus.sourceNames,
-          });
+          const diceModifier = da.modifier || null;
 
           if (collapsed) {
             return {
@@ -298,6 +429,7 @@ export default function GameBoard({ players, onQuit }) {
               damageDice: da.final,
               damageDiceModifier,
               damage,
+              damageResolved: true,
               message:
                 damage > 0
                   ? `The floor gives way! Rolled ${da.firstTotal} (needed 5+). Fall to Basement Landing and take ${damage} physical damage.`
@@ -327,6 +459,7 @@ export default function GameBoard({ players, onQuit }) {
               diceModifier,
               damageType: "physical",
               damage,
+              damageResolved: true,
               message:
                 damage > 0
                   ? `The furnace burns! Take ${damage} physical damage.`
@@ -1209,18 +1342,15 @@ export default function GameBoard({ players, onQuit }) {
         }
         if (tile.endOfTurn === "collapsed") {
           const speedVal = p.character.speed[p.statIndex.speed];
-          const finalDice = rollDice(speedVal);
-          const speedBonus = getTraitRollBonus(p, "speed");
+          const roll = resolveTraitRoll(p, { stat: "speed", baseDiceCount: speedVal, context: "end-of-turn" });
           setDiceAnimation({
             purpose: "collapsed",
-            final: finalDice,
-            display: Array.from({ length: speedVal }, () => Math.floor(Math.random() * 3)),
+            final: roll.dice,
+            display: Array.from({ length: roll.dice.length }, () => Math.floor(Math.random() * 3)),
             tileName: tile.name,
             playerIndex: g.currentPlayerIndex,
-            modifier: createDiceModifier({
-              amount: speedBonus.amount,
-              sourceNames: speedBonus.sourceNames,
-            }),
+            modifier: roll.modifier,
+            resolvedTotal: roll.total,
             settled: false,
           });
           return { ...g, message: `${tile.name} — rolling for stability...` };
@@ -1245,16 +1375,44 @@ export default function GameBoard({ players, onQuit }) {
     const damageType = effect.damageType || "physical";
     const allowedStats = DAMAGE_STATS[damageType] || DAMAGE_STATS.physical;
     const allocation = Object.fromEntries(allowedStats.map((stat) => [stat, 0]));
+    const conversionOptions = getDamageConversionOptions(player, damageType);
+    const postDamageEffects =
+      effect.damage > 0
+        ? getPostDamageEffectsForChoice(player, {
+            damageType,
+            originalDamageType: damageType,
+            allocation,
+          })
+        : [];
 
     return {
       source: "tile-effect",
       effect,
+      originalDamageType: damageType,
       damageType,
       adjustmentMode: "decrease",
       amount: effect.damage,
       allowedStats,
       allocation,
       playerName: player.name,
+      canConvertToGeneral: damageType !== "general" && conversionOptions.canConvertToGeneral,
+      conversionSourceNames: conversionOptions.sourceNames,
+      postDamageEffects,
+    };
+  }
+
+  function updateDamageChoiceType(choice, player, damageType) {
+    const allowedStats = DAMAGE_STATS[damageType] || DAMAGE_STATS.physical;
+    const nextChoice = {
+      ...choice,
+      damageType,
+      allowedStats,
+      allocation: Object.fromEntries(allowedStats.map((stat) => [stat, 0])),
+    };
+
+    return {
+      ...nextChoice,
+      postDamageEffects: choice.amount > 0 ? getPostDamageEffectsForChoice(player, nextChoice) : [],
     };
   }
 
@@ -1349,14 +1507,62 @@ export default function GameBoard({ players, onQuit }) {
       return {
         ...g,
         damageChoice: {
-          ...choice,
-          allocation: {
-            ...choice.allocation,
-            [stat]: Math.max(0, currentAmount + delta),
-          },
+          ...(() => {
+            const nextChoice = {
+              ...choice,
+              allocation: {
+                ...choice.allocation,
+                [stat]: Math.max(0, currentAmount + delta),
+              },
+            };
+
+            return {
+              ...nextChoice,
+              postDamageEffects: getPostDamageEffectsForChoice(currentPlayerState, nextChoice),
+            };
+          })(),
         },
       };
     });
+  }
+
+  function handleToggleDamageConversion() {
+    setGame((g) => {
+      const choice = g.damageChoice;
+      if (!choice?.canConvertToGeneral) return g;
+
+      const nextDamageType = choice.damageType === "general" ? choice.originalDamageType : "general";
+      return {
+        ...g,
+        damageChoice: updateDamageChoiceType(choice, g.players[g.currentPlayerIndex], nextDamageType),
+      };
+    });
+  }
+
+  function applyPostDamagePassiveEffects(players, playerIndex, choice) {
+    if (!choice || choice.amount <= 0 || !choice.postDamageEffects?.length) {
+      return { players, message: "" };
+    }
+
+    let updatedPlayers = players;
+    const playerName = players[playerIndex]?.name || "Player";
+    const messages = [];
+
+    for (const effect of choice.postDamageEffects) {
+      const beforeIndex = updatedPlayers[playerIndex].statIndex[effect.stat];
+      updatedPlayers = applyStatChange(updatedPlayers, playerIndex, effect.stat, effect.amount);
+      const afterIndex = updatedPlayers[playerIndex].statIndex[effect.stat];
+      const appliedAmount = afterIndex - beforeIndex;
+
+      if (appliedAmount > 0) {
+        messages.push(`${playerName} gains ${appliedAmount} ${STAT_LABELS[effect.stat]} from ${effect.sourceName}.`);
+      }
+    }
+
+    return {
+      players: updatedPlayers,
+      message: messages.join(" "),
+    };
   }
 
   function handleConfirmDamageChoice() {
@@ -1368,14 +1574,21 @@ export default function GameBoard({ players, onQuit }) {
       if (selectedTotal !== choice.amount) return g;
 
       const damagedPlayers = applyDamageAllocation(g.players, g.currentPlayerIndex, choice.allocation);
-      const resolvedPlayers = applyTileEffectConsequences(g, damagedPlayers, choice.effect);
-
-      return passTurn({
+      const postDamageResult = applyPostDamagePassiveEffects(damagedPlayers, g.currentPlayerIndex, choice);
+      const resolvedPlayers = applyTileEffectConsequences(g, postDamageResult.players, choice.effect);
+      const nextState = passTurn({
         ...g,
         players: resolvedPlayers,
         tileEffect: null,
         damageChoice: null,
       });
+
+      return postDamageResult.message
+        ? {
+            ...nextState,
+            message: `${postDamageResult.message} ${nextState.message}`,
+          }
+        : nextState;
     });
     setDiceAnimation(null);
   }
@@ -1427,16 +1640,17 @@ export default function GameBoard({ players, onQuit }) {
 
       const pi = g.currentPlayerIndex;
       const currentPlayerState = g.players[pi];
+      const resolvedEffect = resolveDamageEffect(currentPlayerState, effect);
 
-      if (effect.damage > 0 && effect.damageType) {
+      if (resolvedEffect.damage > 0 && resolvedEffect.damageType) {
         return {
           ...g,
           tileEffect: null,
-          damageChoice: createDamageChoice(effect, currentPlayerState),
+          damageChoice: createDamageChoice(resolvedEffect, currentPlayerState),
         };
       }
 
-      const updatedPlayers = applyTileEffectConsequences(g, g.players, effect);
+      const updatedPlayers = applyTileEffectConsequences(g, g.players, resolvedEffect);
       return passTurn({ ...g, players: updatedPlayers, tileEffect: null, damageChoice: null });
     });
     setDiceAnimation(null);
@@ -1554,6 +1768,17 @@ export default function GameBoard({ players, onQuit }) {
       }
       return next;
     });
+  }
+
+  function handleViewOwnedCard(card, ownerName) {
+    setViewedCard({
+      ...card,
+      ownerName,
+    });
+  }
+
+  function handleCloseViewedCard() {
+    setViewedCard(null);
   }
 
   function passTurn(g) {
@@ -1931,6 +2156,52 @@ export default function GameBoard({ players, onQuit }) {
                     </div>
                   </div>
                 ))}
+                <div className="sidebar-card-groups">
+                  <div className="sidebar-card-group">
+                    <div className="sidebar-card-group-header">
+                      <span>Items</span>
+                      <span>{p.inventory.length}</span>
+                    </div>
+                    {p.inventory.length > 0 ? (
+                      <div className="sidebar-card-list">
+                        {p.inventory.map((card, cardIndex) => (
+                          <button
+                            key={`${p.name}-item-${card.id}-${cardIndex}`}
+                            type="button"
+                            className="sidebar-card-chip sidebar-card-chip-item"
+                            onClick={() => handleViewOwnedCard(card, p.name)}
+                          >
+                            {card.name}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="sidebar-card-empty">No items</div>
+                    )}
+                  </div>
+                  <div className="sidebar-card-group">
+                    <div className="sidebar-card-group-header">
+                      <span>Omens</span>
+                      <span>{p.omens.length}</span>
+                    </div>
+                    {p.omens.length > 0 ? (
+                      <div className="sidebar-card-list">
+                        {p.omens.map((card, cardIndex) => (
+                          <button
+                            key={`${p.name}-omen-${card.id}-${cardIndex}`}
+                            type="button"
+                            className="sidebar-card-chip sidebar-card-chip-omen"
+                            onClick={() => handleViewOwnedCard(card, p.name)}
+                          >
+                            {card.name}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="sidebar-card-empty">No omens</div>
+                    )}
+                  </div>
+                </div>
               </div>
             </div>
           );
@@ -1946,17 +2217,28 @@ export default function GameBoard({ players, onQuit }) {
           <div className={`card-modal card-${game.drawnCard.type}`}>
             <div className="card-type-label">{game.drawnCard.type.toUpperCase()}</div>
             <h2 className="card-name">{game.drawnCard.name}</h2>
-            <p className="card-description">
-              {game.drawnCard.type === "omen" ? game.drawnCard.passiveAbility : game.drawnCard.description}
-            </p>
-            {(game.drawnCard.type === "omen" ? game.drawnCard.activeAbility : game.drawnCard.special) && (
-              <div className="card-special">
-                {game.drawnCard.type === "omen" ? game.drawnCard.activeAbility : game.drawnCard.special}
-              </div>
-            )}
+            <CardAbilityContent card={game.drawnCard} />
             {game.drawnCard.flavor && <p className="card-flavor">{game.drawnCard.flavor}</p>}
             <button className="btn btn-primary" onClick={handleDismissCard}>
               {game.drawnCard.type === "omen" ? "Roll for Haunt" : "Continue"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {viewedCard && (
+        <div className="card-overlay" onClick={handleCloseViewedCard}>
+          <div
+            className={`card-modal card-${viewedCard.type} card-viewer`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="card-type-label">{viewedCard.type.toUpperCase()}</div>
+            <h2 className="card-name">{viewedCard.name}</h2>
+            <div className="card-owner-label">Held by {viewedCard.ownerName}</div>
+            <CardAbilityContent card={viewedCard} />
+            {viewedCard.flavor && <p className="card-flavor">{viewedCard.flavor}</p>}
+            <button className="btn btn-primary" onClick={handleCloseViewedCard}>
+              Close
             </button>
           </div>
         </div>
@@ -1979,7 +2261,7 @@ export default function GameBoard({ players, onQuit }) {
                       ? "COLLAPSED ROOM — DAMAGE"
                       : "FURNACE ROOM"}
             </div>
-              <DiceRow dice={diceAnimation.display} modifier={diceAnimation.modifier} rolling />
+            <DiceRow dice={diceAnimation.display} modifier={diceAnimation.modifier} rolling />
             <h2 className="card-name">Rolling...</h2>
           </div>
         </div>
@@ -2013,9 +2295,7 @@ export default function GameBoard({ players, onQuit }) {
             className={`card-modal card-tile-effect ${game.tileEffect.type === "laundry-chute" ? "card-tile-neutral" : game.tileEffect.type === "collapsed-pending" ? "card-tile-danger" : game.tileEffect.damage > 0 || game.tileEffect.collapsed ? "card-tile-danger" : "card-tile-safe"}`}
           >
             <div className="card-type-label">{game.tileEffect.tileName}</div>
-            {game.tileEffect.dice && (
-              <DiceRow dice={game.tileEffect.dice} modifier={game.tileEffect.diceModifier} />
-            )}
+            {game.tileEffect.dice && <DiceRow dice={game.tileEffect.dice} modifier={game.tileEffect.diceModifier} />}
             {game.tileEffect.total !== undefined && <div className="dice-total">Total: {game.tileEffect.total}</div>}
             {game.tileEffect.collapsed && game.tileEffect.damageDice.length > 0 && (
               <>
@@ -2051,6 +2331,25 @@ export default function GameBoard({ players, onQuit }) {
               Assign {damageChoice.amount} point{damageChoice.amount === 1 ? "" : "s"} of {damageChoice.damageType}{" "}
               damage to {damageChoice.playerName}.
             </p>
+            {damageChoice.canConvertToGeneral && (
+              <div className="damage-conversion-panel">
+                <div className="damage-conversion-copy">
+                  {damageChoice.damageType === "general"
+                    ? `Taking this as General damage via ${formatSourceNames(damageChoice.conversionSourceNames)}.`
+                    : `${formatSourceNames(damageChoice.conversionSourceNames)} can convert this to General damage.`}
+                </div>
+                <button className="btn btn-secondary damage-conversion-button" onClick={handleToggleDamageConversion}>
+                  {damageChoice.damageType === "general"
+                    ? `Use ${damageChoice.originalDamageType} damage`
+                    : "Take as General Damage"}
+                </button>
+              </div>
+            )}
+            {damageChoice.postDamageEffects.length > 0 && (
+              <p className="damage-choice-hint">
+                After taking damage: {describePostDamageEffects(damageChoice.postDamageEffects)}.
+              </p>
+            )}
             <p className="damage-choice-hint">
               Use {damageChoice.adjustmentMode === "increase" ? "+" : "-"} to assign this change to a trait.
             </p>
