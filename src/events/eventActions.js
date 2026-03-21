@@ -80,12 +80,34 @@ function getActiveHealRule(viewedCard) {
 function canUseHealAbilityNow(game, viewedCard) {
   const inventoryCard = getInventoryCard(game, viewedCard);
   if (!inventoryCard) return false;
-
-  const owner = game.players[viewedCard.ownerIndex];
   const healRule = getActiveHealRule(viewedCard);
   if (!healRule) return false;
 
-  return getHealableStats(owner, healRule).length > 0;
+  return getHealTargetIndexes(game, viewedCard, healRule).length > 0;
+}
+
+function getHealTargetIndexes(game, viewedCard, healRule) {
+  const owner = game.players[viewedCard.ownerIndex];
+  if (!owner) return [];
+
+  return game.players
+    .map((player, index) => ({ player, index }))
+    .filter(({ player }) => player.isAlive)
+    .filter(
+      ({ player }) =>
+        player.floor === owner.floor &&
+        player.x === owner.x &&
+        player.y === owner.y &&
+        getHealableStats(player, healRule).length > 0
+    )
+    .map(({ index }) => index);
+}
+
+function getHealTargetOptions(game, viewedCard, healRule) {
+  return getHealTargetIndexes(game, viewedCard, healRule).map((index) => ({
+    value: index,
+    label: game.players[index]?.name || `Player ${index + 1}`,
+  }));
 }
 
 export function continueEventState(g, deps) {
@@ -589,9 +611,17 @@ export function getCardActiveAbilityState({ game, viewedCard, drawnEventPrimaryA
     rule.action === "reroll-all-trait-dice" ||
     rule.action === "heal-critical-traits" ||
     rule.action === "heal-stats";
+  const healRule = getActiveHealRule(viewedCard);
   const valueOptions =
-    rule.valueSelection === "number-0-8" ? Array.from({ length: 9 }, (_, value) => value) : rule.valueOptions || [];
-  const requiresValueSelection = rule.action === "set-trait-roll-total";
+    rule.action === "set-trait-roll-total"
+      ? rule.valueSelection === "number-0-8"
+        ? Array.from({ length: 9 }, (_, value) => value)
+        : rule.valueOptions || []
+      : rule.action === "heal-critical-traits" || rule.action === "heal-stats"
+        ? getHealTargetOptions(game, viewedCard, healRule || {})
+        : rule.valueOptions || [];
+  const requiresValueSelection =
+    rule.action === "set-trait-roll-total" || rule.action === "heal-critical-traits" || rule.action === "heal-stats";
   const actionSatisfied =
     rule.action === "heal-critical-traits" || rule.action === "heal-stats"
       ? canUseHealAbilityNow(game, viewedCard)
@@ -606,7 +636,7 @@ export function getCardActiveAbilityState({ game, viewedCard, drawnEventPrimaryA
   };
 }
 
-export function applyFirstAidKitNowState(g, viewedCard) {
+export function applyFirstAidKitNowState(g, viewedCard, targetPlayerIndex = null) {
   if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
 
   const healRule = getActiveHealRule(viewedCard);
@@ -622,21 +652,33 @@ export function applyFirstAidKitNowState(g, viewedCard) {
     return { game: g, closeViewedCard: false, diceAnimation: null };
   }
 
-  const healableStats = getHealableStats(owner, healRule);
+  const healTargetIndexes = getHealTargetIndexes(g, viewedCard, healRule);
+  if (healTargetIndexes.length === 0) {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  const resolvedTargetIndex =
+    healTargetIndexes.find((index) => index === Number(targetPlayerIndex)) ??
+    healTargetIndexes.find((index) => index === viewedCard.ownerIndex) ??
+    healTargetIndexes[0];
+  const targetPlayer = g.players[resolvedTargetIndex];
+  const healableStats = getHealableStats(targetPlayer, healRule);
   if (healableStats.length === 0) {
     return { game: g, closeViewedCard: false, diceAnimation: null };
   }
 
   const nextPlayers = g.players.map((player, playerIndex) => {
-    if (playerIndex !== viewedCard.ownerIndex) return player;
+    if (playerIndex !== viewedCard.ownerIndex && playerIndex !== resolvedTargetIndex) return player;
 
     const nextInventory =
       healRule.consume === "bury-self"
         ? player.inventory.filter((_, cardIndex) => cardIndex !== viewedCard.ownerCardIndex)
         : player.inventory;
     const nextStatIndex = { ...player.statIndex };
-    for (const stat of healableStats) {
-      nextStatIndex[stat] = Math.max(nextStatIndex[stat], player.character.startIndex[stat]);
+    if (playerIndex === resolvedTargetIndex) {
+      for (const stat of healableStats) {
+        nextStatIndex[stat] = Math.max(nextStatIndex[stat], player.character.startIndex[stat]);
+      }
     }
     const isAlive = Object.values(nextStatIndex).every((value) => value > 0);
 
@@ -652,7 +694,9 @@ export function applyFirstAidKitNowState(g, viewedCard) {
     game: {
       ...g,
       players: nextPlayers,
-      message: `${owner.name} heals ${healableStats.length === 1 ? "a trait" : "traits"} to starting values.`,
+      message: `${owner.name} uses ${inventoryCard.name} to heal ${targetPlayer.name}'s ${
+        healableStats.length === 1 ? "critical trait" : "critical traits"
+      } to starting values.`,
     },
     closeViewedCard: true,
     diceAnimation: null,
@@ -837,6 +881,14 @@ export function chooseCardActiveAbilityValueState(g, total, viewedCard, deps) {
   const action = viewedCard?.activeAbilityRule?.action;
   if (action === "set-trait-roll-total") {
     return chooseAngelsFeatherValueState(g, total, viewedCard, deps);
+  }
+  if (action === "heal-critical-traits" || action === "heal-stats") {
+    const result = applyFirstAidKitNowState(g, viewedCard, total);
+    return {
+      game: result.game,
+      queueTotal: undefined,
+      closeViewedCard: result.closeViewedCard,
+    };
   }
 
   return {

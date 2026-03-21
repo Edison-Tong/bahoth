@@ -2260,15 +2260,19 @@ export default function GameBoard({ players, onQuit }) {
             )}
             {viewedCard.showUseNowPicker && viewedCardActiveAbilityState?.requiresValueSelection && (
               <div className="event-option-list" style={{ marginTop: "0.75rem" }}>
-                {viewedCardActiveAbilityState.valueOptions.map((value) => (
-                  <button
-                    key={`active-ability-value-${value}`}
-                    className="btn btn-secondary"
-                    onClick={() => handleChooseActiveAbilityValue(value)}
-                  >
-                    {value}
-                  </button>
-                ))}
+                {viewedCardActiveAbilityState.valueOptions.map((option) => {
+                  const optionValue = typeof option === "object" && option !== null ? option.value : option;
+                  const optionLabel = typeof option === "object" && option !== null ? option.label : option;
+                  return (
+                    <button
+                      key={`active-ability-value-${String(optionValue)}`}
+                      className="btn btn-secondary"
+                      onClick={() => handleChooseActiveAbilityValue(optionValue)}
+                    >
+                      {optionLabel}
+                    </button>
+                  );
+                })}
               </div>
             )}
             {viewedCard.flavor && <p className="card-flavor">{viewedCard.flavor}</p>}
