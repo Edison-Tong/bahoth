@@ -25,7 +25,55 @@ function getInventoryCard(game, viewedCard) {
 function isCreepyDollAvailableThisTurn(game, viewedCard) {
   const inventoryCard = getInventoryCard(game, viewedCard);
   if (!inventoryCard || inventoryCard.id !== "creepy-doll") return false;
-  return inventoryCard.lastActiveAbilityTurnUsed !== game.turnNumber;
+  if (inventoryCard.lastActiveAbilityTurnUsed === game.turnNumber) return false;
+
+  const lastRoll = game.eventState?.lastRoll;
+  return !!lastRoll && Array.isArray(lastRoll.dice) && Array.isArray(lastRoll.outcomes) && isTraitRollResult(lastRoll);
+}
+
+function isTraitRollResult(lastRoll) {
+  if (!lastRoll) return false;
+  return Object.values(STAT_LABELS).includes(lastRoll.label);
+}
+
+function isTraitRollJustMadeContext(game) {
+  if (isTraitRollResult(game.eventState?.lastRoll)) return true;
+
+  const awaiting = game.eventState?.awaiting;
+  if (awaiting?.type === "trait-roll-sequence-complete") {
+    return Array.isArray(awaiting.results) && awaiting.results.length > 0;
+  }
+
+  return false;
+}
+
+function isLuckyCoinAvailableThisTurn(game, viewedCard) {
+  const inventoryCard = getInventoryCard(game, viewedCard);
+  if (!inventoryCard || inventoryCard.id !== "lucky-coin") return false;
+  if (inventoryCard.lastActiveAbilityTurnUsed === game.turnNumber) return false;
+
+  const awaiting = game.eventState?.awaiting;
+  if (awaiting?.type === "trait-roll-sequence-complete" && Array.isArray(awaiting.results)) {
+    return awaiting.results.some((result) => Array.isArray(result?.dice) && result.dice.some((value) => value === 0));
+  }
+
+  const lastRoll = game.eventState?.lastRoll;
+  if (!lastRoll || !Array.isArray(lastRoll.dice) || !Array.isArray(lastRoll.outcomes)) return false;
+  if (!isTraitRollResult(lastRoll)) return false;
+  return lastRoll.dice.some((value) => value === 0);
+}
+
+function getLuckyCoinSequenceRerollOptions(game) {
+  const awaiting = game.eventState?.awaiting;
+  if (awaiting?.type !== "trait-roll-sequence-complete" || !Array.isArray(awaiting.results)) return [];
+
+  return awaiting.results
+    .map((result, index) => ({ result, index }))
+    .filter(({ result }) => Array.isArray(result?.dice) && result.dice.some((value) => value === 0))
+    .map(({ result, index }) => ({
+      value: `sequence:${index}`,
+      label: `${STAT_LABELS[result.stat] || result.stat || "Trait"} (${result.total})`,
+    }));
 }
 
 function getCriticalStats(player) {
@@ -579,10 +627,7 @@ const ACTIVE_ABILITY_TRIGGER_HANDLERS = {
   "on-your-turn": ({ game, viewedCard }) =>
     viewedCard.ownerIndex === game.currentPlayerIndex && game.turnPhase !== "card" && !game.drawnCard,
   "trait-roll-just-made": ({ game, viewedCard }) =>
-    viewedCard.ownerIndex === game.currentPlayerIndex &&
-    !!game.eventState?.lastRoll &&
-    !!game.eventState?.lastRoll?.outcomes &&
-    isCreepyDollAvailableThisTurn(game, viewedCard),
+    viewedCard.ownerIndex === game.currentPlayerIndex && isTraitRollJustMadeContext(game),
   "die-just-rolled": ({ game, viewedCard }) => viewedCard.ownerIndex === game.currentPlayerIndex && !!game.eventState,
   attack: ({ game, viewedCard }) => viewedCard.ownerIndex === game.currentPlayerIndex,
 };
@@ -609,9 +654,12 @@ export function getCardActiveAbilityState({ game, viewedCard, drawnEventPrimaryA
   const hasSupportedAction =
     rule.action === "set-trait-roll-total" ||
     rule.action === "reroll-all-trait-dice" ||
+    rule.action === "reroll-blank-trait-dice" ||
     rule.action === "heal-critical-traits" ||
     rule.action === "heal-stats";
   const healRule = getActiveHealRule(viewedCard);
+  const luckyCoinSequenceOptions =
+    rule.action === "reroll-blank-trait-dice" ? getLuckyCoinSequenceRerollOptions(game) : [];
   const valueOptions =
     rule.action === "set-trait-roll-total"
       ? rule.valueSelection === "number-0-8"
@@ -619,13 +667,22 @@ export function getCardActiveAbilityState({ game, viewedCard, drawnEventPrimaryA
         : rule.valueOptions || []
       : rule.action === "heal-critical-traits" || rule.action === "heal-stats"
         ? getHealTargetOptions(game, viewedCard, healRule || {})
-        : rule.valueOptions || [];
+        : rule.action === "reroll-blank-trait-dice" && luckyCoinSequenceOptions.length > 0
+          ? luckyCoinSequenceOptions
+          : rule.valueOptions || [];
   const requiresValueSelection =
-    rule.action === "set-trait-roll-total" || rule.action === "heal-critical-traits" || rule.action === "heal-stats";
+    rule.action === "set-trait-roll-total" ||
+    rule.action === "heal-critical-traits" ||
+    rule.action === "heal-stats" ||
+    (rule.action === "reroll-blank-trait-dice" && luckyCoinSequenceOptions.length > 0);
   const actionSatisfied =
     rule.action === "heal-critical-traits" || rule.action === "heal-stats"
       ? canUseHealAbilityNow(game, viewedCard)
-      : true;
+      : rule.action === "reroll-all-trait-dice"
+        ? isCreepyDollAvailableThisTurn(game, viewedCard)
+        : rule.action === "reroll-blank-trait-dice"
+          ? isLuckyCoinAvailableThisTurn(game, viewedCard)
+          : true;
 
   return {
     canUseNow: triggerSatisfied && hasSupportedAction && actionSatisfied,
@@ -773,6 +830,107 @@ export function applyCreepyDollNowState(g, viewedCard) {
   };
 }
 
+export function applyLuckyCoinNowState(g, viewedCard, targetRollSelection = null) {
+  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (viewedCard.activeAbilityRule?.action !== "reroll-blank-trait-dice") {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+  if (viewedCard.ownerCollection !== "inventory") return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (!isLuckyCoinAvailableThisTurn(g, viewedCard)) return { game: g, closeViewedCard: false, diceAnimation: null };
+
+  const owner = g.players[viewedCard.ownerIndex];
+  const inventoryCard = getInventoryCard(g, viewedCard);
+  if (!inventoryCard) {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  const awaiting = g.eventState?.awaiting;
+  const sequenceOptions = getLuckyCoinSequenceRerollOptions(g);
+  const sequenceTargetValue = String(targetRollSelection || "");
+  const resolvedSequenceTarget =
+    sequenceOptions.find((option) => option.value === sequenceTargetValue) ||
+    (sequenceOptions.length > 0 && awaiting?.type === "trait-roll-sequence-complete" ? sequenceOptions[0] : null);
+
+  const baseRoll =
+    resolvedSequenceTarget && awaiting?.type === "trait-roll-sequence-complete"
+      ? awaiting.results?.[Number(String(resolvedSequenceTarget.value).replace("sequence:", ""))]
+      : g.eventState?.lastRoll;
+  if (!baseRoll || !Array.isArray(baseRoll.dice)) {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  const blankIndexes = baseRoll.dice.reduce((acc, die, index) => {
+    if (die === 0) acc.push(index);
+    return acc;
+  }, []);
+  if (blankIndexes.length === 0) {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  const rerolledBlankDice = rollDice(blankIndexes.length);
+  const nextDice = [...baseRoll.dice];
+  blankIndexes.forEach((dieIndex, index) => {
+    nextDice[dieIndex] = rerolledBlankDice[index];
+  });
+
+  const previousDiceTotal = (baseRoll.dice || []).reduce((sum, value) => sum + value, 0);
+  const staticBonus = (baseRoll.total || 0) - previousDiceTotal;
+  const nextTotal = nextDice.reduce((sum, value) => sum + value, 0) + staticBonus;
+  const rerollBlankCount = rerolledBlankDice.filter((value) => value === 0).length;
+  const nextPlayers = g.players.map((player, playerIndex) => {
+    if (playerIndex !== viewedCard.ownerIndex) return player;
+
+    const nextInventory = player.inventory.map((card, cardIndex) =>
+      cardIndex === viewedCard.ownerCardIndex
+        ? {
+            ...card,
+            lastActiveAbilityTurnUsed: g.turnNumber,
+          }
+        : card
+    );
+
+    return {
+      ...player,
+      inventory: nextInventory,
+    };
+  });
+
+  return {
+    game: {
+      ...g,
+      players: nextPlayers,
+      message: `${owner.name} flips Lucky Coin and rerolls blank dice...`,
+    },
+    closeViewedCard: true,
+    diceAnimation: {
+      purpose: "event-partial-reroll",
+      final: nextDice,
+      display: [...baseRoll.dice],
+      settled: false,
+      label: baseRoll.label || STAT_LABELS[baseRoll.stat] || "Trait",
+      total: nextTotal,
+      modifier: baseRoll.modifier || null,
+      outcomes:
+        resolvedSequenceTarget && awaiting?.type === "trait-roll-sequence-complete"
+          ? [...(awaiting.outcomes || [])]
+          : [...(baseRoll.outcomes || [])],
+      rerollIndexes: blankIndexes,
+      ownerIndex: viewedCard.ownerIndex,
+      sanityLoss: rerollBlankCount,
+      sourceName: inventoryCard.name,
+      sequenceResultIndex:
+        resolvedSequenceTarget && awaiting?.type === "trait-roll-sequence-complete"
+          ? Number(String(resolvedSequenceTarget.value).replace("sequence:", ""))
+          : undefined,
+      sequenceStat:
+        resolvedSequenceTarget && awaiting?.type === "trait-roll-sequence-complete"
+          ? awaiting.results?.[Number(String(resolvedSequenceTarget.value).replace("sequence:", ""))]?.stat
+          : undefined,
+    },
+  };
+}
+
 export function chooseAngelsFeatherValueState(
   g,
   total,
@@ -880,7 +1038,19 @@ export function chooseAngelsFeatherValueState(
 export function chooseCardActiveAbilityValueState(g, total, viewedCard, deps) {
   const action = viewedCard?.activeAbilityRule?.action;
   if (action === "set-trait-roll-total") {
-    return chooseAngelsFeatherValueState(g, total, viewedCard, deps);
+    return {
+      ...chooseAngelsFeatherValueState(g, total, viewedCard, deps),
+      diceAnimation: null,
+    };
+  }
+  if (action === "reroll-blank-trait-dice") {
+    const result = applyLuckyCoinNowState(g, viewedCard, total);
+    return {
+      game: result.game,
+      queueTotal: undefined,
+      closeViewedCard: result.closeViewedCard,
+      diceAnimation: result.diceAnimation || null,
+    };
   }
   if (action === "heal-critical-traits" || action === "heal-stats") {
     const result = applyFirstAidKitNowState(g, viewedCard, total);
@@ -888,6 +1058,7 @@ export function chooseCardActiveAbilityValueState(g, total, viewedCard, deps) {
       game: result.game,
       queueTotal: undefined,
       closeViewedCard: result.closeViewedCard,
+      diceAnimation: null,
     };
   }
 
@@ -895,6 +1066,7 @@ export function chooseCardActiveAbilityValueState(g, total, viewedCard, deps) {
     game: g,
     queueTotal: undefined,
     closeViewedCard: false,
+    diceAnimation: null,
   };
 }
 
@@ -902,6 +1074,9 @@ export function chooseCardActiveAbilityNowState(g, viewedCard) {
   const action = viewedCard?.activeAbilityRule?.action;
   if (action === "reroll-all-trait-dice") {
     return applyCreepyDollNowState(g, viewedCard);
+  }
+  if (action === "reroll-blank-trait-dice") {
+    return applyLuckyCoinNowState(g, viewedCard);
   }
   if (action === "heal-critical-traits" || action === "heal-stats") {
     return applyFirstAidKitNowState(g, viewedCard);
@@ -1369,7 +1544,7 @@ export function resolveRollReadyAwaiting(g, awaiting, deps) {
   return { game: g, animation: null };
 }
 
-export function resolveEventAnimationSettlement(g, da, applyStatChange) {
+export function resolveEventAnimationSettlement(g, da) {
   if (da.purpose === "event-roll") {
     if (!g.eventState) return { handled: true, game: g };
 
@@ -1394,6 +1569,82 @@ export function resolveEventAnimationSettlement(g, da, applyStatChange) {
           pendingEffects: resolvedEffects,
         },
         message: `${g.eventState.card.name}: roll resolved.`,
+      },
+    };
+  }
+
+  if (da.purpose === "event-partial-reroll") {
+    if (!g.eventState) return { handled: true, game: g };
+
+    const matchedOutcome = getMatchingOutcome(da.outcomes || [], da.total);
+    const resolvedEffects = [...(matchedOutcome?.effects || [])];
+    const sanityLoss = Math.max(0, Number(da.sanityLoss) || 0);
+    const ownerIndex = Number(da.ownerIndex);
+    const nextPlayers = Number.isInteger(ownerIndex)
+      ? g.players.map((player, index) => {
+          if (index !== ownerIndex) return player;
+          const nextStatIndex = {
+            ...player.statIndex,
+            sanity: Math.max(0, player.statIndex.sanity - sanityLoss),
+          };
+          const isAlive = Object.values(nextStatIndex).every((value) => value > 0);
+          return {
+            ...player,
+            statIndex: nextStatIndex,
+            isAlive,
+          };
+        })
+      : g.players;
+
+    const ownerName = Number.isInteger(ownerIndex) ? g.players[ownerIndex]?.name || "Explorer" : "Explorer";
+    const sequenceResultIndex = Number(da.sequenceResultIndex);
+    const isSequenceTarget =
+      Number.isInteger(sequenceResultIndex) && g.eventState.awaiting?.type === "trait-roll-sequence-complete";
+
+    const nextAwaiting = isSequenceTarget
+      ? {
+          ...g.eventState.awaiting,
+          results: (g.eventState.awaiting.results || []).map((result, index) =>
+            index === sequenceResultIndex
+              ? {
+                  ...result,
+                  stat: da.sequenceStat || result.stat,
+                  dice: [...(da.final || [])],
+                  total: da.total,
+                  modifier: da.modifier || null,
+                  failed: da.total <= 1,
+                }
+              : result
+          ),
+        }
+      : g.eventState.awaiting;
+
+    return {
+      handled: true,
+      game: {
+        ...g,
+        players: nextPlayers,
+        eventState: {
+          ...g.eventState,
+          awaiting: nextAwaiting,
+          ...(isSequenceTarget
+            ? {}
+            : {
+                lastRoll: {
+                  label: da.label,
+                  dice: da.final,
+                  total: da.total,
+                  modifier: da.modifier || null,
+                  outcomes: [...(da.outcomes || [])],
+                },
+                summary: describeEventEffects(resolvedEffects),
+                pendingEffects: resolvedEffects,
+              }),
+        },
+        message:
+          sanityLoss > 0
+            ? `${ownerName} uses ${da.sourceName || "Lucky Coin"}, rerolls blank dice, and loses ${sanityLoss} Sanity.`
+            : `${ownerName} uses ${da.sourceName || "Lucky Coin"} and rerolls blank dice.`,
       },
     };
   }
@@ -1487,7 +1738,6 @@ export function resolveEventAnimationSettlement(g, da, applyStatChange) {
     if (!currentStat) return { handled: true, game: g };
 
     const failed = da.total <= 1;
-    const nextPlayers = failed ? applyStatChange(g.players, g.currentPlayerIndex, currentStat, -1) : g.players;
     const nextResults = [
       ...(awaiting.results || []),
       {
@@ -1504,7 +1754,6 @@ export function resolveEventAnimationSettlement(g, da, applyStatChange) {
       handled: true,
       game: {
         ...g,
-        players: nextPlayers,
         eventState: {
           ...g.eventState,
           awaiting: hasMoreRolls

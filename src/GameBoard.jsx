@@ -204,6 +204,18 @@ export default function GameBoard({ players, onQuit }) {
     const interval = setInterval(() => {
       setDiceAnimation((prev) => {
         if (!prev || prev.settled) return prev;
+        if (prev.purpose === "event-partial-reroll" && Array.isArray(prev.rerollIndexes)) {
+          const nextDisplay = [...prev.display];
+          for (const dieIndex of prev.rerollIndexes) {
+            if (dieIndex >= 0 && dieIndex < nextDisplay.length) {
+              nextDisplay[dieIndex] = Math.floor(Math.random() * 3);
+            }
+          }
+          return {
+            ...prev,
+            display: nextDisplay,
+          };
+        }
         return {
           ...prev,
           display: Array.from({ length: prev.final.length }, () => Math.floor(Math.random() * 3)),
@@ -238,11 +250,12 @@ export default function GameBoard({ players, onQuit }) {
         }));
       } else if (
         da.purpose === "event-roll" ||
+        da.purpose === "event-partial-reroll" ||
         da.purpose === "event-damage-roll" ||
         da.purpose === "event-damage-sequence" ||
         da.purpose === "event-trait-sequence-roll"
       ) {
-        setGame((g) => resolveEventAnimationSettlement(g, da, applyStatChange).game);
+        setGame((g) => resolveEventAnimationSettlement(g, da).game);
         setDiceAnimation(null);
       } else if (da.purpose === "collapsed") {
         setGame((g) => {
@@ -1693,6 +1706,9 @@ export default function GameBoard({ players, onQuit }) {
     });
 
     setGame(result.game);
+    if (result.diceAnimation) {
+      setDiceAnimation(result.diceAnimation);
+    }
 
     if (result.queueTotal !== undefined) {
       queuedAngelsFeatherTotalRef.current = result.queueTotal;

@@ -81,7 +81,7 @@ function beginEventDamageSequenceRoll(game, rollDiceFn) {
   };
 }
 
-function applyTraitRollSequenceOverride(game, applyStatChange) {
+function applyTraitRollSequenceOverride(game) {
   const awaiting = game.eventState?.awaiting;
   if (!awaiting || awaiting.type !== "trait-roll-sequence-rolling") return null;
 
@@ -97,7 +97,6 @@ function applyTraitRollSequenceOverride(game, applyStatChange) {
   if (!currentStat) return null;
 
   const failed = forcedTotal <= 1;
-  const nextPlayers = failed ? applyStatChange(game.players, game.currentPlayerIndex, currentStat, -1) : game.players;
   const nextResults = [
     ...(awaiting.results || []),
     {
@@ -113,7 +112,6 @@ function applyTraitRollSequenceOverride(game, applyStatChange) {
   return {
     game: {
       ...game,
-      players: nextPlayers,
       eventState: {
         ...game.eventState,
         awaiting: hasMoreRolls
@@ -193,7 +191,7 @@ export function useEventRuntimeEffects({
 
     let overrideApplied = false;
     setGame((g) => {
-      const result = applyTraitRollSequenceOverride(g, applyStatChange);
+      const result = applyTraitRollSequenceOverride(g);
       if (!result) return g;
       overrideApplied = true;
       return result.game;

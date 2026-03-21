@@ -154,11 +154,20 @@ export default function EventResolutionModal({
         {eventState.summary && !eventState.lastRoll && <p className="card-description">{eventState.summary}</p>}
         {eventState.lastRoll && (
           <>
-            {renderDiceRow({ dice: eventState.lastRoll.dice, modifier: eventState.lastRoll.modifier })}
+            {diceAnimation?.purpose === "event-partial-reroll"
+              ? renderDiceRow({ dice: diceAnimation.display, modifier: diceAnimation.modifier, rolling: true })
+              : renderDiceRow({ dice: eventState.lastRoll.dice, modifier: eventState.lastRoll.modifier })}
             <div className="dice-total">
-              {/^[0-9]+ dice?$/.test(eventState.lastRoll.label || "")
-                ? eventState.lastRoll.total
-                : `${eventState.lastRoll.label}: ${eventState.lastRoll.total}`}
+              {/^[0-9]+ dice?$/.test(
+                (diceAnimation?.purpose === "event-partial-reroll" ? diceAnimation.label : eventState.lastRoll.label) ||
+                  ""
+              )
+                ? diceAnimation?.purpose === "event-partial-reroll"
+                  ? diceAnimation.total
+                  : eventState.lastRoll.total
+                : `${diceAnimation?.purpose === "event-partial-reroll" ? diceAnimation.label : eventState.lastRoll.label}: ${
+                    diceAnimation?.purpose === "event-partial-reroll" ? diceAnimation.total : eventState.lastRoll.total
+                  }`}
             </div>
             {eventState.summary && <p className="card-description">{eventState.summary}</p>}
             <div className="dev-roll-tools">
@@ -248,12 +257,18 @@ export default function EventResolutionModal({
                   eventState.awaiting.type === "trait-roll-sequence-rolling" &&
                   eventState.awaiting.currentIndex === index &&
                   diceAnimation?.purpose === "event-trait-sequence-roll";
+                const isPartialRerollNow =
+                  eventState.awaiting.type === "trait-roll-sequence-complete" &&
+                  diceAnimation?.purpose === "event-partial-reroll" &&
+                  Number(diceAnimation.sequenceResultIndex) === index;
 
                 return (
                   <div key={`event-trait-sequence-${stat}-${index}`}>
                     <p className="card-description">{`${statLabels[stat]} Roll`}</p>
                     {result?.dice && renderDiceRow({ dice: result.dice, modifier: result.modifier })}
                     {isRollingNow &&
+                      renderDiceRow({ dice: diceAnimation.display, modifier: diceAnimation.modifier, rolling: true })}
+                    {isPartialRerollNow &&
                       renderDiceRow({ dice: diceAnimation.display, modifier: diceAnimation.modifier, rolling: true })}
                     {result && <p className="card-description">Result: {result.total}</p>}
                   </div>
