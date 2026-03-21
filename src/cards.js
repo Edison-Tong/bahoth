@@ -381,27 +381,27 @@ export const EVENT_CARDS = [
   //     }),
   //   ],
   // }),
-  createEventCard({
-    id: "alien-geometry",
-    name: "Alien Geometry",
-    todo: "Make a Knowledge roll",
-    result: "4+: Gain 1 Sanity. 0-3: Lose 1 Speed.",
-    steps: [
-      createEventStep("trait-roll", {
-        stat: "knowledge",
-        outcomes: [
-          createEventOutcome(
-            { roll: { min: 4 } },
-            createEventEffect("stat-change", { mode: "gain", stat: "sanity", amount: 1 })
-          ),
-          createEventOutcome(
-            { roll: { max: 3 } },
-            createEventEffect("stat-change", { mode: "lose", stat: "speed", amount: 1 })
-          ),
-        ],
-      }),
-    ],
-  }),
+  // createEventCard({
+  //   id: "alien-geometry",
+  //   name: "Alien Geometry",
+  //   todo: "Make a Knowledge roll",
+  //   result: "4+: Gain 1 Sanity. 0-3: Lose 1 Speed.",
+  //   steps: [
+  //     createEventStep("trait-roll", {
+  //       stat: "knowledge",
+  //       outcomes: [
+  //         createEventOutcome(
+  //           { roll: { min: 4 } },
+  //           createEventEffect("stat-change", { mode: "gain", stat: "sanity", amount: 1 })
+  //         ),
+  //         createEventOutcome(
+  //           { roll: { max: 3 } },
+  //           createEventEffect("stat-change", { mode: "lose", stat: "speed", amount: 1 })
+  //         ),
+  //       ],
+  //     }),
+  //   ],
+  // }),
   // createEventCard({
   //   id: "a-moment-of-hope",
   //   name: "A Moment of Hope",
@@ -608,29 +608,29 @@ export const EVENT_CARDS = [
   //     }),
   //   ],
   // }),
-  // createEventCard({
-  //   id: "burning-figure",
-  //   name: "Burning Figure",
-  //   todo: "Make a Sanity roll",
-  //   result:
-  //     "4+: Gain 1 Sanity. 2-3: Place your explorer on the Entrance Hall. 0-1: Take 1 die of Physical damage and 1 die of Mental damage.",
-  //   steps: [
-  //     createEventStep("trait-roll", {
-  //       stat: "sanity",
-  //       outcomes: [
-  //         createEventOutcome(
-  //           { roll: { min: 4 } },
-  //           createEventEffect("stat-change", { mode: "gain", stat: "sanity", amount: 1 })
-  //         ),
-  //         createEventOutcome({ roll: { min: 2, max: 3 } }, createEventEffect("move", { destination: "entrance-hall" })),
-  //         createEventOutcome({ roll: { max: 1 } }, [
-  //           createEventEffect("damage", { damageType: "physical", amountType: "dice", dice: 1 }),
-  //           createEventEffect("damage", { damageType: "mental", amountType: "dice", dice: 1 }),
-  //         ]),
-  //       ],
-  //     }),
-  //   ],
-  // }),
+  createEventCard({
+    id: "burning-figure",
+    name: "Burning Figure",
+    todo: "Make a Sanity roll",
+    result:
+      "4+: Gain 1 Sanity. 2-3: Place your explorer on the Entrance Hall. 0-1: Take 1 die of Physical damage and 1 die of Mental damage.",
+    steps: [
+      createEventStep("trait-roll", {
+        stat: "sanity",
+        outcomes: [
+          createEventOutcome(
+            { roll: { min: 4 } },
+            createEventEffect("stat-change", { mode: "gain", stat: "sanity", amount: 1 })
+          ),
+          createEventOutcome({ roll: { min: 2, max: 3 } }, createEventEffect("move", { destination: "entrance-hall" })),
+          createEventOutcome({ roll: { max: 1 } }, [
+            createEventEffect("damage", { damageType: "physical", amountType: "dice", dice: 1 }),
+            createEventEffect("damage", { damageType: "mental", amountType: "dice", dice: 1 }),
+          ]),
+        ],
+      }),
+    ],
+  }),
   // createEventCard({
   //   id: "cassette-player",
   //   name: "Cassette Player",
