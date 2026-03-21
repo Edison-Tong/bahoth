@@ -138,13 +138,28 @@ export default function EventResolutionModal({
   eventState,
   currentPlayer,
   diceAnimation,
+  rabbitFootPendingReroll,
   statLabels,
   onAdjustEventRollTotal,
   onEventAwaitingChoice,
+  onSelectRabbitFootDie,
+  onConfirmRabbitFootReroll,
   onContinueEvent,
   renderDiceRow,
 }) {
   if (!eventState || eventState.awaiting?.type === "tile-choice") return null;
+
+  const isRabbitFootSelectionActive =
+    !!rabbitFootPendingReroll &&
+    !!eventState.lastRoll &&
+    Array.isArray(eventState.lastRoll.dice) &&
+    diceAnimation?.purpose !== "event-partial-reroll";
+  const selectedRabbitFootDieIndex = rabbitFootPendingReroll?.selectedDieIndex;
+  const canConfirmRabbitFootReroll =
+    isRabbitFootSelectionActive &&
+    Number.isInteger(selectedRabbitFootDieIndex) &&
+    selectedRabbitFootDieIndex >= 0 &&
+    selectedRabbitFootDieIndex < (eventState.lastRoll?.dice?.length || 0);
 
   return (
     <div className="card-overlay">
@@ -154,9 +169,37 @@ export default function EventResolutionModal({
         {eventState.summary && !eventState.lastRoll && <p className="card-description">{eventState.summary}</p>}
         {eventState.lastRoll && (
           <>
-            {diceAnimation?.purpose === "event-partial-reroll"
-              ? renderDiceRow({ dice: diceAnimation.display, modifier: diceAnimation.modifier, rolling: true })
-              : renderDiceRow({ dice: eventState.lastRoll.dice, modifier: eventState.lastRoll.modifier })}
+            {diceAnimation?.purpose === "event-partial-reroll" ? (
+              renderDiceRow({ dice: diceAnimation.display, modifier: diceAnimation.modifier, rolling: true })
+            ) : isRabbitFootSelectionActive ? (
+              <div className="dice-row">
+                <div className="dice-container">
+                  {eventState.lastRoll.dice.map((die, index) => {
+                    const isSelected = index === selectedRabbitFootDieIndex;
+                    return (
+                      <button
+                        key={`rabbit-foot-die-${index}`}
+                        type="button"
+                        className={isSelected ? "die die-selectable die-selected" : "die die-selectable"}
+                        onClick={() => onSelectRabbitFootDie(index)}
+                        aria-label={`Select die ${index + 1}`}
+                        aria-pressed={isSelected}
+                      >
+                        {die}
+                      </button>
+                    );
+                  })}
+                </div>
+                {eventState.lastRoll.modifier && (
+                  <div className={`dice-modifier dice-modifier-${eventState.lastRoll.modifier.tone}`}>
+                    <div className="dice-modifier-value">{eventState.lastRoll.modifier.value}</div>
+                    <div className="dice-modifier-label">{eventState.lastRoll.modifier.label}</div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              renderDiceRow({ dice: eventState.lastRoll.dice, modifier: eventState.lastRoll.modifier })
+            )}
             <div className="dice-total">
               {/^[0-9]+ dice?$/.test(
                 (diceAnimation?.purpose === "event-partial-reroll" ? diceAnimation.label : eventState.lastRoll.label) ||
@@ -179,6 +222,13 @@ export default function EventResolutionModal({
                 +1
               </button>
             </div>
+            {isRabbitFootSelectionActive && (
+              <p className="card-description">
+                {canConfirmRabbitFootReroll
+                  ? `Selected die ${selectedRabbitFootDieIndex + 1}. Press Reroll.`
+                  : "Select one die to reroll with Rabbit's Foot, then press Reroll."}
+              </p>
+            )}
           </>
         )}
         {eventState.awaiting?.prompt && <p className="card-description">{eventState.awaiting.prompt}</p>}
@@ -327,7 +377,16 @@ export default function EventResolutionModal({
             )}
           </>
         )}
-        {!eventState.awaiting && (
+        {!eventState.awaiting && isRabbitFootSelectionActive && (
+          <button
+            className="btn btn-primary"
+            onClick={onConfirmRabbitFootReroll}
+            disabled={!canConfirmRabbitFootReroll}
+          >
+            Reroll
+          </button>
+        )}
+        {!eventState.awaiting && !isRabbitFootSelectionActive && (
           <button className="btn btn-primary" onClick={onContinueEvent}>
             Continue
           </button>

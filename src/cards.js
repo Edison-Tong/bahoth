@@ -290,20 +290,20 @@ export const ITEM_CARDS = [
   //   activeAbility:
   //     "On your turn, you may bury the Mystical Stopwatch. If you do, take another turn after this one. You may only use this ability after the haunt has started.", // NOTE: SHOULD ONLY BE USABLE AFTER THE HAUNT STARTS
   // },
-  {
-    id: "necklace-of-teeth",
-    name: "Necklace of Teeth",
-    isWeapon: false,
-    passiveEffects: [{ type: "end-turn-gain-critical-trait" }],
-    passiveAbility: "At the end of your turn, you may gain 1 in a critical trait of your choice.",
-  },
   // {
-  //   id: "rabbits-foot",
-  //   name: "Rabbit's Foot",
+  //   id: "necklace-of-teeth",
+  //   name: "Necklace of Teeth",
   //   isWeapon: false,
-  //   activeAbilityRule: { trigger: "die-just-rolled", action: "reroll-one-die" },
-  //   activeAbility: "Once during your turn, you may reroll 1 die that you just rolled.",
+  //   passiveEffects: [{ type: "end-turn-gain-critical-trait" }],
+  //   passiveAbility: "At the end of your turn, you may gain 1 in a critical trait of your choice.",
   // },
+  {
+    id: "rabbits-foot",
+    name: "Rabbit's Foot",
+    isWeapon: false,
+    activeAbilityRule: { trigger: "die-just-rolled", action: "reroll-one-die" },
+    activeAbility: "Once during your turn, you may reroll 1 die that you just rolled.",
+  },
   // {
   //   id: "skeleton-key",
   //   name: "Skeleton Key",

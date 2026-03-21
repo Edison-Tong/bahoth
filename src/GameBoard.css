@@ -1120,6 +1120,21 @@
   border-radius: 8px;
 }
 
+.die-selectable {
+  cursor: pointer;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.die-selectable:hover {
+  transform: translateY(-1px);
+  border-color: #9fb5c7;
+}
+
+.die-selected {
+  border-color: #f4d35e;
+  box-shadow: 0 0 0 2px rgba(244, 211, 94, 0.35);
+}
+
 .die-rolling {
   animation: die-shake 0.1s ease-in-out infinite alternate;
 }

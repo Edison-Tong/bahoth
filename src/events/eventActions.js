@@ -63,6 +63,15 @@ function isLuckyCoinAvailableThisTurn(game, viewedCard) {
   return lastRoll.dice.some((value) => value === 0);
 }
 
+function isRabbitsFootAvailableThisTurn(game, viewedCard) {
+  const inventoryCard = getInventoryCard(game, viewedCard);
+  if (!inventoryCard || inventoryCard.id !== "rabbits-foot") return false;
+  if (inventoryCard.lastActiveAbilityTurnUsed === game.turnNumber) return false;
+
+  const lastRoll = game.eventState?.lastRoll;
+  return !!lastRoll && Array.isArray(lastRoll.dice) && lastRoll.dice.length > 0 && Array.isArray(lastRoll.outcomes);
+}
+
 function getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }) {
   const awaiting = game.eventState?.awaiting;
   const canApplyNow =
@@ -754,6 +763,7 @@ export function getCardActiveAbilityState({
     rule.action === "set-trait-roll-total" ||
     rule.action === "reroll-all-trait-dice" ||
     rule.action === "reroll-blank-trait-dice" ||
+    rule.action === "reroll-one-die" ||
     rule.action === "substitute-sanity-for-knowledge" ||
     rule.action === "teleport-any-tile" ||
     rule.action === "extra-turn-after-current" ||
@@ -793,9 +803,12 @@ export function getCardActiveAbilityState({
         ? isCreepyDollAvailableThisTurn(game, viewedCard)
         : rule.action === "reroll-blank-trait-dice"
           ? isLuckyCoinAvailableThisTurn(game, viewedCard)
-          : rule.action === "substitute-sanity-for-knowledge"
-            ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }).canUseMagicCameraNow
-            : true;
+          : rule.action === "reroll-one-die"
+            ? isRabbitsFootAvailableThisTurn(game, viewedCard)
+            : rule.action === "substitute-sanity-for-knowledge"
+              ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
+                  .canUseMagicCameraNow
+              : true;
 
   return {
     canUseNow: triggerSatisfied && hasSupportedAction && actionSatisfied,
@@ -1206,6 +1219,7 @@ export function applyLuckyCoinNowState(g, viewedCard, targetRollSelection = null
           ? [...(awaiting.outcomes || [])]
           : [...(baseRoll.outcomes || [])],
       rerollIndexes: blankIndexes,
+      rerollDescription: "blank dice",
       ownerIndex: viewedCard.ownerIndex,
       sanityLoss: rerollBlankCount,
       sourceName: inventoryCard.name,
@@ -1217,6 +1231,122 @@ export function applyLuckyCoinNowState(g, viewedCard, targetRollSelection = null
         resolvedSequenceTarget && awaiting?.type === "trait-roll-sequence-complete"
           ? awaiting.results?.[Number(String(resolvedSequenceTarget.value).replace("sequence:", ""))]?.stat
           : undefined,
+    },
+  };
+}
+
+export function applyRabbitsFootNowState(g, viewedCard) {
+  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (viewedCard.activeAbilityRule?.action !== "reroll-one-die") {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+  if (viewedCard.ownerCollection !== "inventory") return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (!isRabbitsFootAvailableThisTurn(g, viewedCard)) return { game: g, closeViewedCard: false, diceAnimation: null };
+
+  const owner = g.players[viewedCard.ownerIndex];
+  const inventoryCard = getInventoryCard(g, viewedCard);
+  const lastRoll = g.eventState?.lastRoll;
+  if (!owner || !inventoryCard || !lastRoll || !Array.isArray(lastRoll.dice) || lastRoll.dice.length === 0) {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  return {
+    game: {
+      ...g,
+      rabbitFootPendingReroll: {
+        ownerIndex: viewedCard.ownerIndex,
+        ownerCardIndex: viewedCard.ownerCardIndex,
+        sourceName: inventoryCard.name,
+        selectedDieIndex: null,
+      },
+      message: `${owner.name} uses ${inventoryCard.name}. Select one die, then press Reroll.`,
+    },
+    closeViewedCard: true,
+    diceAnimation: null,
+  };
+}
+
+export function chooseRabbitFootDieState(g, dieIndex) {
+  const pending = g.rabbitFootPendingReroll;
+  const lastRoll = g.eventState?.lastRoll;
+  const selectedIndex = Number(dieIndex);
+  if (!pending || !lastRoll || !Array.isArray(lastRoll.dice)) return g;
+  if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= lastRoll.dice.length) return g;
+
+  return {
+    ...g,
+    rabbitFootPendingReroll: {
+      ...pending,
+      selectedDieIndex: selectedIndex,
+    },
+  };
+}
+
+export function applyRabbitFootRerollState(g) {
+  const pending = g.rabbitFootPendingReroll;
+  const lastRoll = g.eventState?.lastRoll;
+  if (!pending || !lastRoll || !Array.isArray(lastRoll.dice) || !Array.isArray(lastRoll.outcomes)) {
+    return { game: g, diceAnimation: null };
+  }
+
+  const selectedIndex = Number(pending.selectedDieIndex);
+  if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= lastRoll.dice.length) {
+    return { game: g, diceAnimation: null };
+  }
+
+  const ownerIndex = Number(pending.ownerIndex);
+  if (!Number.isInteger(ownerIndex) || ownerIndex < 0 || ownerIndex >= g.players.length) {
+    return { game: g, diceAnimation: null };
+  }
+
+  const rerolledValue = rollDice(1)[0];
+  const nextDice = [...lastRoll.dice];
+  nextDice[selectedIndex] = rerolledValue;
+
+  const previousDiceTotal = (lastRoll.dice || []).reduce((sum, value) => sum + value, 0);
+  const staticBonus = (lastRoll.total || 0) - previousDiceTotal;
+  const nextTotal = nextDice.reduce((sum, value) => sum + value, 0) + staticBonus;
+
+  const nextPlayers = g.players.map((player, index) => {
+    if (index !== ownerIndex) return player;
+
+    return {
+      ...player,
+      inventory: player.inventory.map((card, cardIndex) =>
+        cardIndex === pending.ownerCardIndex
+          ? {
+              ...card,
+              lastActiveAbilityTurnUsed: g.turnNumber,
+            }
+          : card
+      ),
+    };
+  });
+
+  const ownerName = g.players[ownerIndex]?.name || "Explorer";
+
+  return {
+    game: {
+      ...g,
+      players: nextPlayers,
+      rabbitFootPendingReroll: null,
+      message: `${ownerName} uses ${pending.sourceName || "Rabbit's Foot"} and rerolls one die...`,
+    },
+    diceAnimation: {
+      purpose: "event-partial-reroll",
+      final: nextDice,
+      display: [...lastRoll.dice],
+      settled: false,
+      label: lastRoll.label || "Roll",
+      total: nextTotal,
+      modifier: lastRoll.modifier || null,
+      outcomes: [...(lastRoll.outcomes || [])],
+      rerollIndexes: [selectedIndex],
+      rerollDescription: "one die",
+      ownerIndex,
+      sanityLoss: 0,
+      sourceName: pending.sourceName || "Rabbit's Foot",
     },
   };
 }
@@ -1379,6 +1509,9 @@ export function chooseCardActiveAbilityNowState(g, viewedCard, deps = {}) {
   }
   if (action === "reroll-blank-trait-dice") {
     return applyLuckyCoinNowState(g, viewedCard);
+  }
+  if (action === "reroll-one-die") {
+    return applyRabbitsFootNowState(g, viewedCard);
   }
   if (action === "substitute-sanity-for-knowledge") {
     return applyMagicCameraNowState(g, viewedCard, deps);
@@ -1910,6 +2043,7 @@ export function resolveEventAnimationSettlement(g, da) {
       : g.players;
 
     const ownerName = Number.isInteger(ownerIndex) ? g.players[ownerIndex]?.name || "Explorer" : "Explorer";
+    const rerollDescription = da.rerollDescription || "dice";
     const sequenceResultIndex = Number(da.sequenceResultIndex);
     const isSequenceTarget =
       Number.isInteger(sequenceResultIndex) && g.eventState.awaiting?.type === "trait-roll-sequence-complete";
@@ -1956,8 +2090,8 @@ export function resolveEventAnimationSettlement(g, da) {
         },
         message:
           sanityLoss > 0
-            ? `${ownerName} uses ${da.sourceName || "Lucky Coin"}, rerolls blank dice, and loses ${sanityLoss} Sanity.`
-            : `${ownerName} uses ${da.sourceName || "Lucky Coin"} and rerolls blank dice.`,
+            ? `${ownerName} uses ${da.sourceName || "Lucky Coin"}, rerolls ${rerollDescription}, and loses ${sanityLoss} Sanity.`
+            : `${ownerName} uses ${da.sourceName || "Lucky Coin"} and rerolls ${rerollDescription}.`,
       },
     };
   }

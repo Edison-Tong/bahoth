@@ -19,6 +19,8 @@ import {
   resolveTraitRoll,
   updateDamageChoiceType,
   rollDice,
+  chooseRabbitFootDieState,
+  applyRabbitFootRerollState,
   chooseCardActiveAbilityValueState,
   chooseCardActiveAbilityNowState,
   getCardActiveAbilityState,
@@ -181,6 +183,7 @@ function initGameState(players) {
     hauntRoll: null,
     tileEffect: null,
     damageChoice: null,
+    rabbitFootPendingReroll: null,
     extraTurnAfterCurrent: false,
     eventState: null,
     turnNumber: 1,
@@ -1801,6 +1804,18 @@ export default function GameBoard({ players, onQuit }) {
     setViewedCard(null);
   }
 
+  function handleSelectRabbitFootDie(dieIndex) {
+    setGame((g) => chooseRabbitFootDieState(g, dieIndex));
+  }
+
+  function handleConfirmRabbitFootReroll() {
+    const result = applyRabbitFootRerollState(game);
+    setGame(result.game);
+    if (result.diceAnimation) {
+      setDiceAnimation(result.diceAnimation);
+    }
+  }
+
   function passTurnCore(g) {
     const shouldTakeExtraTurn = !!g.extraTurnAfterCurrent && !!g.players[g.currentPlayerIndex]?.isAlive;
     let next = shouldTakeExtraTurn ? g.currentPlayerIndex : (g.currentPlayerIndex + 1) % g.players.length;
@@ -1832,6 +1847,7 @@ export default function GameBoard({ players, onQuit }) {
       mysticElevatorUsed: false,
       tileEffect: null,
       damageChoice: null,
+      rabbitFootPendingReroll: null,
       eventState: null,
       extraTurnAfterCurrent: false,
       turnNumber: shouldTakeExtraTurn ? g.turnNumber : g.turnNumber + (next === 0 ? 1 : 0),
@@ -2438,9 +2454,12 @@ export default function GameBoard({ players, onQuit }) {
           eventState={eventState}
           currentPlayer={currentPlayer}
           diceAnimation={diceAnimation}
+          rabbitFootPendingReroll={game.rabbitFootPendingReroll}
           statLabels={STAT_LABELS}
           onAdjustEventRollTotal={handleAdjustEventRollTotal}
           onEventAwaitingChoice={handleEventAwaitingChoice}
+          onSelectRabbitFootDie={handleSelectRabbitFootDie}
+          onConfirmRabbitFootReroll={handleConfirmRabbitFootReroll}
           onContinueEvent={handleContinueEvent}
           renderDiceRow={(props) => <DiceRow {...props} />}
         />
