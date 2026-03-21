@@ -159,7 +159,7 @@ export const ITEM_CARDS = [
   //   id: "chainsaw",
   //   name: "Chainsaw",
   //   isWeapon: true,
-  //   activeAbilityRule: { trigger: "attack", action: "attack-bonus-die" }, //HAVE NOT TESTED ATTACKS YET
+  //   activeAbilityRule: { trigger: "attack", action: "attack-bonus-die" }, // NOTE: HAVE NOT TESTED ATTACKS YET
   //   activeAbility: "When you use the Chainsaw to attack, add one die to your attack.",
   // },
   // {
@@ -174,7 +174,7 @@ export const ITEM_CARDS = [
   //   id: "crossbow",
   //   name: "Crossbow",
   //   isWeapon: true,
-  //   activeAbilityRule: { trigger: "attack", action: "ranged-attack-speed" }, //HAVE NOT TESTED ATTACKS YET
+  //   activeAbilityRule: { trigger: "attack", action: "ranged-attack-speed" }, // NOTE: HAVE NOT TESTED ATTACKS YET
   //   activeAbility:
   //     "When you use the Crossbow to attack, you may attack any character on your tile or an adjacent tile. You and the defender each roll Speed. Roll 1 extra die on the attack. If you lose, you take no damage.",
   // },
@@ -182,7 +182,7 @@ export const ITEM_CARDS = [
   //   id: "dynamite",
   //   name: "Dynamite",
   //   isWeapon: true,
-  //   activeAbilityRule: { trigger: "attack", action: "dynamite-aoe-attack" }, //HAVE NOT TESTED ATTACKS YET
+  //   activeAbilityRule: { trigger: "attack", action: "dynamite-aoe-attack" }, // NOTE: HAVE NOT TESTED ATTACKS YET
   //   activeAbility:
   //     "You may use Dynamite in place of a regular attack. To do so, bury it and then choose your tile or an adjacent one. Everyone on the chosen tile must make a Speed roll. 4+: Nothing happens. 0-3: Take 4 Physical damage.",
   // },
@@ -216,7 +216,7 @@ export const ITEM_CARDS = [
   //   id: "gun",
   //   name: "Gun",
   //   isWeapon: true,
-  //   activeAbilityRule: { trigger: "attack", action: "ranged-attack-speed" }, //HAVE NOT TESTED ATTACKS YET
+  //   activeAbilityRule: { trigger: "attack", action: "ranged-attack-speed" }, // NOTE: HAVE NOT TESTED ATTACKS YET
   //   activeAbility:
   //     "When you use the Gun to attack, you may attack any target in line of sight. You and the defender each roll Speed. If you lose, you take no damage.",
   // },
@@ -258,7 +258,7 @@ export const ITEM_CARDS = [
   //   id: "machete",
   //   name: "Machete",
   //   isWeapon: true,
-  //   activeAbilityRule: { trigger: "attack", action: "attack-bonus-total" }, //HAVE NOT TESTED ATTACKS YET
+  //   activeAbilityRule: { trigger: "attack", action: "attack-bonus-total" }, // NOTE: HAVE NOT TESTED ATTACKS YET
   //   activeAbility: "When you use the Machete to attack, add 1 to the result of your roll.",
   // },
   // {
@@ -282,21 +282,21 @@ export const ITEM_CARDS = [
   //   activeAbilityRule: { trigger: "on-your-turn", action: "heal-knowledge-sanity" },
   //   activeAbility: "On your turn, you may bury the Mirror. If you do, heal your Knowledge and Sanity.",
   // },
-  {
-    id: "mystical-stopwatch",
-    name: "Mystical Stopwatch",
-    isWeapon: false,
-    activeAbilityRule: { trigger: "on-your-turn", action: "extra-turn-after-current" },
-    activeAbility:
-      "On your turn, you may bury the Mystical Stopwatch. If you do, take another turn after this one. You may only use this ability after the haunt has started.",
-  },
   // {
-  //   id: "necklace-of-teeth",
-  //   name: "Necklace of Teeth",
+  //   id: "mystical-stopwatch",
+  //   name: "Mystical Stopwatch",
   //   isWeapon: false,
-  //   activeAbilityRule: { trigger: "on-your-turn", action: "gain-critical-trait" },
-  //   activeAbility: "At the end of your turn, you may gain 1 in a critical trait of your choice.",
+  //   activeAbilityRule: { trigger: "on-your-turn", action: "extra-turn-after-current" },
+  //   activeAbility:
+  //     "On your turn, you may bury the Mystical Stopwatch. If you do, take another turn after this one. You may only use this ability after the haunt has started.", // NOTE: SHOULD ONLY BE USABLE AFTER THE HAUNT STARTS
   // },
+  {
+    id: "necklace-of-teeth",
+    name: "Necklace of Teeth",
+    isWeapon: false,
+    passiveEffects: [{ type: "end-turn-gain-critical-trait" }],
+    passiveAbility: "At the end of your turn, you may gain 1 in a critical trait of your choice.",
+  },
   // {
   //   id: "rabbits-foot",
   //   name: "Rabbit's Foot",
@@ -939,7 +939,7 @@ export const EVENT_CARDS = [
   //     "4+: Gain 1 Sanity. 2-3: Lose 1 Sanity. 0-1: Lose 1 Sanity and 1 Might. If the Graveyard or Catacombs tiles have been discovered, place your explorer on one of those tiles.",
   //   steps: [
   //     createEventStep("effect", {
-  //       when: { discoveredAny: ["graveyard", "catacombs"] }, // TEST TO SEE IF ALLOWS CHOICE TO PLACE ON GRAVEYARD OR CATACOMBS IF BOTH ARE DISCOVERED
+  //       when: { discoveredAny: ["graveyard", "catacombs"] }, // NOTE: TEST TO SEE IF ALLOWS CHOICE TO PLACE ON GRAVEYARD OR CATACOMBS IF BOTH ARE DISCOVERED
   //       effects: [createEventEffect("move", { destination: "graveyard-or-catacombs" })],
   //     }),
   //     createEventStep("trait-roll", {
@@ -1034,7 +1034,7 @@ export const EVENT_CARDS = [
   //       options: ["yes", "no"],
   //     }),
   //     createEventStep("effect", {
-  //       when: { choice: { step: "discard-item", equals: "yes" } }, // TEST TO SEE IF ALLOWS TO CHOOSE THE ITEM THAT IS DISCARDED
+  //       when: { choice: { step: "discard-item", equals: "yes" } }, // NOTE: TEST TO SEE IF ALLOWS TO CHOOSE THE ITEM THAT IS DISCARDED
   //       effects: [
   //         createEventEffect("discard-item", { filter: "non-weapon-item" }),
   //         createEventEffect("stat-change", { mode: "gain", stat: "sanity", amount: 1 }),
@@ -1222,7 +1222,7 @@ export const EVENT_CARDS = [
   //             hauntNumber: 33,
   //             book: "traitors-tome",
   //             role: "traitor",
-  //             specialTraitorRule: "hero-with-magic-camera-if-present", // CHECK IF HAVING THE MAGIC CAMERA MAKES YOU TRAITOR
+  //             specialTraitorRule: "hero-with-magic-camera-if-present", // NOTE: CHECK IF HAVING THE MAGIC CAMERA MAKES YOU TRAITOR
   //           })
   //         ),
   //         createEventOutcome({ roll: { max: 4 } }, createEventEffect("draw-card", { deck: "item", amount: 1 })),
@@ -1256,7 +1256,7 @@ export const EVENT_CARDS = [
   //     createEventStep("choice", {
   //       id: "take-damage",
   //       prompt: "Take 2 Physical damage?",
-  //       options: ["yes", "no"], // MAYBE MAKE A WAY TO TAKE BACK THE CHOICE TO TAKE DAMAGE IF PLAYER CHOOSES YES BUT THEN DECIDES THEY DON'T WANT TO TAKE DAMAGE AFTER ALL
+  //       options: ["yes", "no"], // NOTE: MAYBE MAKE A WAY TO TAKE BACK THE CHOICE TO TAKE DAMAGE IF PLAYER CHOOSES YES BUT THEN DECIDES THEY DON'T WANT TO TAKE DAMAGE AFTER ALL
   //     }),
   //     createEventStep("effect", {
   //       when: { choice: { step: "take-damage", equals: "yes" } },
@@ -1333,7 +1333,7 @@ export const EVENT_CARDS = [
   //       when: { currentFloor: "basement" },
   //       effects: [
   //         createEventEffect("move", { destination: "upper-landing" }),
-  //         createEventEffect("damage", { damageType: "mental", amount: 1 }), //HAVE NOT CONFIRMED IF MENTAL DAMAGE IS TAKEN IF ON THE BASEMENT LEVEL
+  //         createEventEffect("damage", { damageType: "mental", amount: 1 }), // NOTE: HAVE NOT CONFIRMED IF MENTAL DAMAGE IS TAKEN IF ON THE BASEMENT LEVEL
   //       ],
   //     }),
   //   ],
@@ -1392,7 +1392,7 @@ export const EVENT_CARDS = [
   //       id: "make-haunt-roll",
   //       prompt: "Make a haunt roll?",
   //       options: ["yes", "no"],
-  //       onlyIf: { hauntStarted: false },  // CHECK TO SEE IF RESULTS ARE AUTOMATIC IF HAUNT HAS STARTED
+  //       onlyIf: { hauntStarted: false },  // NOTE: CHECK TO SEE IF RESULTS ARE AUTOMATIC IF HAUNT HAS STARTED
   //     }),
   //     createEventStep("effect", {
   //       when: {
@@ -1466,7 +1466,7 @@ export const EVENT_CARDS = [
   //           { roll: { exact: 4 } },
   //           createEventEffect("stat-change", { mode: "lose", stat: "chosen", amount: 1 })
   //         ),
-  //         createEventOutcome({ roll: { max: 3 } }, createEventEffect("stat-change", { mode: "heal", stat: "chosen" })), // CHECK TO SEE IF STAT HEALING WORKS
+  //         createEventOutcome({ roll: { max: 3 } }, createEventEffect("stat-change", { mode: "heal", stat: "chosen" })), // NOTE:  CHECK TO SEE IF STAT HEALING WORKS
   //       ],
   //     }),
   //   ],

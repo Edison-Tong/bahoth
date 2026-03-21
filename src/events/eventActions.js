@@ -756,6 +756,7 @@ export function getCardActiveAbilityState({
     rule.action === "reroll-blank-trait-dice" ||
     rule.action === "substitute-sanity-for-knowledge" ||
     rule.action === "teleport-any-tile" ||
+    rule.action === "extra-turn-after-current" ||
     rule.action === "heal-critical-traits" ||
     rule.action === "heal-stats" ||
     rule.action === "heal-knowledge-sanity";
@@ -771,7 +772,9 @@ export function getCardActiveAbilityState({
       ? rule.valueSelection === "number-0-8"
         ? Array.from({ length: 9 }, (_, value) => value)
         : rule.valueOptions || []
-      : rule.action === "heal-critical-traits" || rule.action === "heal-stats" || rule.action === "heal-knowledge-sanity"
+      : rule.action === "heal-critical-traits" ||
+          rule.action === "heal-stats" ||
+          rule.action === "heal-knowledge-sanity"
         ? healTargetOptions
         : rule.action === "reroll-blank-trait-dice" && luckyCoinSequenceOptions.length > 0
           ? luckyCoinSequenceOptions
@@ -784,9 +787,7 @@ export function getCardActiveAbilityState({
       healTargetOptions.length > 1) ||
     (rule.action === "reroll-blank-trait-dice" && luckyCoinSequenceOptions.length > 0);
   const actionSatisfied =
-    rule.action === "heal-critical-traits" ||
-    rule.action === "heal-stats" ||
-    rule.action === "heal-knowledge-sanity"
+    rule.action === "heal-critical-traits" || rule.action === "heal-stats" || rule.action === "heal-knowledge-sanity"
       ? canUseHealAbilityNow(game, viewedCard)
       : rule.action === "reroll-all-trait-dice"
         ? isCreepyDollAvailableThisTurn(game, viewedCard)
@@ -942,6 +943,41 @@ export function applyMapNowState(g, viewedCard) {
         },
       },
       message: `${owner.name} uses ${inventoryCard.name}. Choose a destination tile.`,
+    },
+    closeViewedCard: true,
+    diceAnimation: null,
+  };
+}
+
+export function applyMysticalStopwatchNowState(g, viewedCard) {
+  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (viewedCard.activeAbilityRule?.action !== "extra-turn-after-current") {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+  if (viewedCard.ownerCollection !== "inventory") return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
+
+  const owner = g.players[viewedCard.ownerIndex];
+  const inventoryCard = getInventoryCard(g, viewedCard);
+  if (!owner || !inventoryCard || inventoryCard.id !== "mystical-stopwatch") {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  const nextPlayers = g.players.map((player, index) =>
+    index === viewedCard.ownerIndex
+      ? {
+          ...player,
+          inventory: player.inventory.filter((_, cardIndex) => cardIndex !== viewedCard.ownerCardIndex),
+        }
+      : player
+  );
+
+  return {
+    game: {
+      ...g,
+      players: nextPlayers,
+      extraTurnAfterCurrent: true,
+      message: `${owner.name} uses ${inventoryCard.name} and will take another turn after this one.`,
     },
     closeViewedCard: true,
     diceAnimation: null,
@@ -1349,6 +1385,9 @@ export function chooseCardActiveAbilityNowState(g, viewedCard, deps = {}) {
   }
   if (action === "teleport-any-tile") {
     return applyMapNowState(g, viewedCard);
+  }
+  if (action === "extra-turn-after-current") {
+    return applyMysticalStopwatchNowState(g, viewedCard);
   }
   if (action === "heal-critical-traits" || action === "heal-stats" || action === "heal-knowledge-sanity") {
     return applyFirstAidKitNowState(g, viewedCard);

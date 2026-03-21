@@ -81,6 +81,33 @@ function formatStatTrackValue(value) {
   return value === 0 ? "☠" : value;
 }
 
+function getNecklaceOfTeethCriticalStats(player) {
+  if (!player) return [];
+
+  return PLAYER_STAT_ORDER.filter((stat) => {
+    const currentIndex = player.statIndex?.[stat];
+    const maxIndex = (player.character?.[stat] || []).length - 1;
+    return currentIndex === CRITICAL_STAT_INDEX && currentIndex < maxIndex;
+  });
+}
+
+function applyNecklaceOfTeethGain(players, playerIndex, stat) {
+  return players.map((player, index) => {
+    if (index !== playerIndex) return player;
+
+    const maxIndex = player.character[stat].length - 1;
+    const nextIndex = Math.min(maxIndex, player.statIndex[stat] + 1);
+
+    return {
+      ...player,
+      statIndex: {
+        ...player.statIndex,
+        [stat]: nextIndex,
+      },
+    };
+  });
+}
+
 function DiceRow({ dice, modifier = null, rolling = false }) {
   return (
     <div className="dice-row">
@@ -154,6 +181,7 @@ function initGameState(players) {
     hauntRoll: null,
     tileEffect: null,
     damageChoice: null,
+    extraTurnAfterCurrent: false,
     eventState: null,
     turnNumber: 1,
     message: `${players[0].name}'s turn — ${players[0].character.speed[players[0].character.startIndex.speed]} moves`,
@@ -1550,6 +1578,47 @@ export default function GameBoard({ players, onQuit }) {
     setDiceAnimation(null);
   }
 
+  function handleChooseNecklaceOfTeethStat(stat) {
+    setGame((g) => {
+      const effect = g.tileEffect;
+      if (!effect || effect.type !== "necklace-of-teeth-choice") return g;
+      if (!Array.isArray(effect.statOptions) || !effect.statOptions.includes(stat)) return g;
+
+      const current = g.players[g.currentPlayerIndex];
+      const healedPlayers = applyNecklaceOfTeethGain(g.players, g.currentPlayerIndex, stat);
+      const nextState = passTurnCore({
+        ...g,
+        players: healedPlayers,
+        tileEffect: null,
+      });
+
+      return {
+        ...nextState,
+        message: `${current.name} gains 1 ${STAT_LABELS[stat]} with Necklace of Teeth. ${nextState.message}`,
+      };
+    });
+    setDiceAnimation(null);
+  }
+
+  function handleSkipNecklaceOfTeethGain() {
+    setGame((g) => {
+      const effect = g.tileEffect;
+      if (!effect || effect.type !== "necklace-of-teeth-choice") return g;
+
+      const current = g.players[g.currentPlayerIndex];
+      const nextState = passTurnCore({
+        ...g,
+        tileEffect: null,
+      });
+
+      return {
+        ...nextState,
+        message: `${current.name} skips Necklace of Teeth. ${nextState.message}`,
+      };
+    });
+    setDiceAnimation(null);
+  }
+
   function handleRollMysticElevator() {
     setGame((g) => {
       const player = g.players[g.currentPlayerIndex];
@@ -1732,13 +1801,17 @@ export default function GameBoard({ players, onQuit }) {
     setViewedCard(null);
   }
 
-  function passTurn(g) {
-    let next = (g.currentPlayerIndex + 1) % g.players.length;
-    // Skip dead players
-    let attempts = 0;
-    while (!g.players[next].isAlive && attempts < g.players.length) {
-      next = (next + 1) % g.players.length;
-      attempts++;
+  function passTurnCore(g) {
+    const shouldTakeExtraTurn = !!g.extraTurnAfterCurrent && !!g.players[g.currentPlayerIndex]?.isAlive;
+    let next = shouldTakeExtraTurn ? g.currentPlayerIndex : (g.currentPlayerIndex + 1) % g.players.length;
+
+    if (!shouldTakeExtraTurn) {
+      // Skip dead players
+      let attempts = 0;
+      while (!g.players[next].isAlive && attempts < g.players.length) {
+        next = (next + 1) % g.players.length;
+        attempts++;
+      }
     }
 
     const nextPlayer = g.players[next];
@@ -1760,9 +1833,46 @@ export default function GameBoard({ players, onQuit }) {
       tileEffect: null,
       damageChoice: null,
       eventState: null,
-      turnNumber: g.turnNumber + (next === 0 ? 1 : 0),
-      message: `${nextPlayer.name}'s turn — ${speed} moves`,
+      extraTurnAfterCurrent: false,
+      turnNumber: shouldTakeExtraTurn ? g.turnNumber : g.turnNumber + (next === 0 ? 1 : 0),
+      message: shouldTakeExtraTurn
+        ? `${nextPlayer.name} takes an extra turn — ${speed} moves`
+        : `${nextPlayer.name}'s turn — ${speed} moves`,
     };
+  }
+
+  function passTurn(g) {
+    const currentPlayerState = g.players[g.currentPlayerIndex];
+    const necklaceCard = currentPlayerState?.inventory?.find((card) => card.id === "necklace-of-teeth");
+    const criticalStats = getNecklaceOfTeethCriticalStats(currentPlayerState);
+
+    if (necklaceCard && criticalStats.length > 1) {
+      return {
+        ...g,
+        tileEffect: {
+          type: "necklace-of-teeth-choice",
+          tileName: necklaceCard.name,
+          statOptions: criticalStats,
+          message: "Choose a critical trait to gain 1, or skip.",
+        },
+      };
+    }
+
+    if (necklaceCard && criticalStats.length === 1) {
+      const gainedStat = criticalStats[0];
+      const healedPlayers = applyNecklaceOfTeethGain(g.players, g.currentPlayerIndex, gainedStat);
+      const nextState = passTurnCore({
+        ...g,
+        players: healedPlayers,
+      });
+
+      return {
+        ...nextState,
+        message: `${currentPlayerState.name} gains 1 ${STAT_LABELS[gainedStat]} with Necklace of Teeth. ${nextState.message}`,
+      };
+    }
+
+    return passTurnCore(g);
   }
 
   const validMoves = cameraFloor === currentPlayer.floor ? getValidMoves() : [];
@@ -1825,6 +1935,20 @@ export default function GameBoard({ players, onQuit }) {
       : [];
   const isOnSecretPassageTile = (currentTileObj?.tokens || []).some((token) => token.type === "secret-passage");
   const canUseSecretPassage = isOnSecretPassageTile && secretPassageTargets.length > 0;
+  const endTurnPreviewPlayerName = (() => {
+    if (game.extraTurnAfterCurrent && currentPlayer.isAlive) {
+      return `${currentPlayer.name} (extra turn)`;
+    }
+
+    let next = (game.currentPlayerIndex + 1) % game.players.length;
+    let attempts = 0;
+    while (!game.players[next].isAlive && attempts < game.players.length) {
+      next = (next + 1) % game.players.length;
+      attempts++;
+    }
+
+    return game.players[next]?.name || currentPlayer.name;
+  })();
   let stairTarget = null;
   let stairIsBacktrack = false;
   if (game.turnPhase === "move" && !game.pendingExplore) {
@@ -2125,7 +2249,7 @@ export default function GameBoard({ players, onQuit }) {
           !game.pendingExplore &&
           !(eventState?.awaiting?.type === "tile-choice" && eventState.awaiting?.source === "item-active-ability") && (
             <button className="btn btn-primary" onClick={handleEndTurn}>
-              End Turn — Pass to {game.players[(game.currentPlayerIndex + 1) % game.players.length].name}
+              End Turn — Pass to {endTurnPreviewPlayerName}
             </button>
           )}
       </div>
@@ -2391,7 +2515,24 @@ export default function GameBoard({ players, onQuit }) {
               </>
             )}
             <p className="card-description">{game.tileEffect.message}</p>
-            {game.tileEffect.type === "collapsed-pending" ? (
+            {game.tileEffect.type === "necklace-of-teeth-choice" ? (
+              <>
+                <div className="event-option-list" style={{ marginTop: "0.75rem" }}>
+                  {(game.tileEffect.statOptions || []).map((stat) => (
+                    <button
+                      key={`necklace-stat-${stat}`}
+                      className="btn btn-secondary"
+                      onClick={() => handleChooseNecklaceOfTeethStat(stat)}
+                    >
+                      Gain 1 {STAT_LABELS[stat]}
+                    </button>
+                  ))}
+                </div>
+                <button className="btn btn-primary" onClick={handleSkipNecklaceOfTeethGain}>
+                  Skip
+                </button>
+              </>
+            ) : game.tileEffect.type === "collapsed-pending" ? (
               <button className="btn btn-primary" onClick={handleStartCollapsedDamage}>
                 Roll for damage
               </button>
