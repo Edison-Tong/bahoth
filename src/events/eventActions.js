@@ -457,6 +457,21 @@ export function confirmEventTileChoiceState(g, deps) {
   if (!tile) return { game: g, cameraFloor: null };
 
   if (awaiting.effect.type === "move") {
+    if (awaiting.source === "item-active-ability") {
+      return {
+        game: {
+          ...g,
+          players: g.players.map((player, index) =>
+            index === g.currentPlayerIndex ? { ...player, x: tile.x, y: tile.y, floor: selectedOption.floor } : player
+          ),
+          movePath: [{ x: tile.x, y: tile.y, floor: selectedOption.floor, cost: 0 }],
+          eventState: null,
+          message: `${g.players[g.currentPlayerIndex].name} uses ${awaiting.sourceName || "Map"} to move to ${selectedOption.label}.`,
+        },
+        cameraFloor: selectedOption.floor,
+      };
+    }
+
     const resumed = runAdvanceEventResolution({
       ...g,
       players: g.players.map((player, index) =>
@@ -503,12 +518,7 @@ export function confirmEventTileChoiceState(g, deps) {
 
 export function startEventFromDrawnCardState(
   g,
-  {
-    card,
-    initialEventChoice = null,
-    autoRollIfReady = false,
-    queuedTraitRollOverride = null,
-  },
+  { card, initialEventChoice = null, autoRollIfReady = false, queuedTraitRollOverride = null },
   deps
 ) {
   const { runAdvanceEventResolution, resolveRollReadyAwaiting, eventFlowDeps } = deps;
@@ -682,12 +692,7 @@ export function getAngelsFeatherUsageState({ game, drawnEventPrimaryAction, queu
 }
 
 const ACTIVE_ABILITY_TRIGGER_HANDLERS = {
-  "trait-roll-required": ({
-    game,
-    viewedCard,
-    drawnEventPrimaryAction,
-    queuedTraitRollOverride,
-  }) => {
+  "trait-roll-required": ({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride }) => {
     const action = viewedCard?.activeAbilityRule?.action;
     if (action === "set-trait-roll-total") {
       return getAngelsFeatherUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
@@ -736,6 +741,7 @@ export function getCardActiveAbilityState({
     rule.action === "reroll-all-trait-dice" ||
     rule.action === "reroll-blank-trait-dice" ||
     rule.action === "substitute-sanity-for-knowledge" ||
+    rule.action === "teleport-any-tile" ||
     rule.action === "heal-critical-traits" ||
     rule.action === "heal-stats";
   const healRule = getActiveHealRule(viewedCard);
@@ -837,6 +843,82 @@ export function applyFirstAidKitNowState(g, viewedCard, targetPlayerIndex = null
       message: `${owner.name} uses ${inventoryCard.name} to heal ${targetPlayer.name}'s ${
         healableStats.length === 1 ? "critical trait" : "critical traits"
       } to starting values.`,
+    },
+    closeViewedCard: true,
+    diceAnimation: null,
+  };
+}
+
+export function applyMapNowState(g, viewedCard) {
+  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (viewedCard.activeAbilityRule?.action !== "teleport-any-tile") {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+  if (viewedCard.ownerCollection !== "inventory") return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
+
+  const owner = g.players[viewedCard.ownerIndex];
+  const inventoryCard = getInventoryCard(g, viewedCard);
+  if (!owner || !inventoryCard || inventoryCard.id !== "map") {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  const options = Object.entries(g.board)
+    .flatMap(([floor, tiles]) =>
+      (tiles || []).map((tile) => ({
+        id: `${floor}:${tile.x}:${tile.y}`,
+        label: tile.name || tile.id || `${floor} (${tile.x}, ${tile.y})`,
+        x: tile.x,
+        y: tile.y,
+        floor,
+      }))
+    )
+    .filter((option) => !(option.floor === owner.floor && option.x === owner.x && option.y === owner.y));
+
+  if (options.length === 0) {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  const nextPlayers = g.players.map((player, index) =>
+    index === viewedCard.ownerIndex
+      ? {
+          ...player,
+          inventory: player.inventory.filter((_, cardIndex) => cardIndex !== viewedCard.ownerCardIndex),
+        }
+      : player
+  );
+
+  return {
+    game: {
+      ...g,
+      players: nextPlayers,
+      eventState: {
+        card: {
+          id: "item-map-teleport",
+          name: inventoryCard.name,
+        },
+        stepIndex: 0,
+        context: {
+          choices: {},
+          selectedStats: {},
+        },
+        pendingEffects: [],
+        summary: null,
+        lastRoll: null,
+        awaiting: {
+          type: "tile-choice",
+          source: "item-active-ability",
+          sourceName: inventoryCard.name,
+          effect: {
+            type: "move",
+            destination: "any-tile",
+          },
+          options,
+          selectedOptionId: null,
+          prompt: "Choose any discovered tile.",
+        },
+      },
+      message: `${owner.name} uses ${inventoryCard.name}. Choose a destination tile.`,
     },
     closeViewedCard: true,
     diceAnimation: null,
@@ -1092,7 +1174,8 @@ export function chooseAngelsFeatherValueState(
   if (viewedCard.activeAbilityRule?.action !== "set-trait-roll-total") {
     return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
   }
-  if (viewedCard.ownerCollection !== "inventory") return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
+  if (viewedCard.ownerCollection !== "inventory")
+    return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
   if (viewedCard.ownerIndex !== g.currentPlayerIndex) {
     return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
   }
@@ -1240,6 +1323,9 @@ export function chooseCardActiveAbilityNowState(g, viewedCard, deps = {}) {
   }
   if (action === "substitute-sanity-for-knowledge") {
     return applyMagicCameraNowState(g, viewedCard, deps);
+  }
+  if (action === "teleport-any-tile") {
+    return applyMapNowState(g, viewedCard);
   }
   if (action === "heal-critical-traits" || action === "heal-stats") {
     return applyFirstAidKitNowState(g, viewedCard);

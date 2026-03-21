@@ -1173,6 +1173,10 @@ export default function GameBoard({ players, onQuit }) {
   // End turn
   function handleEndTurn() {
     setGame((g) => {
+      if (g.eventState?.awaiting?.type === "tile-choice" && g.eventState.awaiting?.source === "item-active-ability") {
+        return g;
+      }
+
       const p = g.players[g.currentPlayerIndex];
       const tile = g.board[p.floor]?.find((t) => t.x === p.x && t.y === p.y);
 
@@ -2117,11 +2121,13 @@ export default function GameBoard({ players, onQuit }) {
             </button>
           </>
         )}
-        {(game.turnPhase === "endTurn" || game.turnPhase === "move") && !game.pendingExplore && (
-          <button className="btn btn-primary" onClick={handleEndTurn}>
-            End Turn — Pass to {game.players[(game.currentPlayerIndex + 1) % game.players.length].name}
-          </button>
-        )}
+        {(game.turnPhase === "endTurn" || game.turnPhase === "move") &&
+          !game.pendingExplore &&
+          !(eventState?.awaiting?.type === "tile-choice" && eventState.awaiting?.source === "item-active-ability") && (
+            <button className="btn btn-primary" onClick={handleEndTurn}>
+              End Turn — Pass to {game.players[(game.currentPlayerIndex + 1) % game.players.length].name}
+            </button>
+          )}
       </div>
 
       {/* Player sidebar */}
