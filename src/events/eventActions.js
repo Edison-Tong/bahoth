@@ -63,6 +63,44 @@ function isLuckyCoinAvailableThisTurn(game, viewedCard) {
   return lastRoll.dice.some((value) => value === 0);
 }
 
+function getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }) {
+  const awaiting = game.eventState?.awaiting;
+  const canApplyNow =
+    (awaiting?.type === "roll-ready" && awaiting.rollKind === "trait-roll" && awaiting.overrideTotal === undefined) ||
+    (awaiting?.type === "trait-roll-sequence-ready" && awaiting.overrideTotal === undefined);
+  const canQueueForDrawnEvent =
+    game.drawnCard?.type === "event" &&
+    drawnEventPrimaryAction?.type === "roll" &&
+    drawnEventPrimaryAction?.isTraitRoll &&
+    !queuedTraitRollOverride;
+
+  return {
+    canApplyNow,
+    canQueueForDrawnEvent,
+    canUseNow: canApplyNow || canQueueForDrawnEvent,
+  };
+}
+
+function getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }) {
+  const base = getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride });
+  const awaiting = game.eventState?.awaiting;
+  const canApplyNow =
+    base.canApplyNow &&
+    awaiting?.type === "roll-ready" &&
+    awaiting.rollKind === "trait-roll" &&
+    awaiting.rollStat === "knowledge";
+  const canQueueForDrawnEvent =
+    base.canQueueForDrawnEvent &&
+    drawnEventPrimaryAction?.isTraitRoll &&
+    drawnEventPrimaryAction?.rollStat === "knowledge";
+
+  return {
+    canApplyNow,
+    canQueueForDrawnEvent,
+    canUseMagicCameraNow: canApplyNow || canQueueForDrawnEvent,
+  };
+}
+
 function getLuckyCoinSequenceRerollOptions(game) {
   const awaiting = game.eventState?.awaiting;
   if (awaiting?.type !== "trait-roll-sequence-complete" || !Array.isArray(awaiting.results)) return [];
@@ -465,7 +503,12 @@ export function confirmEventTileChoiceState(g, deps) {
 
 export function startEventFromDrawnCardState(
   g,
-  { card, initialEventChoice = null, autoRollIfReady = false, queuedAngelsFeatherTotal = null },
+  {
+    card,
+    initialEventChoice = null,
+    autoRollIfReady = false,
+    queuedTraitRollOverride = null,
+  },
   deps
 ) {
   const { runAdvanceEventResolution, resolveRollReadyAwaiting, eventFlowDeps } = deps;
@@ -493,7 +536,7 @@ export function startEventFromDrawnCardState(
   let nextState = result.game;
   let nextCameraFloor = result.cameraFloor || null;
   let nextDiceAnimation = null;
-  let shouldClearQueuedAngelsFeather = false;
+  let shouldClearQueuedTraitRollOverride = false;
 
   if (initialEventChoice !== null && nextState.eventState?.awaiting?.type === "choice") {
     const choiceStepId = nextState.eventState.awaiting.stepId;
@@ -516,35 +559,65 @@ export function startEventFromDrawnCardState(
     nextCameraFloor = choiceResult.cameraFloor || nextCameraFloor;
   }
 
-  if (queuedAngelsFeatherTotal !== null) {
-    if (
-      nextState.eventState?.awaiting?.type === "roll-ready" &&
-      nextState.eventState.awaiting.rollKind === "trait-roll"
-    ) {
-      nextState = {
-        ...nextState,
-        eventState: {
-          ...nextState.eventState,
-          awaiting: {
-            ...nextState.eventState.awaiting,
-            overrideTotal: queuedAngelsFeatherTotal,
+  if (queuedTraitRollOverride) {
+    if (queuedTraitRollOverride.kind === "set-total") {
+      if (
+        nextState.eventState?.awaiting?.type === "roll-ready" &&
+        nextState.eventState.awaiting.rollKind === "trait-roll"
+      ) {
+        nextState = {
+          ...nextState,
+          eventState: {
+            ...nextState.eventState,
+            awaiting: {
+              ...nextState.eventState.awaiting,
+              overrideTotal: Math.max(0, Math.min(8, Number(queuedTraitRollOverride.total))),
+            },
           },
-        },
-      };
-    } else if (nextState.eventState?.awaiting?.type === "trait-roll-sequence-ready") {
-      nextState = {
-        ...nextState,
-        eventState: {
-          ...nextState.eventState,
-          awaiting: {
-            ...nextState.eventState.awaiting,
-            overrideTotal: queuedAngelsFeatherTotal,
+        };
+        shouldClearQueuedTraitRollOverride = true;
+      } else if (nextState.eventState?.awaiting?.type === "trait-roll-sequence-ready") {
+        nextState = {
+          ...nextState,
+          eventState: {
+            ...nextState.eventState,
+            awaiting: {
+              ...nextState.eventState.awaiting,
+              overrideTotal: Math.max(0, Math.min(8, Number(queuedTraitRollOverride.total))),
+            },
           },
-        },
-      };
+        };
+        shouldClearQueuedTraitRollOverride = true;
+      }
     }
 
-    shouldClearQueuedAngelsFeather = true;
+    if (
+      queuedTraitRollOverride.kind === "substitute-stat" &&
+      nextState.eventState?.awaiting?.type === "roll-ready" &&
+      nextState.eventState.awaiting.rollKind === "trait-roll" &&
+      nextState.eventState.awaiting.rollStat === queuedTraitRollOverride.from
+    ) {
+      const currentPlayer = nextState.players[nextState.currentPlayerIndex];
+      const targetStat = queuedTraitRollOverride.to;
+      const nextDiceCount =
+        currentPlayer?.character?.[targetStat]?.[currentPlayer?.statIndex?.[targetStat]] ??
+        nextState.eventState.awaiting.baseDiceCount;
+
+      nextState = {
+        ...nextState,
+        eventState: {
+          ...nextState.eventState,
+          awaiting: {
+            ...nextState.eventState.awaiting,
+            rollStat: targetStat,
+            baseDiceCount: nextDiceCount,
+            prompt: `${getEventRollButtonLabel(nextDiceCount)} for ${STAT_LABELS[targetStat] || targetStat}.`,
+          },
+        },
+        message: `${currentPlayer?.name || "Explorer"} uses Magic Camera and will roll Sanity instead of Knowledge.`,
+      };
+      shouldClearQueuedTraitRollOverride = true;
+    }
   }
 
   if (autoRollIfReady && nextState.eventState?.awaiting?.type === "roll-ready") {
@@ -568,7 +641,7 @@ export function startEventFromDrawnCardState(
     game: nextState,
     cameraFloor: nextCameraFloor,
     diceAnimation: nextDiceAnimation,
-    shouldClearQueuedAngelsFeather,
+    shouldClearQueuedTraitRollOverride,
   };
 }
 
@@ -600,30 +673,32 @@ export function resolveEventDamageChoiceState(g, choice, baseState, postDamageMe
   return null;
 }
 
-export function getAngelsFeatherUsageState({ game, drawnEventPrimaryAction, queuedAngelsFeatherTotal }) {
-  const eventState = game.eventState;
-  const awaiting = eventState?.awaiting;
-
-  const canApplyNow =
-    (awaiting?.type === "roll-ready" && awaiting.rollKind === "trait-roll" && awaiting.overrideTotal === undefined) ||
-    (awaiting?.type === "trait-roll-sequence-ready" && awaiting.overrideTotal === undefined);
-
-  const canQueueForDrawnEvent =
-    game.drawnCard?.type === "event" &&
-    drawnEventPrimaryAction?.type === "roll" &&
-    drawnEventPrimaryAction?.isTraitRoll &&
-    queuedAngelsFeatherTotal === null;
-
+export function getAngelsFeatherUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }) {
+  const base = getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride });
   return {
-    canApplyNow,
-    canQueueForDrawnEvent,
-    canUseAngelsFeatherNow: canApplyNow || canQueueForDrawnEvent,
+    ...base,
+    canUseAngelsFeatherNow: base.canUseNow,
   };
 }
 
 const ACTIVE_ABILITY_TRIGGER_HANDLERS = {
-  "trait-roll-required": ({ game, drawnEventPrimaryAction, queuedAngelsFeatherTotal }) =>
-    getAngelsFeatherUsageState({ game, drawnEventPrimaryAction, queuedAngelsFeatherTotal }).canUseAngelsFeatherNow,
+  "trait-roll-required": ({
+    game,
+    viewedCard,
+    drawnEventPrimaryAction,
+    queuedTraitRollOverride,
+  }) => {
+    const action = viewedCard?.activeAbilityRule?.action;
+    if (action === "set-trait-roll-total") {
+      return getAngelsFeatherUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
+        .canUseAngelsFeatherNow;
+    }
+    if (action === "substitute-sanity-for-knowledge") {
+      return getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }).canUseMagicCameraNow;
+    }
+
+    return getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }).canUseNow;
+  },
   "on-your-turn": ({ game, viewedCard }) =>
     viewedCard.ownerIndex === game.currentPlayerIndex && game.turnPhase !== "card" && !game.drawnCard,
   "trait-roll-just-made": ({ game, viewedCard }) =>
@@ -632,7 +707,12 @@ const ACTIVE_ABILITY_TRIGGER_HANDLERS = {
   attack: ({ game, viewedCard }) => viewedCard.ownerIndex === game.currentPlayerIndex,
 };
 
-export function getCardActiveAbilityState({ game, viewedCard, drawnEventPrimaryAction, queuedAngelsFeatherTotal }) {
+export function getCardActiveAbilityState({
+  game,
+  viewedCard,
+  drawnEventPrimaryAction,
+  queuedTraitRollOverride = null,
+}) {
   if (!viewedCard) return { canUseNow: false, requiresValueSelection: false, valueOptions: [] };
 
   const rule = viewedCard.activeAbilityRule;
@@ -648,13 +728,14 @@ export function getCardActiveAbilityState({ game, viewedCard, drawnEventPrimaryA
 
   const triggerHandler = ACTIVE_ABILITY_TRIGGER_HANDLERS[rule.trigger];
   const triggerSatisfied = triggerHandler
-    ? triggerHandler({ game, viewedCard, drawnEventPrimaryAction, queuedAngelsFeatherTotal })
+    ? triggerHandler({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride })
     : false;
 
   const hasSupportedAction =
     rule.action === "set-trait-roll-total" ||
     rule.action === "reroll-all-trait-dice" ||
     rule.action === "reroll-blank-trait-dice" ||
+    rule.action === "substitute-sanity-for-knowledge" ||
     rule.action === "heal-critical-traits" ||
     rule.action === "heal-stats";
   const healRule = getActiveHealRule(viewedCard);
@@ -682,7 +763,9 @@ export function getCardActiveAbilityState({ game, viewedCard, drawnEventPrimaryA
         ? isCreepyDollAvailableThisTurn(game, viewedCard)
         : rule.action === "reroll-blank-trait-dice"
           ? isLuckyCoinAvailableThisTurn(game, viewedCard)
-          : true;
+          : rule.action === "substitute-sanity-for-knowledge"
+            ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }).canUseMagicCameraNow
+            : true;
 
   return {
     canUseNow: triggerSatisfied && hasSupportedAction && actionSatisfied,
@@ -830,6 +913,72 @@ export function applyCreepyDollNowState(g, viewedCard) {
   };
 }
 
+export function applyMagicCameraNowState(
+  g,
+  viewedCard,
+  { drawnEventPrimaryAction, queuedTraitRollOverride = null } = {}
+) {
+  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
+  if (viewedCard.activeAbilityRule?.action !== "substitute-sanity-for-knowledge") {
+    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
+  }
+  if (viewedCard.ownerCollection !== "inventory") {
+    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
+  }
+  if (viewedCard.ownerIndex !== g.currentPlayerIndex) {
+    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
+  }
+
+  const usageState = getMagicCameraUsageState({ game: g, drawnEventPrimaryAction, queuedTraitRollOverride });
+  if (!usageState.canApplyNow && !usageState.canQueueForDrawnEvent) {
+    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
+  }
+
+  const owner = g.players[viewedCard.ownerIndex];
+  const inventoryCard = getInventoryCard(g, viewedCard);
+
+  if (usageState.canQueueForDrawnEvent && !usageState.canApplyNow) {
+    return {
+      game: {
+        ...g,
+        message: `${owner.name} will use ${inventoryCard?.name || "Magic Camera"} on this Knowledge roll.`,
+      },
+      closeViewedCard: true,
+      diceAnimation: null,
+      queueTraitRollOverride: {
+        kind: "substitute-stat",
+        from: "knowledge",
+        to: "sanity",
+      },
+    };
+  }
+
+  const awaiting = g.eventState?.awaiting;
+  if (!owner || !inventoryCard || !awaiting || awaiting.type !== "roll-ready") {
+    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
+  }
+
+  const sanityDiceCount = owner.character?.sanity?.[owner.statIndex?.sanity] ?? awaiting.baseDiceCount;
+  return {
+    game: {
+      ...g,
+      eventState: {
+        ...g.eventState,
+        awaiting: {
+          ...awaiting,
+          rollStat: "sanity",
+          baseDiceCount: sanityDiceCount,
+          prompt: `${getEventRollButtonLabel(sanityDiceCount)} for ${STAT_LABELS.sanity}.`,
+        },
+      },
+      message: `${owner.name} uses ${inventoryCard.name} and will roll Sanity instead of Knowledge.`,
+    },
+    closeViewedCard: true,
+    diceAnimation: null,
+    queueTraitRollOverride: undefined,
+  };
+}
+
 export function applyLuckyCoinNowState(g, viewedCard, targetRollSelection = null) {
   if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
   if (viewedCard.activeAbilityRule?.action !== "reroll-blank-trait-dice") {
@@ -935,22 +1084,26 @@ export function chooseAngelsFeatherValueState(
   g,
   total,
   viewedCard,
-  { drawnEventPrimaryAction, queuedAngelsFeatherTotal }
+  { drawnEventPrimaryAction, queuedTraitRollOverride = null }
 ) {
-  const usageState = getAngelsFeatherUsageState({ game: g, drawnEventPrimaryAction, queuedAngelsFeatherTotal });
+  const usageState = getAngelsFeatherUsageState({ game: g, drawnEventPrimaryAction, queuedTraitRollOverride });
   const { canApplyNow, canQueueForDrawnEvent } = usageState;
-  if (!viewedCard) return { game: g, queueTotal: undefined, closeViewedCard: false };
+  if (!viewedCard) return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
   if (viewedCard.activeAbilityRule?.action !== "set-trait-roll-total") {
-    return { game: g, queueTotal: undefined, closeViewedCard: false };
+    return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
   }
-  if (viewedCard.ownerCollection !== "inventory") return { game: g, queueTotal: undefined, closeViewedCard: false };
-  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, queueTotal: undefined, closeViewedCard: false };
-  if (!canApplyNow && !canQueueForDrawnEvent) return { game: g, queueTotal: undefined, closeViewedCard: false };
+  if (viewedCard.ownerCollection !== "inventory") return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
+  if (viewedCard.ownerIndex !== g.currentPlayerIndex) {
+    return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
+  }
+  if (!canApplyNow && !canQueueForDrawnEvent) {
+    return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
+  }
 
   const owner = g.players[viewedCard.ownerIndex];
   const inventoryCard = owner?.inventory?.[viewedCard.ownerCardIndex];
   if (!inventoryCard || inventoryCard.id !== "angels-feather") {
-    return { game: g, queueTotal: undefined, closeViewedCard: false };
+    return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
   }
 
   const nextPlayers = g.players.map((player, index) => {
@@ -987,7 +1140,7 @@ export function chooseAngelsFeatherValueState(
         },
         message: `${owner.name} buries Angel's Feather and sets this roll to ${forcedTotal}.`,
       },
-      queueTotal: null,
+      queueTraitRollOverride: null,
       closeViewedCard: true,
     };
   }
@@ -1007,7 +1160,7 @@ export function chooseAngelsFeatherValueState(
         },
         message: `${owner.name} buries Angel's Feather and sets this roll to ${forcedTotal}.`,
       },
-      queueTotal: null,
+      queueTraitRollOverride: null,
       closeViewedCard: true,
     };
   }
@@ -1030,7 +1183,13 @@ export function chooseAngelsFeatherValueState(
 
   return {
     game: nextGame,
-    queueTotal: canQueueForDrawnEvent && !canApplyNow ? total : null,
+    queueTraitRollOverride:
+      canQueueForDrawnEvent && !canApplyNow
+        ? {
+            kind: "set-total",
+            total: forcedTotal,
+          }
+        : null,
     closeViewedCard: true,
   };
 }
@@ -1038,8 +1197,9 @@ export function chooseAngelsFeatherValueState(
 export function chooseCardActiveAbilityValueState(g, total, viewedCard, deps) {
   const action = viewedCard?.activeAbilityRule?.action;
   if (action === "set-trait-roll-total") {
+    const result = chooseAngelsFeatherValueState(g, total, viewedCard, deps);
     return {
-      ...chooseAngelsFeatherValueState(g, total, viewedCard, deps),
+      ...result,
       diceAnimation: null,
     };
   }
@@ -1047,7 +1207,7 @@ export function chooseCardActiveAbilityValueState(g, total, viewedCard, deps) {
     const result = applyLuckyCoinNowState(g, viewedCard, total);
     return {
       game: result.game,
-      queueTotal: undefined,
+      queueTraitRollOverride: undefined,
       closeViewedCard: result.closeViewedCard,
       diceAnimation: result.diceAnimation || null,
     };
@@ -1056,7 +1216,7 @@ export function chooseCardActiveAbilityValueState(g, total, viewedCard, deps) {
     const result = applyFirstAidKitNowState(g, viewedCard, total);
     return {
       game: result.game,
-      queueTotal: undefined,
+      queueTraitRollOverride: undefined,
       closeViewedCard: result.closeViewedCard,
       diceAnimation: null,
     };
@@ -1064,19 +1224,22 @@ export function chooseCardActiveAbilityValueState(g, total, viewedCard, deps) {
 
   return {
     game: g,
-    queueTotal: undefined,
+    queueTraitRollOverride: undefined,
     closeViewedCard: false,
     diceAnimation: null,
   };
 }
 
-export function chooseCardActiveAbilityNowState(g, viewedCard) {
+export function chooseCardActiveAbilityNowState(g, viewedCard, deps = {}) {
   const action = viewedCard?.activeAbilityRule?.action;
   if (action === "reroll-all-trait-dice") {
     return applyCreepyDollNowState(g, viewedCard);
   }
   if (action === "reroll-blank-trait-dice") {
     return applyLuckyCoinNowState(g, viewedCard);
+  }
+  if (action === "substitute-sanity-for-knowledge") {
+    return applyMagicCameraNowState(g, viewedCard, deps);
   }
   if (action === "heal-critical-traits" || action === "heal-stats") {
     return applyFirstAidKitNowState(g, viewedCard);
@@ -1086,6 +1249,7 @@ export function chooseCardActiveAbilityNowState(g, viewedCard) {
     game: g,
     closeViewedCard: false,
     diceAnimation: null,
+    queueTraitRollOverride: undefined,
   };
 }
 
@@ -1191,7 +1355,7 @@ export function applyTileEffectConsequences(g, players, effect) {
   return updatedPlayers;
 }
 
-export function getEventUiState(game, eventEngineDeps, queuedAngelsFeatherTotal = null) {
+export function getEventUiState(game, eventEngineDeps, queuedTraitRollOverride = null) {
   const eventState = game.eventState;
   const drawnEventPrimaryAction =
     game.drawnCard?.type === "event" ? getInitialEventPrimaryAction(game, game.drawnCard, eventEngineDeps) : null;
@@ -1202,7 +1366,7 @@ export function getEventUiState(game, eventEngineDeps, queuedAngelsFeatherTotal 
   const angelsFeatherUsageState = getAngelsFeatherUsageState({
     game,
     drawnEventPrimaryAction,
-    queuedAngelsFeatherTotal,
+    queuedTraitRollOverride,
   });
 
   return {
@@ -1420,6 +1584,7 @@ export function getInitialEventPrimaryAction(g, card, eventEngineDeps) {
       label: getEventRollButtonLabel(awaiting.baseDiceCount || 0),
       autoRoll: true,
       isTraitRoll: awaiting.rollKind === "trait-roll",
+      rollStat: awaiting.rollKind === "trait-roll" ? awaiting.rollStat : null,
     };
   }
 

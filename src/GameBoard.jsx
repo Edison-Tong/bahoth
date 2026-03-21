@@ -187,14 +187,13 @@ export default function GameBoard({ players, onQuit }) {
   const [diceAnimation, setDiceAnimation] = useState(null);
   const [expandedSidebarPlayers, setExpandedSidebarPlayers] = useState(() => new Set());
   const [viewedCard, setViewedCard] = useState(null);
-  const [queuedAngelsFeatherTotal, setQueuedAngelsFeatherTotal] = useState(null);
-  const [pendingAngelsFeatherAutoResolve, setPendingAngelsFeatherAutoResolve] = useState(false);
-  const queuedAngelsFeatherTotalRef = useRef(null);
+  const [queuedTraitRollOverride, setQueuedTraitRollOverride] = useState(null);
+  const queuedTraitRollOverrideRef = useRef(null);
   const boardRef = useRef(null);
 
   useEffect(() => {
-    queuedAngelsFeatherTotalRef.current = queuedAngelsFeatherTotal;
-  }, [queuedAngelsFeatherTotal]);
+    queuedTraitRollOverrideRef.current = queuedTraitRollOverride;
+  }, [queuedTraitRollOverride]);
 
   // Dice rolling animation
   useEffect(() => {
@@ -1334,8 +1333,8 @@ export default function GameBoard({ players, onQuit }) {
     setGame,
     setCameraFloor,
     setDiceAnimation,
-    setQueuedAngelsFeatherTotal,
-    getQueuedAngelsFeatherTotal: () => queuedAngelsFeatherTotalRef.current,
+    setQueuedTraitRollOverride,
+    getQueuedTraitRollOverride: () => queuedTraitRollOverrideRef.current,
     rollDice,
     runAdvanceEventResolution,
     resolveRollReadyAwaiting,
@@ -1343,11 +1342,10 @@ export default function GameBoard({ players, onQuit }) {
   });
 
   useEffect(() => {
-    if (!pendingAngelsFeatherAutoResolve) return;
+    if (!queuedTraitRollOverride) return;
     if (game.drawnCard?.type !== "event") return;
-    setPendingAngelsFeatherAutoResolve(false);
     handleDismissCard({ autoRollIfReady: true });
-  }, [pendingAngelsFeatherAutoResolve, game.drawnCard, handleDismissCard]);
+  }, [queuedTraitRollOverride, game.drawnCard, handleDismissCard]);
 
   function handleAdjustDamageAllocation(stat, delta) {
     setGame((g) => {
@@ -1677,10 +1675,17 @@ export default function GameBoard({ players, onQuit }) {
     if (!viewedCard || !viewedCardActiveAbilityState?.canUseNow) return;
 
     if (!viewedCardActiveAbilityState.requiresValueSelection) {
-      const result = chooseCardActiveAbilityNowState(game, viewedCard);
+      const result = chooseCardActiveAbilityNowState(game, viewedCard, {
+        drawnEventPrimaryAction,
+        queuedTraitRollOverride: queuedTraitRollOverrideRef.current,
+      });
       setGame(result.game);
       if (result.diceAnimation) {
         setDiceAnimation(result.diceAnimation);
+      }
+      if (result.queueTraitRollOverride !== undefined) {
+        queuedTraitRollOverrideRef.current = result.queueTraitRollOverride;
+        setQueuedTraitRollOverride(result.queueTraitRollOverride);
       }
       if (result.closeViewedCard) {
         setViewedCard(null);
@@ -1702,7 +1707,7 @@ export default function GameBoard({ players, onQuit }) {
 
     const result = chooseCardActiveAbilityValueState(game, total, viewedCard, {
       drawnEventPrimaryAction,
-      queuedAngelsFeatherTotal: queuedAngelsFeatherTotalRef.current,
+      queuedTraitRollOverride: queuedTraitRollOverrideRef.current,
     });
 
     setGame(result.game);
@@ -1710,10 +1715,9 @@ export default function GameBoard({ players, onQuit }) {
       setDiceAnimation(result.diceAnimation);
     }
 
-    if (result.queueTotal !== undefined) {
-      queuedAngelsFeatherTotalRef.current = result.queueTotal;
-      setQueuedAngelsFeatherTotal(result.queueTotal);
-      setPendingAngelsFeatherAutoResolve(result.queueTotal !== null);
+    if (result.queueTraitRollOverride !== undefined) {
+      queuedTraitRollOverrideRef.current = result.queueTraitRollOverride;
+      setQueuedTraitRollOverride(result.queueTraitRollOverride);
     }
     if (result.closeViewedCard) {
       setViewedCard(null);
@@ -1764,13 +1768,13 @@ export default function GameBoard({ players, onQuit }) {
   const damageChoice = game.damageChoice;
   const eventState = game.eventState;
   const { drawnEventPrimaryAction, eventTileChoiceOptions, selectedEventTileChoiceId, showEventResolutionModal } =
-    getEventUiState(game, eventEngineDeps, queuedAngelsFeatherTotal);
+    getEventUiState(game, eventEngineDeps, queuedTraitRollOverride);
   const viewedCardActiveAbilityState = viewedCard
     ? getCardActiveAbilityState({
         game,
         viewedCard,
         drawnEventPrimaryAction,
-        queuedAngelsFeatherTotal,
+        queuedTraitRollOverride,
       })
     : null;
   const damageAllocated = damageChoice

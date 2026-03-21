@@ -353,8 +353,8 @@ export function useDrawnCardHandlers({
   setGame,
   setCameraFloor,
   setDiceAnimation,
-  setQueuedAngelsFeatherTotal,
-  getQueuedAngelsFeatherTotal,
+  setQueuedTraitRollOverride,
+  getQueuedTraitRollOverride,
   rollDice,
   runAdvanceEventResolution,
   resolveRollReadyAwaiting,
@@ -364,7 +364,7 @@ export function useDrawnCardHandlers({
     const { autoRollIfReady = false, initialEventChoice = null } = options;
     let nextCameraFloor = null;
     let nextDiceAnimation = null;
-    let shouldClearQueuedAngelsFeather = false;
+    let shouldClearQueuedTraitRollOverride = false;
 
     setGame((g) => {
       const card = g.drawnCard;
@@ -393,14 +393,14 @@ export function useDrawnCardHandlers({
       }
 
       if (card?.type === "event") {
-        const queuedAngelsFeatherTotal = getQueuedAngelsFeatherTotal?.() ?? null;
+        const queuedTraitRollOverride = getQueuedTraitRollOverride?.() ?? null;
         const eventResult = startEventFromDrawnCardState(
           g,
           {
             card,
             initialEventChoice,
             autoRollIfReady,
-            queuedAngelsFeatherTotal,
+            queuedTraitRollOverride,
           },
           {
             runAdvanceEventResolution,
@@ -411,7 +411,7 @@ export function useDrawnCardHandlers({
 
         nextCameraFloor = eventResult.cameraFloor;
         nextDiceAnimation = eventResult.diceAnimation;
-        shouldClearQueuedAngelsFeather = eventResult.shouldClearQueuedAngelsFeather;
+        shouldClearQueuedTraitRollOverride = eventResult.shouldClearQueuedTraitRollOverride;
         return eventResult.game;
       }
 
@@ -443,8 +443,8 @@ export function useDrawnCardHandlers({
     if (nextDiceAnimation) {
       setDiceAnimation(nextDiceAnimation);
     }
-    if (shouldClearQueuedAngelsFeather) {
-      setQueuedAngelsFeatherTotal(null);
+    if (shouldClearQueuedTraitRollOverride) {
+      setQueuedTraitRollOverride(null);
     }
   }
 

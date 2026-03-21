@@ -246,19 +246,19 @@ export const ITEM_CARDS = [
   //   ],
   //   passiveAbility: "Roll 1 extra die whenever you defend against an attack.",
   // },
-  {
-    id: "lucky-coin",
-    name: "Lucky Coin",
-    isWeapon: false,
-    activeAbilityRule: { trigger: "trait-roll-just-made", action: "reroll-blank-trait-dice" },
-    activeAbility:
-      "Once during your turn, you may reroll all blank dice on a trait roll you just made. For each blank die on the reroll, take 1 Mental damage.",
-  },
+  // {
+  //   id: "lucky-coin",
+  //   name: "Lucky Coin",
+  //   isWeapon: false,
+  //   activeAbilityRule: { trigger: "trait-roll-just-made", action: "reroll-blank-trait-dice" },
+  //   activeAbility:
+  //     "Once during your turn, you may reroll all blank dice on a trait roll you just made. For each blank die on the reroll, take 1 Mental damage.",
+  // },
   // {
   //   id: "machete",
   //   name: "Machete",
   //   isWeapon: true,
-  //   activeAbilityRule: { trigger: "attack", action: "attack-bonus-total" },
+  //   activeAbilityRule: { trigger: "attack", action: "attack-bonus-total" }, //HAVE NOT TESTED ATTACKS YET
   //   activeAbility: "When you use the Machete to attack, add 1 to the result of your roll.",
   // },
   // {
@@ -268,13 +268,13 @@ export const ITEM_CARDS = [
   //   activeAbilityRule: { trigger: "trait-roll-required", action: "substitute-sanity-for-knowledge" },
   //   activeAbility: "You may use your Sanity to make Knowledge rolls.",
   // },
-  // {
-  //   id: "map",
-  //   name: "Map",
-  //   isWeapon: false,
-  //   activeAbilityRule: { trigger: "on-your-turn", action: "teleport-any-tile" },
-  //   activeAbility: "On your turn, you may bury the Map. If you do, place your explorer on any tile.",
-  // },
+  {
+    id: "map",
+    name: "Map",
+    isWeapon: false,
+    activeAbilityRule: { trigger: "on-your-turn", action: "teleport-any-tile" },
+    activeAbility: "On your turn, you may bury the Map. If you do, place your explorer on any tile.",
+  },
   // {
   //   id: "mirror",
   //   name: "Mirror",
@@ -373,103 +373,103 @@ const createAllStatsAdjustEffects = () => [
 // FOR TESTING ONLY
 
 export const EVENT_CARDS = [
-  createEventCard({
-    id: "test-event", // FOR TESTING ONLY
-    name: "Test Event Sandbox",
-    todo: "Choose a scenario to test.",
-    result:
-      "Pick one branch: Trait roll, Dice roll, Trait sequence, Stat choice, Item choice, Move choice, Token choice, Damage sequence, or All-stats adjust.",
-    steps: [
-      createEventStep("choice", {
-        id: "scenario",
-        prompt: "Choose a test scenario.",
-        options: [
-          "trait-roll",
-          "dice-roll",
-          "trait-roll-sequence",
-          "stat-choice",
-          "item-choice",
-          "tile-choice-move",
-          "tile-choice-token",
-          "damage-sequence",
-          "all-stats-adjust",
-        ],
-      }),
-      createEventStep("choice", {
-        id: "all-stats-adjustment",
-        onlyIf: { choice: { step: "scenario", equals: "all-stats-adjust" } },
-        prompt: "Choose gain/lose amount (0-8).",
-        options: TEST_ALL_STATS_ADJUST_OPTIONS,
-      }),
-      createEventStep("trait-roll", {
-        id: "test-trait-roll",
-        onlyIf: { choice: { step: "scenario", equals: "trait-roll" } },
-        chooseFrom: ["might", "speed", "knowledge", "sanity"],
-        outcomes: [
-          createEventOutcome(
-            { roll: { min: 4 } },
-            createEventEffect("stat-change", { mode: "gain", stat: "chosen", amount: 1 })
-          ),
-          createEventOutcome(
-            { roll: { exact: 3 } },
-            createEventEffect("stat-change", { mode: "lose", stat: "chosen", amount: 1 })
-          ),
-          createEventOutcome({ roll: { max: 2 } }, createEventEffect("damage", { damageType: "general", amount: 1 })),
-        ],
-      }),
-      createEventStep("dice-roll", {
-        onlyIf: { choice: { step: "scenario", equals: "dice-roll" } },
-        dice: 2,
-        outcomes: [
-          createEventOutcome({ roll: { min: 3 } }, createEventEffect("draw-card", { deck: "item", amount: 1 })),
-          createEventOutcome(
-            { roll: { max: 2 } },
-            createEventEffect("damage", { damageType: "mental", amountType: "dice", dice: 1 })
-          ),
-        ],
-      }),
-      createEventStep("trait-roll-sequence", {
-        onlyIf: { choice: { step: "scenario", equals: "trait-roll-sequence" } },
-        stats: ["might", "speed", "sanity", "knowledge"],
-        outcomes: [
-          createEventOutcome(
-            { allRolls: { min: 2 } },
-            createEventEffect("stat-change", { mode: "gain", stat: "sanity", amount: 1 })
-          ),
-        ],
-      }),
-      createEventStep("effect", {
-        onlyIf: { choice: { step: "scenario", equals: "stat-choice" } },
-        effects: [
-          createEventEffect("stat-choice", {
-            mode: "gain",
-            options: ["might", "speed", "knowledge", "sanity"],
-            amount: 2,
-          }),
-        ],
-      }),
-      createEventStep("effect", {
-        onlyIf: { choice: { step: "scenario", equals: "item-choice" } },
-        effects: [createEventEffect("bury-item", { filter: "any-item" })],
-      }),
-      createEventStep("effect", {
-        onlyIf: { choice: { step: "scenario", equals: "tile-choice-move" } },
-        effects: [createEventEffect("move", { destination: "any-tile" })],
-      }),
-      createEventStep("effect", {
-        onlyIf: { choice: { step: "scenario", equals: "tile-choice-token" } },
-        effects: [createEventEffect("place-token", { token: "obstacle", location: "any-other-tile" })],
-      }),
-      createEventStep("effect", {
-        onlyIf: { choice: { step: "scenario", equals: "damage-sequence" } },
-        effects: [
-          createEventEffect("damage", { damageType: "physical", amountType: "dice", dice: 1 }),
-          createEventEffect("damage", { damageType: "mental", amountType: "dice", dice: 1 }),
-        ],
-      }),
-      ...createAllStatsAdjustEffects(),
-    ],
-  }),
+  // createEventCard({
+  //   id: "test-event", // FOR TESTING ONLY
+  //   name: "Test Event Sandbox",
+  //   todo: "Choose a scenario to test.",
+  //   result:
+  //     "Pick one branch: Trait roll, Dice roll, Trait sequence, Stat choice, Item choice, Move choice, Token choice, Damage sequence, or All-stats adjust.",
+  //   steps: [
+  //     createEventStep("choice", {
+  //       id: "scenario",
+  //       prompt: "Choose a test scenario.",
+  //       options: [
+  //         "trait-roll",
+  //         "dice-roll",
+  //         "trait-roll-sequence",
+  //         "stat-choice",
+  //         "item-choice",
+  //         "tile-choice-move",
+  //         "tile-choice-token",
+  //         "damage-sequence",
+  //         "all-stats-adjust",
+  //       ],
+  //     }),
+  //     createEventStep("choice", {
+  //       id: "all-stats-adjustment",
+  //       onlyIf: { choice: { step: "scenario", equals: "all-stats-adjust" } },
+  //       prompt: "Choose gain/lose amount (0-8).",
+  //       options: TEST_ALL_STATS_ADJUST_OPTIONS,
+  //     }),
+  //     createEventStep("trait-roll", {
+  //       id: "test-trait-roll",
+  //       onlyIf: { choice: { step: "scenario", equals: "trait-roll" } },
+  //       chooseFrom: ["might", "speed", "knowledge", "sanity"],
+  //       outcomes: [
+  //         createEventOutcome(
+  //           { roll: { min: 4 } },
+  //           createEventEffect("stat-change", { mode: "gain", stat: "chosen", amount: 1 })
+  //         ),
+  //         createEventOutcome(
+  //           { roll: { exact: 3 } },
+  //           createEventEffect("stat-change", { mode: "lose", stat: "chosen", amount: 1 })
+  //         ),
+  //         createEventOutcome({ roll: { max: 2 } }, createEventEffect("damage", { damageType: "general", amount: 1 })),
+  //       ],
+  //     }),
+  //     createEventStep("dice-roll", {
+  //       onlyIf: { choice: { step: "scenario", equals: "dice-roll" } },
+  //       dice: 2,
+  //       outcomes: [
+  //         createEventOutcome({ roll: { min: 3 } }, createEventEffect("draw-card", { deck: "item", amount: 1 })),
+  //         createEventOutcome(
+  //           { roll: { max: 2 } },
+  //           createEventEffect("damage", { damageType: "mental", amountType: "dice", dice: 1 })
+  //         ),
+  //       ],
+  //     }),
+  //     createEventStep("trait-roll-sequence", {
+  //       onlyIf: { choice: { step: "scenario", equals: "trait-roll-sequence" } },
+  //       stats: ["might", "speed", "sanity", "knowledge"],
+  //       outcomes: [
+  //         createEventOutcome(
+  //           { allRolls: { min: 2 } },
+  //           createEventEffect("stat-change", { mode: "gain", stat: "sanity", amount: 1 })
+  //         ),
+  //       ],
+  //     }),
+  //     createEventStep("effect", {
+  //       onlyIf: { choice: { step: "scenario", equals: "stat-choice" } },
+  //       effects: [
+  //         createEventEffect("stat-choice", {
+  //           mode: "gain",
+  //           options: ["might", "speed", "knowledge", "sanity"],
+  //           amount: 2,
+  //         }),
+  //       ],
+  //     }),
+  //     createEventStep("effect", {
+  //       onlyIf: { choice: { step: "scenario", equals: "item-choice" } },
+  //       effects: [createEventEffect("bury-item", { filter: "any-item" })],
+  //     }),
+  //     createEventStep("effect", {
+  //       onlyIf: { choice: { step: "scenario", equals: "tile-choice-move" } },
+  //       effects: [createEventEffect("move", { destination: "any-tile" })],
+  //     }),
+  //     createEventStep("effect", {
+  //       onlyIf: { choice: { step: "scenario", equals: "tile-choice-token" } },
+  //       effects: [createEventEffect("place-token", { token: "obstacle", location: "any-other-tile" })],
+  //     }),
+  //     createEventStep("effect", {
+  //       onlyIf: { choice: { step: "scenario", equals: "damage-sequence" } },
+  //       effects: [
+  //         createEventEffect("damage", { damageType: "physical", amountType: "dice", dice: 1 }),
+  //         createEventEffect("damage", { damageType: "mental", amountType: "dice", dice: 1 }),
+  //       ],
+  //     }),
+  //     ...createAllStatsAdjustEffects(),
+  //   ],
+  // }),
   // createEventCard({
   //   id: "a-bite",
   //   name: "A Bite!",
@@ -489,24 +489,24 @@ export const EVENT_CARDS = [
   //     }),
   //   ],
   // }),
-  // createEventCard({
-  //   id: "a-cry-for-help",
-  //   name: "A Cry for Help",
-  //   todo: "Make a Knowledge roll",
-  //   result: "4+: Place your explorer on any tile in your region. 0-3: Take 1 Mental damage.",
-  //   steps: [
-  //     createEventStep("trait-roll", {
-  //       stat: "knowledge",
-  //       outcomes: [
-  //         createEventOutcome(
-  //           { roll: { min: 4 } },
-  //           createEventEffect("move", { destination: "any-tile-in-current-region" })
-  //         ),
-  //         createEventOutcome({ roll: { max: 3 } }, createEventEffect("damage", { damageType: "mental", amount: 1 })),
-  //       ],
-  //     }),
-  //   ],
-  // }),
+  createEventCard({
+    id: "a-cry-for-help",
+    name: "A Cry for Help",
+    todo: "Make a Knowledge roll",
+    result: "4+: Place your explorer on any tile in your region. 0-3: Take 1 Mental damage.",
+    steps: [
+      createEventStep("trait-roll", {
+        stat: "knowledge",
+        outcomes: [
+          createEventOutcome(
+            { roll: { min: 4 } },
+            createEventEffect("move", { destination: "any-tile-in-current-region" })
+          ),
+          createEventOutcome({ roll: { max: 3 } }, createEventEffect("damage", { damageType: "mental", amount: 1 })),
+        ],
+      }),
+    ],
+  }),
   // createEventCard({
   //   id: "a-full-table",
   //   name: "A Full Table",

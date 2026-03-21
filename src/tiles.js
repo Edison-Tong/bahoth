@@ -115,13 +115,13 @@ export const TILES = [
   //     "If you end your turn on this tile, make a speed roll. 5+: Nothing happens. 4-0: Place your explorer on the Basement Landing and take one die of Physical damage",
   //   endOfTurn: "collapsed",
   // },
-  // {
-  //   id: "conservatory",
-  //   name: "Conservatory",
-  //   floors: ["ground"],
-  //   doors: ["N", "S"],
-  //   cardType: "item",
-  // },
+  {
+    id: "conservatory",
+    name: "Conservatory",
+    floors: ["ground"],
+    doors: ["N", "S"],
+    cardType: "item",
+  },
   // {
   //   id: "cramped-passageway",
   //   name: "Cramped Passageway",
