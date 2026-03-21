@@ -12,38 +12,34 @@ export const OMEN_CARDS = [
   //   passiveAbility:
   //     "Whenever you take any physical damage, reduce that damage by 1. (the Armor doesn't prevent General damage or the direct loss of Might and/or Speed)",
   // },
-  {
-    id: "book",
-    name: "Book",
-    passiveEffects: [
-      {
-        type: "trait-roll-bonus",
-        stat: "knowledge",
-        amount: 1,
-      },
-    ],
-    passiveAbility: "Add 1 to the result of your knowledge rolls",
-    activeAbilityRule: { trigger: "trait-roll-required", action: "substitute-knowledge-for-trait" },
-    activeAbility:
-      "Once during your turn, you may use the book to lose 1 Sanity. On the next trait roll you make this turn that isn't an attack, you may use your knowledge in place of the named trait.",
-  },
   // {
-  //   id: "dagger",
-  //   name: "Dagger",
+  //   id: "book",
+  //   name: "Book",
   //   passiveEffects: [
   //     {
-  //       type: "attack-roll-dice-bonus",
-  //       amount: 2,
-  //     },
-  //     {
-  //       type: "self-damage-on-attack",
-  //       damageType: "direct-stat-loss",
-  //       stat: "speed",
+  //       type: "trait-roll-bonus",
+  //       stat: "knowledge",
   //       amount: 1,
   //     },
   //   ],
-  //   passiveAbility: "When you use the Dagger to attack, lose one speed. Roll 2 extra dice on the attack.",
+  //   passiveAbility: "Add 1 to the result of your knowledge rolls",
+  //   activeAbilityRule: { trigger: "trait-roll-required", action: "substitute-knowledge-for-trait" },
+  //   activeAbility:
+  //     "Once during your turn, you may use the book to lose 1 Sanity. On the next trait roll you make this turn that isn't an attack, you may use your knowledge in place of the named trait.",
   // },
+  {
+    id: "dagger",
+    name: "Dagger",
+    activeAbilityRule: {
+      trigger: "attack",
+      action: "optional-speed-loss-for-attack-dice",
+      costStat: "speed",
+      costAmount: 1,
+      bonusDice: 2,
+    },
+    activeAbility:
+      "When you attack, you may lose 1 Speed. If you do, roll 2 extra dice on that attack.",
+  },
   // {
   //   id: "dog",
   //   name: "Dog",
