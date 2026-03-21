@@ -304,14 +304,14 @@ export const ITEM_CARDS = [
     activeAbilityRule: { trigger: "die-just-rolled", action: "reroll-one-die" },
     activeAbility: "Once during your turn, you may reroll 1 die that you just rolled.",
   },
-  // {
-  //   id: "skeleton-key",
-  //   name: "Skeleton Key",
-  //   isWeapon: false,
-  //   activeAbilityRule: { trigger: "on-your-turn", action: "move-through-walls" },
-  //   activeAbility:
-  //     "You may move through walls. Whenever you do so, roll 1 die. If you roll a blank, bury the Skeleton Key. You may not use the Skeleton Key to discover new rooms.",
-  // },
+  {
+    id: "skeleton-key",
+    name: "Skeleton Key",
+    isWeapon: false,
+    activeAbilityRule: { trigger: "on-your-turn", action: "move-through-walls" },
+    activeAbility:
+      "You may move through walls. Whenever you do so, roll 1 die. If you roll a blank, bury the Skeleton Key. You may not use the Skeleton Key to discover new rooms.",
+  },
   // {
   //   id: "strange-amulet",
   //   name: "Strange Amulet",

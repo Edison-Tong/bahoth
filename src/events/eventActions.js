@@ -69,7 +69,57 @@ function isRabbitsFootAvailableThisTurn(game, viewedCard) {
   if (inventoryCard.lastActiveAbilityTurnUsed === game.turnNumber) return false;
 
   const lastRoll = game.eventState?.lastRoll;
-  return !!lastRoll && Array.isArray(lastRoll.dice) && lastRoll.dice.length > 0 && Array.isArray(lastRoll.outcomes);
+  if (!!lastRoll && Array.isArray(lastRoll.dice) && lastRoll.dice.length > 0 && Array.isArray(lastRoll.outcomes)) {
+    return true;
+  }
+
+  return (
+    game.tileEffect?.type === "skeleton-key-result" &&
+    Array.isArray(game.tileEffect?.dice) &&
+    game.tileEffect.dice.length > 0
+  );
+}
+
+function hasSkeletonKeyWallMoveAvailable(game, viewedCard) {
+  const inventoryCard = getInventoryCard(game, viewedCard);
+  if (!inventoryCard || inventoryCard.id !== "skeleton-key") return false;
+
+  const owner = game.players[viewedCard.ownerIndex];
+  const board = game.board?.[owner?.floor] || [];
+  const currentTile = board.find((tile) => tile.x === owner.x && tile.y === owner.y);
+  if (!owner || !currentTile) return false;
+
+  const dirs = [
+    { name: "N", dx: 0, dy: -1 },
+    { name: "S", dx: 0, dy: 1 },
+    { name: "E", dx: 1, dy: 0 },
+    { name: "W", dx: -1, dy: 0 },
+  ];
+  const opposite = { N: "S", S: "N", E: "W", W: "E" };
+
+  return dirs.some(({ name, dx, dy }) => {
+    const neighbor = board.find((tile) => tile.x === owner.x + dx && tile.y === owner.y + dy);
+    if (!neighbor) return false;
+
+    const normalPassage = currentTile.doors?.includes(name) && neighbor.doors?.includes(opposite[name]);
+    return !normalPassage;
+  });
+}
+
+function canUseNormalMovementNow(game, viewedCard) {
+  const owner = game.players?.[viewedCard?.ownerIndex];
+  if (!owner || !owner.isAlive) return false;
+
+  return (
+    game.turnPhase === "move" &&
+    !game.pendingExplore &&
+    !game.pendingSpecialPlacement &&
+    !game.tileEffect &&
+    !game.damageChoice &&
+    !game.drawnCard &&
+    !game.eventState &&
+    owner.movesLeft > 0
+  );
 }
 
 function getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }) {
@@ -731,7 +781,14 @@ const ACTIVE_ABILITY_TRIGGER_HANDLERS = {
     viewedCard.ownerIndex === game.currentPlayerIndex && game.turnPhase !== "card" && !game.drawnCard,
   "trait-roll-just-made": ({ game, viewedCard }) =>
     viewedCard.ownerIndex === game.currentPlayerIndex && isTraitRollJustMadeContext(game),
-  "die-just-rolled": ({ game, viewedCard }) => viewedCard.ownerIndex === game.currentPlayerIndex && !!game.eventState,
+  "die-just-rolled": ({ game, viewedCard }) => {
+    const action = viewedCard?.activeAbilityRule?.action;
+    if (action === "reroll-one-die") {
+      return viewedCard.ownerIndex === game.currentPlayerIndex && isRabbitsFootAvailableThisTurn(game, viewedCard);
+    }
+
+    return viewedCard.ownerIndex === game.currentPlayerIndex && !!game.eventState;
+  },
   attack: ({ game, viewedCard }) => viewedCard.ownerIndex === game.currentPlayerIndex,
 };
 
@@ -764,6 +821,7 @@ export function getCardActiveAbilityState({
     rule.action === "reroll-all-trait-dice" ||
     rule.action === "reroll-blank-trait-dice" ||
     rule.action === "reroll-one-die" ||
+    rule.action === "move-through-walls" ||
     rule.action === "substitute-sanity-for-knowledge" ||
     rule.action === "teleport-any-tile" ||
     rule.action === "extra-turn-after-current" ||
@@ -805,10 +863,12 @@ export function getCardActiveAbilityState({
           ? isLuckyCoinAvailableThisTurn(game, viewedCard)
           : rule.action === "reroll-one-die"
             ? isRabbitsFootAvailableThisTurn(game, viewedCard)
-            : rule.action === "substitute-sanity-for-knowledge"
-              ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
-                  .canUseMagicCameraNow
-              : true;
+            : rule.action === "move-through-walls"
+              ? canUseNormalMovementNow(game, viewedCard) && hasSkeletonKeyWallMoveAvailable(game, viewedCard)
+              : rule.action === "substitute-sanity-for-knowledge"
+                ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
+                    .canUseMagicCameraNow
+                : true;
 
   return {
     canUseNow: triggerSatisfied && hasSupportedAction && actionSatisfied,
@@ -1247,9 +1307,21 @@ export function applyRabbitsFootNowState(g, viewedCard) {
   const owner = g.players[viewedCard.ownerIndex];
   const inventoryCard = getInventoryCard(g, viewedCard);
   const lastRoll = g.eventState?.lastRoll;
-  if (!owner || !inventoryCard || !lastRoll || !Array.isArray(lastRoll.dice) || lastRoll.dice.length === 0) {
+  const skeletonKeyRollDice =
+    g.tileEffect?.type === "skeleton-key-result" && Array.isArray(g.tileEffect?.dice) ? g.tileEffect.dice : null;
+  if (
+    !owner ||
+    !inventoryCard ||
+    ((!lastRoll || !Array.isArray(lastRoll.dice) || lastRoll.dice.length === 0 || !Array.isArray(lastRoll.outcomes)) &&
+      (!skeletonKeyRollDice || skeletonKeyRollDice.length === 0))
+  ) {
     return { game: g, closeViewedCard: false, diceAnimation: null };
   }
+
+  const sourceType =
+    !!lastRoll && Array.isArray(lastRoll.dice) && lastRoll.dice.length > 0 && Array.isArray(lastRoll.outcomes)
+      ? "event-last-roll"
+      : "skeleton-key-roll";
 
   return {
     game: {
@@ -1258,6 +1330,7 @@ export function applyRabbitsFootNowState(g, viewedCard) {
         ownerIndex: viewedCard.ownerIndex,
         ownerCardIndex: viewedCard.ownerCardIndex,
         sourceName: inventoryCard.name,
+        sourceType,
         selectedDieIndex: null,
       },
       message: `${owner.name} uses ${inventoryCard.name}. Select one die, then press Reroll.`,
@@ -1267,12 +1340,48 @@ export function applyRabbitsFootNowState(g, viewedCard) {
   };
 }
 
+export function applySkeletonKeyNowState(g, viewedCard) {
+  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (viewedCard.activeAbilityRule?.action !== "move-through-walls") {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+  if (viewedCard.ownerCollection !== "inventory") return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (!canUseNormalMovementNow(g, viewedCard)) {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+  if (!hasSkeletonKeyWallMoveAvailable(g, viewedCard)) {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  const owner = g.players[viewedCard.ownerIndex];
+  const inventoryCard = getInventoryCard(g, viewedCard);
+  if (!owner || !inventoryCard || inventoryCard.id !== "skeleton-key") {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  return {
+    game: {
+      ...g,
+      skeletonKeyArmed: true,
+      message: `${owner.name} uses ${inventoryCard.name}. Your next wall move costs movement normally.`,
+    },
+    closeViewedCard: true,
+    diceAnimation: null,
+  };
+}
+
 export function chooseRabbitFootDieState(g, dieIndex) {
   const pending = g.rabbitFootPendingReroll;
-  const lastRoll = g.eventState?.lastRoll;
+  const dice =
+    pending?.sourceType === "skeleton-key-roll"
+      ? g.tileEffect?.type === "skeleton-key-result"
+        ? g.tileEffect?.dice
+        : null
+      : g.eventState?.lastRoll?.dice;
   const selectedIndex = Number(dieIndex);
-  if (!pending || !lastRoll || !Array.isArray(lastRoll.dice)) return g;
-  if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= lastRoll.dice.length) return g;
+  if (!pending || !Array.isArray(dice)) return g;
+  if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= dice.length) return g;
 
   return {
     ...g,
@@ -1285,13 +1394,23 @@ export function chooseRabbitFootDieState(g, dieIndex) {
 
 export function applyRabbitFootRerollState(g) {
   const pending = g.rabbitFootPendingReroll;
+  const isSkeletonKeyRoll = pending?.sourceType === "skeleton-key-roll";
   const lastRoll = g.eventState?.lastRoll;
-  if (!pending || !lastRoll || !Array.isArray(lastRoll.dice) || !Array.isArray(lastRoll.outcomes)) {
+  const skeletonKeyRollDice =
+    g.tileEffect?.type === "skeleton-key-result" && Array.isArray(g.tileEffect?.dice) ? g.tileEffect.dice : null;
+
+  if (
+    !pending ||
+    (!isSkeletonKeyRoll && (!lastRoll || !Array.isArray(lastRoll.dice) || !Array.isArray(lastRoll.outcomes))) ||
+    (isSkeletonKeyRoll && (!skeletonKeyRollDice || skeletonKeyRollDice.length === 0))
+  ) {
     return { game: g, diceAnimation: null };
   }
 
+  const sourceDice = isSkeletonKeyRoll ? skeletonKeyRollDice : lastRoll.dice;
+
   const selectedIndex = Number(pending.selectedDieIndex);
-  if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= lastRoll.dice.length) {
+  if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= sourceDice.length) {
     return { game: g, diceAnimation: null };
   }
 
@@ -1301,11 +1420,11 @@ export function applyRabbitFootRerollState(g) {
   }
 
   const rerolledValue = rollDice(1)[0];
-  const nextDice = [...lastRoll.dice];
+  const nextDice = [...sourceDice];
   nextDice[selectedIndex] = rerolledValue;
 
-  const previousDiceTotal = (lastRoll.dice || []).reduce((sum, value) => sum + value, 0);
-  const staticBonus = (lastRoll.total || 0) - previousDiceTotal;
+  const previousDiceTotal = (sourceDice || []).reduce((sum, value) => sum + value, 0);
+  const staticBonus = isSkeletonKeyRoll ? 0 : (lastRoll.total || 0) - previousDiceTotal;
   const nextTotal = nextDice.reduce((sum, value) => sum + value, 0) + staticBonus;
 
   const nextPlayers = g.players.map((player, index) => {
@@ -1326,6 +1445,25 @@ export function applyRabbitFootRerollState(g) {
 
   const ownerName = g.players[ownerIndex]?.name || "Explorer";
 
+  if (isSkeletonKeyRoll) {
+    return {
+      game: {
+        ...g,
+        players: nextPlayers,
+        rabbitFootPendingReroll: null,
+        message: `${ownerName} uses ${pending.sourceName || "Rabbit's Foot"} to reroll the Skeleton Key die...`,
+      },
+      diceAnimation: {
+        purpose: "skeleton-key",
+        final: [...nextDice],
+        display: [...sourceDice],
+        settled: false,
+        tileName: "Skeleton Key",
+        rerollIndexes: [selectedIndex],
+      },
+    };
+  }
+
   return {
     game: {
       ...g,
@@ -1336,7 +1474,7 @@ export function applyRabbitFootRerollState(g) {
     diceAnimation: {
       purpose: "event-partial-reroll",
       final: nextDice,
-      display: [...lastRoll.dice],
+      display: [...sourceDice],
       settled: false,
       label: lastRoll.label || "Roll",
       total: nextTotal,
@@ -1513,6 +1651,9 @@ export function chooseCardActiveAbilityNowState(g, viewedCard, deps = {}) {
   if (action === "reroll-one-die") {
     return applyRabbitsFootNowState(g, viewedCard);
   }
+  if (action === "move-through-walls") {
+    return applySkeletonKeyNowState(g, viewedCard);
+  }
   if (action === "substitute-sanity-for-knowledge") {
     return applyMagicCameraNowState(g, viewedCard, deps);
   }
@@ -1608,7 +1749,14 @@ export function getMysticElevatorDestination(total) {
 }
 
 export function isQueuedTileEffectType(type) {
-  return ["discover-gain", "armory", "junk-room", "panic-room", "mystic-elevator-result"].includes(type);
+  return [
+    "discover-gain",
+    "armory",
+    "junk-room",
+    "panic-room",
+    "mystic-elevator-result",
+    "skeleton-key-result",
+  ].includes(type);
 }
 
 export function applyTileEffectConsequences(g, players, effect) {

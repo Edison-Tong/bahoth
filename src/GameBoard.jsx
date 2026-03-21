@@ -184,6 +184,7 @@ function initGameState(players) {
     tileEffect: null,
     damageChoice: null,
     rabbitFootPendingReroll: null,
+    skeletonKeyArmed: false,
     extraTurnAfterCurrent: false,
     eventState: null,
     turnNumber: 1,
@@ -463,6 +464,26 @@ export default function GameBoard({ players, onQuit }) {
             },
           };
         });
+      } else if (da.purpose === "skeleton-key") {
+        setGame((g) => {
+          const rolled = da.final?.[0] ?? 0;
+          const keyLost = rolled === 0;
+
+          return {
+            ...g,
+            tileEffect: {
+              type: "skeleton-key-result",
+              tileName: "Skeleton Key",
+              dice: da.final,
+              message: keyLost
+                ? `You rolled ${rolled}. The Skeleton Key breaks and is buried.`
+                : `You rolled ${rolled}. You keep the Skeleton Key.`,
+              nextTurnPhase: "move",
+              nextMessage: g.message,
+            },
+          };
+        });
+        setDiceAnimation(null);
       }
     }, 2000);
 
@@ -669,6 +690,8 @@ export default function GameBoard({ players, onQuit }) {
 
     const moves = [];
     const moveCost = getLeaveMoveCost(tile);
+    const canUseSkeletonKeyMovement =
+      game.skeletonKeyArmed && currentPlayer.inventory.some((card) => card.id === "skeleton-key");
     for (const dir of tile.doors) {
       const { dx, dy } = DIR[dir];
       const nx = currentPlayer.x + dx;
@@ -693,37 +716,95 @@ export default function GameBoard({ players, onQuit }) {
         moves.push({ dir, x: nx, y: ny, type: "explore", cost: moveCost });
       }
     }
+
+    if (canUseSkeletonKeyMovement && currentPlayer.movesLeft >= moveCost) {
+      const dirs = ["N", "S", "E", "W"];
+      for (const dir of dirs) {
+        const { dx, dy } = DIR[dir];
+        const nx = currentPlayer.x + dx;
+        const ny = currentPlayer.y + dy;
+        const neighbor = getTileAt(nx, ny, currentPlayer.floor);
+        if (!neighbor) continue;
+
+        const isAlreadyReachable = tile.doors.includes(dir) && neighbor.doors.includes(OPPOSITE[dir]);
+        if (isAlreadyReachable) continue;
+
+        const isBacktrack =
+          backtrackPos && backtrackPos.x === nx && backtrackPos.y === ny && backtrackPos.floor === currentPlayer.floor;
+        if (isBacktrack) continue;
+
+        moves.push({ dir, x: nx, y: ny, type: "wall-move", cost: moveCost });
+      }
+    }
+
     return moves;
   }
 
   // Move player to an existing tile and extend the current path.
-  function handleMove(nx, ny, cost) {
+  function handleMove(nx, ny, cost, options = {}) {
+    const { useSkeletonKey = false } = options;
+    const skeletonKeyRoll = useSkeletonKey ? rollDice(1)[0] : null;
     setGame((g) => {
       const player = g.players[g.currentPlayerIndex];
       const currentTile = g.board[player.floor]?.find((t) => t.x === player.x && t.y === player.y);
       const resolvedCost = cost ?? getLeaveMoveCost(currentTile);
       if (player.movesLeft < resolvedCost) return g;
 
+      const hasSkeletonKey = player.inventory.some((card) => card.id === "skeleton-key");
+      if (useSkeletonKey && (!g.skeletonKeyArmed || !hasSkeletonKey)) return g;
+
       const movesLeft = player.movesLeft - resolvedCost;
       const newPath = [...g.movePath, { x: nx, y: ny, floor: player.floor, cost: resolvedCost }];
       const destinationTile = g.board[player.floor]?.find((tile) => tile.x === nx && tile.y === ny);
-      const updatedPlayers = g.players.map((p, i) =>
-        i === g.currentPlayerIndex ? { ...p, x: nx, y: ny, movesLeft } : p
-      );
+
+      let keyRoll = null;
+      if (useSkeletonKey) {
+        keyRoll = skeletonKeyRoll;
+      }
+
+      const updatedPlayers = g.players.map((p, i) => {
+        if (i !== g.currentPlayerIndex) return p;
+
+        return {
+          ...p,
+          x: nx,
+          y: ny,
+          movesLeft,
+        };
+      });
+
+      const baseMessage =
+        destinationTile?.enterEffect === "mystic-elevator" && !g.mysticElevatorUsed
+          ? `${g.players[g.currentPlayerIndex].name} entered the Mystic Elevator. Use Elevator to roll 2 dice.`
+          : movesLeft > 0
+            ? `${g.players[g.currentPlayerIndex].name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`
+            : `${g.players[g.currentPlayerIndex].name} — no moves left`;
+
+      const skeletonKeyMessage =
+        useSkeletonKey && keyRoll !== null
+          ? `Skeleton Key roll: ${keyRoll}. Resolve the result after you continue.`
+          : "";
+
       return {
         ...g,
         players: updatedPlayers,
         movePath: newPath,
         mysticElevatorReady:
           destinationTile?.enterEffect === "mystic-elevator" && !g.mysticElevatorUsed ? true : g.mysticElevatorReady,
-        message:
-          destinationTile?.enterEffect === "mystic-elevator" && !g.mysticElevatorUsed
-            ? `${g.players[g.currentPlayerIndex].name} entered the Mystic Elevator. Use Elevator to roll 2 dice.`
-            : movesLeft > 0
-              ? `${g.players[g.currentPlayerIndex].name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`
-              : `${g.players[g.currentPlayerIndex].name} — no moves left`,
+        skeletonKeyArmed: g.skeletonKeyArmed,
+        message: skeletonKeyMessage ? `${baseMessage}. ${skeletonKeyMessage}` : baseMessage,
       };
     });
+
+    if (useSkeletonKey && skeletonKeyRoll !== null) {
+      setDiceAnimation({
+        purpose: "skeleton-key",
+        final: [skeletonKeyRoll],
+        display: [Math.floor(Math.random() * 3)],
+        settled: false,
+        tileName: "Skeleton Key",
+      });
+    }
   }
 
   // Backtrack to previous tile in path and refund the cost of the undone step.
@@ -814,6 +895,8 @@ export default function GameBoard({ players, onQuit }) {
   function handleAction(move) {
     if (move.type === "backtrack") {
       handleBacktrack();
+    } else if (move.type === "wall-move") {
+      handleMove(move.x, move.y, move.cost, { useSkeletonKey: true });
     } else if (move.type === "move") {
       handleMove(move.x, move.y, move.cost);
     } else {
@@ -1553,6 +1636,33 @@ export default function GameBoard({ players, onQuit }) {
           setCameraFloor(effect.pendingSpecialPlacement.placements[0]?.floor || cameraFloor);
         }
 
+        if (effect.type === "skeleton-key-result") {
+          const rollResult = Number(effect.pendingSkeletonKeyRoll ?? effect.dice?.[0] ?? 0);
+          const keyLost = rollResult === 0;
+          const currentPlayerIndex = g.currentPlayerIndex;
+          const nextPlayers = g.players.map((player, index) => {
+            if (index !== currentPlayerIndex) return player;
+            if (!keyLost) return player;
+
+            return {
+              ...player,
+              inventory: player.inventory.filter((card) => card.id !== "skeleton-key"),
+            };
+          });
+
+          return {
+            ...g,
+            players: nextPlayers,
+            skeletonKeyArmed: keyLost ? false : g.skeletonKeyArmed,
+            rabbitFootPendingReroll: null,
+            tileEffect: null,
+            drawnCard: effect.pendingSpecialPlacement ? null : effect.queuedCard || null,
+            pendingSpecialPlacement: effect.pendingSpecialPlacement || null,
+            turnPhase: effect.nextTurnPhase,
+            message: keyLost ? "The Skeleton Key is buried." : "You keep the Skeleton Key.",
+          };
+        }
+
         return {
           ...g,
           tileEffect: null,
@@ -1848,6 +1958,7 @@ export default function GameBoard({ players, onQuit }) {
       tileEffect: null,
       damageChoice: null,
       rabbitFootPendingReroll: null,
+      skeletonKeyArmed: false,
       eventState: null,
       extraTurnAfterCurrent: false,
       turnNumber: shouldTakeExtraTurn ? g.turnNumber : g.turnNumber + (next === 0 ? 1 : 0),
@@ -2194,7 +2305,7 @@ export default function GameBoard({ players, onQuit }) {
 
             {/* Clickable overlay on existing tiles for movement/backtrack */}
             {validMoves
-              .filter((m) => m.type === "move" || m.type === "backtrack")
+              .filter((m) => m.type === "move" || m.type === "backtrack" || m.type === "wall-move")
               .map((m) => {
                 const left = (m.x - minX) * (TILE_SIZE + GAP);
                 const top = (m.y - minY) * (TILE_SIZE + GAP);
@@ -2470,7 +2581,7 @@ export default function GameBoard({ players, onQuit }) {
         !diceAnimation.settled &&
         diceAnimation.purpose !== "event-damage-sequence" &&
         diceAnimation.purpose !== "event-trait-sequence-roll" && (
-          <div className="card-overlay">
+          <div className="card-overlay card-overlay-animation">
             <div
               className={`card-modal ${diceAnimation.purpose === "haunt" ? "card-haunt-rolling" : "card-tile-rolling"}`}
             >
@@ -2481,13 +2592,15 @@ export default function GameBoard({ players, onQuit }) {
                     ? "EVENT ROLL"
                     : diceAnimation.purpose === "event-damage-roll"
                       ? "EVENT DAMAGE ROLL"
-                      : diceAnimation.purpose === "mystic-elevator"
-                        ? "MYSTIC ELEVATOR"
-                        : diceAnimation.purpose === "collapsed"
-                          ? "COLLAPSED ROOM"
-                          : diceAnimation.purpose === "collapsed-damage"
-                            ? "COLLAPSED ROOM — DAMAGE"
-                            : "FURNACE ROOM"}
+                      : diceAnimation.purpose === "skeleton-key"
+                        ? "SKELETON KEY"
+                        : diceAnimation.purpose === "mystic-elevator"
+                          ? "MYSTIC ELEVATOR"
+                          : diceAnimation.purpose === "collapsed"
+                            ? "COLLAPSED ROOM"
+                            : diceAnimation.purpose === "collapsed-damage"
+                              ? "COLLAPSED ROOM — DAMAGE"
+                              : "FURNACE ROOM"}
               </div>
               <DiceRow dice={diceAnimation.display} modifier={diceAnimation.modifier} rolling />
               <h2 className="card-name">Rolling...</h2>
@@ -2523,7 +2636,11 @@ export default function GameBoard({ players, onQuit }) {
             className={`card-modal card-tile-effect ${game.tileEffect.type === "laundry-chute" ? "card-tile-neutral" : game.tileEffect.type === "collapsed-pending" ? "card-tile-danger" : game.tileEffect.damage > 0 || game.tileEffect.collapsed ? "card-tile-danger" : "card-tile-safe"}`}
           >
             <div className="card-type-label">{game.tileEffect.tileName}</div>
-            {game.tileEffect.dice && <DiceRow dice={game.tileEffect.dice} modifier={game.tileEffect.diceModifier} />}
+            {game.tileEffect.dice &&
+              !(
+                game.tileEffect.type === "skeleton-key-result" &&
+                game.rabbitFootPendingReroll?.sourceType === "skeleton-key-roll"
+              ) && <DiceRow dice={game.tileEffect.dice} modifier={game.tileEffect.diceModifier} />}
             {game.tileEffect.total !== undefined && <div className="dice-total">Total: {game.tileEffect.total}</div>}
             {game.tileEffect.collapsed && game.tileEffect.damageDice.length > 0 && (
               <>
@@ -2533,8 +2650,37 @@ export default function GameBoard({ players, onQuit }) {
                 <DiceRow dice={game.tileEffect.damageDice} modifier={game.tileEffect.damageDiceModifier} />
               </>
             )}
+            {game.tileEffect.type === "skeleton-key-result" &&
+              game.rabbitFootPendingReroll?.sourceType === "skeleton-key-roll" && (
+                <div className="dice-row">
+                  <div className="dice-container">
+                    {(game.tileEffect.dice || []).map((die, index) => {
+                      const selected = game.rabbitFootPendingReroll?.selectedDieIndex === index;
+                      return (
+                        <button
+                          key={`skeleton-key-rabbit-foot-die-${index}`}
+                          type="button"
+                          className={selected ? "die die-selectable die-selected" : "die die-selectable"}
+                          onClick={() => handleSelectRabbitFootDie(index)}
+                        >
+                          {die}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             <p className="card-description">{game.tileEffect.message}</p>
-            {game.tileEffect.type === "necklace-of-teeth-choice" ? (
+            {game.tileEffect.type === "skeleton-key-result" &&
+            game.rabbitFootPendingReroll?.sourceType === "skeleton-key-roll" ? (
+              <button
+                className="btn btn-primary"
+                onClick={handleConfirmRabbitFootReroll}
+                disabled={!Number.isInteger(game.rabbitFootPendingReroll?.selectedDieIndex)}
+              >
+                Reroll
+              </button>
+            ) : game.tileEffect.type === "necklace-of-teeth-choice" ? (
               <>
                 <div className="event-option-list" style={{ marginTop: "0.75rem" }}>
                   {(game.tileEffect.statOptions || []).map((stat) => (

@@ -910,6 +910,10 @@
   z-index: 1000;
 }
 
+.card-overlay-animation {
+  z-index: 1300;
+}
+
 .card-modal {
   width: 320px;
   padding: 2rem;
