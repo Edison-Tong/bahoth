@@ -23,6 +23,7 @@ export const OMEN_CARDS = [
       },
     ],
     passiveAbility: "Add 1 to the result of your knowledge rolls",
+    activeAbilityRule: { trigger: "trait-roll-required", action: "substitute-knowledge-for-trait" },
     activeAbility:
       "Once during your turn, you may use the book to lose 1 Sanity. On the next trait roll you make this turn that isn't an attack, you may use your knowledge in place of the named trait.",
   },

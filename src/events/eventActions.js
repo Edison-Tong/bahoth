@@ -160,6 +160,37 @@ function getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRo
   };
 }
 
+function getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride }) {
+  const owner = game.players?.[viewedCard?.ownerIndex];
+  const omenCard = viewedCard?.ownerCollection === "omens" ? owner?.omens?.[viewedCard.ownerCardIndex] || null : null;
+  if (!omenCard || omenCard.id !== "book") {
+    return {
+      canApplyNow: false,
+      canQueueForDrawnEvent: false,
+      canUseBookNow: false,
+    };
+  }
+  if (omenCard.lastActiveAbilityTurnUsed === game.turnNumber) {
+    return {
+      canApplyNow: false,
+      canQueueForDrawnEvent: false,
+      canUseBookNow: false,
+    };
+  }
+
+  const base = getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride });
+  const awaiting = game.eventState?.awaiting;
+  const canApplyNow =
+    base.canApplyNow && awaiting?.type === "roll-ready" && awaiting.rollKind === "trait-roll" && !!awaiting.rollStat;
+  const canQueueForDrawnEvent = base.canQueueForDrawnEvent && !!drawnEventPrimaryAction?.isTraitRoll;
+
+  return {
+    canApplyNow,
+    canQueueForDrawnEvent,
+    canUseBookNow: canApplyNow || canQueueForDrawnEvent,
+  };
+}
+
 function getLuckyCoinSequenceRerollOptions(game) {
   const awaiting = game.eventState?.awaiting;
   if (awaiting?.type !== "trait-roll-sequence-complete" || !Array.isArray(awaiting.results)) return [];
@@ -688,10 +719,12 @@ export function startEventFromDrawnCardState(
       queuedTraitRollOverride.kind === "substitute-stat" &&
       nextState.eventState?.awaiting?.type === "roll-ready" &&
       nextState.eventState.awaiting.rollKind === "trait-roll" &&
-      nextState.eventState.awaiting.rollStat === queuedTraitRollOverride.from
+      (queuedTraitRollOverride.from === "any" ||
+        nextState.eventState.awaiting.rollStat === queuedTraitRollOverride.from)
     ) {
       const currentPlayer = nextState.players[nextState.currentPlayerIndex];
       const targetStat = queuedTraitRollOverride.to;
+      const fromStat = nextState.eventState.awaiting.rollStat;
       const nextDiceCount =
         currentPlayer?.character?.[targetStat]?.[currentPlayer?.statIndex?.[targetStat]] ??
         nextState.eventState.awaiting.baseDiceCount;
@@ -707,7 +740,7 @@ export function startEventFromDrawnCardState(
             prompt: `${getEventRollButtonLabel(nextDiceCount)} for ${STAT_LABELS[targetStat] || targetStat}.`,
           },
         },
-        message: `${currentPlayer?.name || "Explorer"} uses Magic Camera and will roll Sanity instead of Knowledge.`,
+        message: `${currentPlayer?.name || "Explorer"} uses ${queuedTraitRollOverride.sourceName || "an item"} and will roll ${STAT_LABELS[targetStat] || targetStat} instead of ${STAT_LABELS[fromStat] || fromStat}.`,
       };
       shouldClearQueuedTraitRollOverride = true;
     }
@@ -784,6 +817,9 @@ const ACTIVE_ABILITY_TRIGGER_HANDLERS = {
     if (action === "substitute-sanity-for-knowledge") {
       return getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }).canUseMagicCameraNow;
     }
+    if (action === "substitute-knowledge-for-trait") {
+      return getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride }).canUseBookNow;
+    }
 
     return getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }).canUseNow;
   },
@@ -833,6 +869,7 @@ export function getCardActiveAbilityState({
     rule.action === "reroll-one-die" ||
     rule.action === "move-through-walls" ||
     rule.action === "substitute-sanity-for-knowledge" ||
+    rule.action === "substitute-knowledge-for-trait" ||
     rule.action === "teleport-any-tile" ||
     rule.action === "extra-turn-after-current" ||
     rule.action === "heal-critical-traits" ||
@@ -887,7 +924,10 @@ export function getCardActiveAbilityState({
               : rule.action === "substitute-sanity-for-knowledge"
                 ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
                     .canUseMagicCameraNow
-                : true;
+                : rule.action === "substitute-knowledge-for-trait"
+                  ? getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride })
+                      .canUseBookNow
+                  : true;
 
   return {
     canUseNow: triggerSatisfied && hasSupportedAction && actionSatisfied,
@@ -1205,6 +1245,97 @@ export function applyMagicCameraNowState(
         },
       },
       message: `${owner.name} uses ${inventoryCard.name} and will roll Sanity instead of Knowledge.`,
+    },
+    closeViewedCard: true,
+    diceAnimation: null,
+    queueTraitRollOverride: undefined,
+  };
+}
+
+export function applyBookNowState(g, viewedCard, { drawnEventPrimaryAction, queuedTraitRollOverride = null } = {}) {
+  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
+  if (viewedCard.activeAbilityRule?.action !== "substitute-knowledge-for-trait") {
+    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
+  }
+  if (viewedCard.ownerCollection !== "omens") {
+    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
+  }
+  if (viewedCard.ownerIndex !== g.currentPlayerIndex) {
+    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
+  }
+
+  const usageState = getBookUsageState({ game: g, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride });
+  if (!usageState.canApplyNow && !usageState.canQueueForDrawnEvent) {
+    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
+  }
+
+  const owner = g.players[viewedCard.ownerIndex];
+  const omenCard = owner?.omens?.[viewedCard.ownerCardIndex] || null;
+  if (!owner || !omenCard) {
+    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
+  }
+
+  const nextPlayers = g.players.map((player, playerIndex) => {
+    if (playerIndex !== viewedCard.ownerIndex) return player;
+
+    return {
+      ...player,
+      omens: player.omens.map((card, cardIndex) =>
+        cardIndex === viewedCard.ownerCardIndex
+          ? {
+              ...card,
+              lastActiveAbilityTurnUsed: g.turnNumber,
+            }
+          : card
+      ),
+      statIndex: {
+        ...player.statIndex,
+        sanity: Math.max(0, player.statIndex.sanity - 1),
+      },
+    };
+  });
+
+  const nextOwner = nextPlayers[viewedCard.ownerIndex];
+  const ownerKnowledgeDice =
+    nextOwner?.character?.knowledge?.[nextOwner?.statIndex?.knowledge] ?? g.eventState?.awaiting?.baseDiceCount;
+
+  if (usageState.canQueueForDrawnEvent && !usageState.canApplyNow) {
+    return {
+      game: {
+        ...g,
+        players: nextPlayers,
+        message: `${owner.name} uses ${omenCard.name}, loses 1 Sanity, and will roll Knowledge for the next trait roll.`,
+      },
+      closeViewedCard: true,
+      diceAnimation: null,
+      queueTraitRollOverride: {
+        kind: "substitute-stat",
+        from: "any",
+        to: "knowledge",
+        sourceName: omenCard.name,
+      },
+    };
+  }
+
+  const awaiting = g.eventState?.awaiting;
+  if (!awaiting || awaiting.type !== "roll-ready" || awaiting.rollKind !== "trait-roll" || !awaiting.rollStat) {
+    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
+  }
+
+  return {
+    game: {
+      ...g,
+      players: nextPlayers,
+      eventState: {
+        ...g.eventState,
+        awaiting: {
+          ...awaiting,
+          rollStat: "knowledge",
+          baseDiceCount: ownerKnowledgeDice,
+          prompt: `${getEventRollButtonLabel(ownerKnowledgeDice)} for ${STAT_LABELS.knowledge}.`,
+        },
+      },
+      message: `${owner.name} uses ${omenCard.name}, loses 1 Sanity, and will roll Knowledge instead of ${STAT_LABELS[awaiting.rollStat] || awaiting.rollStat}.`,
     },
     closeViewedCard: true,
     diceAnimation: null,
@@ -1680,6 +1811,9 @@ export function chooseCardActiveAbilityNowState(g, viewedCard, deps = {}) {
   }
   if (action === "substitute-sanity-for-knowledge") {
     return applyMagicCameraNowState(g, viewedCard, deps);
+  }
+  if (action === "substitute-knowledge-for-trait") {
+    return applyBookNowState(g, viewedCard, deps);
   }
   if (action === "teleport-any-tile") {
     return applyMapNowState(g, viewedCard);
