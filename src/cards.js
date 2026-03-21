@@ -129,14 +129,14 @@ export const OMEN_CARDS = [
 ];
 
 export const ITEM_CARDS = [
-  // {
-  //   id: "angels-feather",
-  //   name: "Angel's Feather",
-  //   subtype: "trait-roll",
-  //   isWeapon: false,
-  //   activeAbility:
-  //     "When you are required to make a trait roll, you may instead bury Angel's Feather. If you do, choose a number from 0-8. Use that number as the result of the required roll.",
-  // },
+  {
+    id: "angels-feather",
+    name: "Angel's Feather",
+    subtype: "trait-roll",
+    isWeapon: false,
+    activeAbility:
+      "When you are required to make a trait roll, you may instead bury Angel's Feather. If you do, choose a number from 0-8. Use that number as the result of the required roll.",
+  },
   // {
   //   id: "brooch",
   //   name: "Brooch",
@@ -301,12 +301,12 @@ export const ITEM_CARDS = [
   //   ],
   //   passiveAbility: "Whenever you take Physical damage, gain 1 Sanity.",
   // },
-  {
-    id: "strange-medicine",
-    name: "Strange Medicine",
-    isWeapon: false,
-    activeAbility: "On your turn, you may bury the Strange Medicine. If you do, heal your Might and your Speed.",
-  },
+  // {
+  //   id: "strange-medicine",
+  //   name: "Strange Medicine",
+  //   isWeapon: false,
+  //   activeAbility: "On your turn, you may bury the Strange Medicine. If you do, heal your Might and your Speed.",
+  // },
 ];
 
 const createEventEffect = (type, details = {}) => ({ type, ...details });
@@ -381,27 +381,27 @@ export const EVENT_CARDS = [
   //     }),
   //   ],
   // }),
-  // createEventCard({
-  //   id: "alien-geometry",
-  //   name: "Alien Geometry",
-  //   todo: "Make a Knowledge roll",
-  //   result: "4+: Gain 1 Sanity. 0-3: Lose 1 Speed.",
-  //   steps: [
-  //     createEventStep("trait-roll", {
-  //       stat: "knowledge",
-  //       outcomes: [
-  //         createEventOutcome(
-  //           { roll: { min: 4 } },
-  //           createEventEffect("stat-change", { mode: "gain", stat: "sanity", amount: 1 })
-  //         ),
-  //         createEventOutcome(
-  //           { roll: { max: 3 } },
-  //           createEventEffect("stat-change", { mode: "lose", stat: "speed", amount: 1 })
-  //         ),
-  //       ],
-  //     }),
-  //   ],
-  // }),
+  createEventCard({
+    id: "alien-geometry",
+    name: "Alien Geometry",
+    todo: "Make a Knowledge roll",
+    result: "4+: Gain 1 Sanity. 0-3: Lose 1 Speed.",
+    steps: [
+      createEventStep("trait-roll", {
+        stat: "knowledge",
+        outcomes: [
+          createEventOutcome(
+            { roll: { min: 4 } },
+            createEventEffect("stat-change", { mode: "gain", stat: "sanity", amount: 1 })
+          ),
+          createEventOutcome(
+            { roll: { max: 3 } },
+            createEventEffect("stat-change", { mode: "lose", stat: "speed", amount: 1 })
+          ),
+        ],
+      }),
+    ],
+  }),
   // createEventCard({
   //   id: "a-moment-of-hope",
   //   name: "A Moment of Hope",
@@ -453,35 +453,35 @@ export const EVENT_CARDS = [
   //     }),
   //   ],
   // }),
-  createEventCard({
-    id: "a-secret-passage",
-    name: "A Secret Passage",
-    todo: "Place a secret passage token on your tile. Make a Knowledge roll.",
-    result:
-      "5+: Place another Secret Passage token on any other tile and gain 1 Knowledge. 3-4: Place another Secret Passage token on any Ground Floor tile. 0-2: Place another Secret Passage token on any Basement tile and lose 1 Sanity.",
-    steps: [
-      createEventStep("effect", {
-        effects: [createEventEffect("place-token", { token: "secret-passage", location: "current-tile" })],
-      }),
-      createEventStep("trait-roll", {
-        stat: "knowledge",
-        outcomes: [
-          createEventOutcome({ roll: { min: 5 } }, [
-            createEventEffect("place-token", { token: "secret-passage", location: "any-other-tile" }),
-            createEventEffect("stat-change", { mode: "gain", stat: "knowledge", amount: 1 }),
-          ]),
-          createEventOutcome(
-            { roll: { min: 3, max: 4 } },
-            createEventEffect("place-token", { token: "secret-passage", location: "any-ground-floor-tile" })
-          ),
-          createEventOutcome({ roll: { max: 2 } }, [
-            createEventEffect("place-token", { token: "secret-passage", location: "any-basement-tile" }),
-            createEventEffect("stat-change", { mode: "lose", stat: "sanity", amount: 1 }),
-          ]),
-        ],
-      }),
-    ],
-  }),
+  // createEventCard({
+  //   id: "a-secret-passage",
+  //   name: "A Secret Passage",
+  //   todo: "Place a secret passage token on your tile. Make a Knowledge roll.",
+  //   result:
+  //     "5+: Place another Secret Passage token on any other tile and gain 1 Knowledge. 3-4: Place another Secret Passage token on any Ground Floor tile. 0-2: Place another Secret Passage token on any Basement tile and lose 1 Sanity.",
+  //   steps: [
+  //     createEventStep("effect", {
+  //       effects: [createEventEffect("place-token", { token: "secret-passage", location: "current-tile" })],
+  //     }),
+  //     createEventStep("trait-roll", {
+  //       stat: "knowledge",
+  //       outcomes: [
+  //         createEventOutcome({ roll: { min: 5 } }, [
+  //           createEventEffect("place-token", { token: "secret-passage", location: "any-other-tile" }),
+  //           createEventEffect("stat-change", { mode: "gain", stat: "knowledge", amount: 1 }),
+  //         ]),
+  //         createEventOutcome(
+  //           { roll: { min: 3, max: 4 } },
+  //           createEventEffect("place-token", { token: "secret-passage", location: "any-ground-floor-tile" })
+  //         ),
+  //         createEventOutcome({ roll: { max: 2 } }, [
+  //           createEventEffect("place-token", { token: "secret-passage", location: "any-basement-tile" }),
+  //           createEventEffect("stat-change", { mode: "lose", stat: "sanity", amount: 1 }),
+  //         ]),
+  //       ],
+  //     }),
+  //   ],
+  // }),
   // createEventCard({
   //   id: "a-splash-of-crimson",
   //   name: "A Splash of Crimson",
@@ -795,7 +795,7 @@ export const EVENT_CARDS = [
   //     "4+: Gain 1 Sanity. 2-3: Lose 1 Sanity. 0-1: Lose 1 Sanity and 1 Might. If the Graveyard or Catacombs tiles have been discovered, place your explorer on one of those tiles.",
   //   steps: [
   //     createEventStep("effect", {
-  //       when: { discoveredAny: ["graveyard", "catacombs"] },
+  //       when: { discoveredAny: ["graveyard", "catacombs"] }, // TEST TO SEE IF ALLOWS CHOICE TO PLACE ON GRAVEYARD OR CATACOMBS IF BOTH ARE DISCOVERED
   //       effects: [createEventEffect("move", { destination: "graveyard-or-catacombs" })],
   //     }),
   //     createEventStep("trait-roll", {
@@ -890,7 +890,7 @@ export const EVENT_CARDS = [
   //       options: ["yes", "no"],
   //     }),
   //     createEventStep("effect", {
-  //       when: { choice: { step: "discard-item", equals: "yes" } },
+  //       when: { choice: { step: "discard-item", equals: "yes" } }, // TEST TO SEE IF ALLOWS TO CHOOSE THE ITEM THAT IS DISCARDED
   //       effects: [
   //         createEventEffect("discard-item", { filter: "non-weapon-item" }),
   //         createEventEffect("stat-change", { mode: "gain", stat: "sanity", amount: 1 }),
@@ -1078,7 +1078,7 @@ export const EVENT_CARDS = [
   //             hauntNumber: 33,
   //             book: "traitors-tome",
   //             role: "traitor",
-  //             specialTraitorRule: "hero-with-magic-camera-if-present",
+  //             specialTraitorRule: "hero-with-magic-camera-if-present", // CHECK IF HAVING THE MAGIC CAMERA MAKES YOU TRAITOR
   //           })
   //         ),
   //         createEventOutcome({ roll: { max: 4 } }, createEventEffect("draw-card", { deck: "item", amount: 1 })),
@@ -1112,7 +1112,7 @@ export const EVENT_CARDS = [
   //     createEventStep("choice", {
   //       id: "take-damage",
   //       prompt: "Take 2 Physical damage?",
-  //       options: ["yes", "no"],
+  //       options: ["yes", "no"], // MAYBE MAKE A WAY TO TAKE BACK THE CHOICE TO TAKE DAMAGE IF PLAYER CHOOSES YES BUT THEN DECIDES THEY DON'T WANT TO TAKE DAMAGE AFTER ALL
   //     }),
   //     createEventStep("effect", {
   //       when: { choice: { step: "take-damage", equals: "yes" } },
@@ -1189,7 +1189,7 @@ export const EVENT_CARDS = [
   //       when: { currentFloor: "basement" },
   //       effects: [
   //         createEventEffect("move", { destination: "upper-landing" }),
-  //         createEventEffect("damage", { damageType: "mental", amount: 1 }),
+  //         createEventEffect("damage", { damageType: "mental", amount: 1 }), //HAVE NOT CONFIRMED IF MENTAL DAMAGE IS TAKEN IF ON THE BASEMENT LEVEL
   //       ],
   //     }),
   //   ],
@@ -1220,9 +1220,9 @@ export const EVENT_CARDS = [
   // createEventCard({
   //   id: "the-flowering",
   //   name: "The Flowering",
-  //   todo: "Take one General damage. Place your explorer on any Basement or Ground Floor tile. If the Conservatory has been discovered, you must place your explorer there.",
+  //   todo: "Take one General damage.",
   //   result:
-  //     "Take 1 General damage. If the Conservatory has been discovered, place your explorer there. Otherwise, place your explorer on any Basement or Ground Floor tile.",
+  //     "If the Conservatory has been discovered, place your explorer there. Otherwise, place your explorer on any Basement or Ground Floor tile.",
   //   steps: [
   //     createEventStep("effect", {
   //       effects: [createEventEffect("damage", { damageType: "general", amount: 1 })],
@@ -1248,7 +1248,7 @@ export const EVENT_CARDS = [
   //       id: "make-haunt-roll",
   //       prompt: "Make a haunt roll?",
   //       options: ["yes", "no"],
-  //       onlyIf: { hauntStarted: false },
+  //       onlyIf: { hauntStarted: false },  // CHECK TO SEE IF RESULTS ARE AUTOMATIC IF HAUNT HAS STARTED
   //     }),
   //     createEventStep("effect", {
   //       when: {
@@ -1322,7 +1322,7 @@ export const EVENT_CARDS = [
   //           { roll: { exact: 4 } },
   //           createEventEffect("stat-change", { mode: "lose", stat: "chosen", amount: 1 })
   //         ),
-  //         createEventOutcome({ roll: { max: 3 } }, createEventEffect("stat-change", { mode: "heal", stat: "chosen" })),
+  //         createEventOutcome({ roll: { max: 3 } }, createEventEffect("stat-change", { mode: "heal", stat: "chosen" })), // CHECK TO SEE IF STAT HEALING WORKS
   //       ],
   //     }),
   //   ],

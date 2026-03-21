@@ -193,10 +193,70 @@ function getEventRollButtonLabel(diceCount) {
   return diceCount === 1 ? "Roll Die" : "Roll Dice";
 }
 
+function describeTokenPlacementLocation(location) {
+  switch (location) {
+    case "current-tile":
+      return "on your current tile";
+    case "adjacent-tile":
+      return "on an adjacent tile";
+    case "any-other-tile":
+      return "on any other discovered tile";
+    case "any-ground-floor-tile":
+      return "on any Ground Floor tile";
+    case "any-basement-tile":
+      return "on any Basement tile";
+    case "any-basement-or-ground-floor-tile":
+      return "on any Basement or Ground Floor tile";
+    case "any-upper-or-ground-floor-tile":
+      return "on any Upper or Ground Floor tile";
+    case "any-tile":
+      return "on any discovered tile";
+    default:
+      return "on a valid tile";
+  }
+}
+
+function describeMoveDestination(destination) {
+  switch (destination) {
+    case "adjacent-tile":
+      return "an adjacent tile";
+    case "any-tile-in-current-region":
+      return "any tile in your current region";
+    case "any-tile-in-different-region":
+      return "any tile in a different region";
+    case "any-ground-floor-tile":
+      return "any Ground Floor tile";
+    case "any-basement-tile":
+      return "any Basement tile";
+    case "any-basement-or-ground-floor-tile":
+      return "any Basement or Ground Floor tile";
+    case "any-upper-or-ground-floor-tile":
+      return "any Upper or Ground Floor tile";
+    case "any-tile":
+      return "any discovered tile";
+    case "entrance-hall":
+      return "the Entrance Hall";
+    case "basement-landing":
+      return "the Basement Landing";
+    case "upper-landing":
+      return "the Upper Landing";
+    case "conservatory":
+      return "the Conservatory";
+    case "graveyard-or-catacombs":
+      return "the Graveyard or Catacombs";
+    default:
+      return "a valid destination";
+  }
+}
+
 function describeEventEffect(effect) {
   if (!effect) return "";
 
   if (effect.type === "damage") {
+    if (effect.amountType === "dice" && effect.resolvedAmount === undefined) {
+      const diceCount = effect.dice || 1;
+      return `Take ${diceCount} ${diceCount === 1 ? "die" : "dice"} of ${effect.damageType} damage.`;
+    }
     const amount = effect.resolvedAmount ?? effect.amount ?? 0;
     return `Take ${amount} ${effect.damageType} damage.`;
   }
@@ -210,12 +270,23 @@ function describeEventEffect(effect) {
     return `${verb} ${effect.amount} ${STAT_LABELS[effect.stat]}.`;
   }
   if (effect.type === "stat-choice") {
-    return `${effect.mode === "lose" ? "Lose" : "Gain"} ${effect.amount} in any listed trait.`;
+    const optionLabels = (effect.options || []).map((option) => STAT_LABELS[option] || option);
+    const optionText =
+      optionLabels.length === 0
+        ? "any listed trait"
+        : optionLabels.length === 1
+          ? optionLabels[0]
+          : optionLabels.length === 2
+            ? `${optionLabels[0]} or ${optionLabels[1]}`
+            : `${optionLabels.slice(0, -1).join(", ")}, or ${optionLabels[optionLabels.length - 1]}`;
+    return `${effect.mode === "lose" ? "Lose" : "Gain"} ${effect.amount} ${optionText}.`;
   }
-  if (effect.type === "move") return "Move to a valid destination.";
+  if (effect.type === "move") return `Place your explorer on ${describeMoveDestination(effect.destination)}.`;
   if (effect.type === "draw-card")
     return `Draw ${effect.amount || 1} ${effect.deck} card${(effect.amount || 1) === 1 ? "" : "s"}.`;
-  if (effect.type === "place-token") return `Place a ${effect.token.replace(/-/g, " ")} token.`;
+  if (effect.type === "place-token") {
+    return `Place a ${effect.token.replace(/-/g, " ")} token ${describeTokenPlacementLocation(effect.location)}.`;
+  }
   if (effect.type === "start-haunt") return `Start haunt ${effect.hauntNumber}.`;
   if (effect.type === "discard-item") return "Discard an item.";
   if (effect.type === "bury-item") return "Bury an item.";
@@ -286,7 +357,35 @@ function DiceRow({ dice, modifier = null, rolling = false }) {
   );
 }
 
+function formatEventResultLines(resultText) {
+  if (!resultText) return [];
+
+  const markerRegex = /(\d+\+?:|\d+-\d+:|\d+:|Upper Floor:|Ground Floor:|Basement:)/g;
+  const matches = [...resultText.matchAll(markerRegex)];
+
+  const baseLines =
+    matches.length > 1
+      ? matches
+          .map((match, index) => {
+            const start = match.index;
+            const end = index + 1 < matches.length ? matches[index + 1].index : resultText.length;
+            return resultText.slice(start, end).trim();
+          })
+          .filter(Boolean)
+      : resultText
+          .split(/(?<=\.)\s+/)
+          .map((line) => line.trim())
+          .filter(Boolean);
+
+  return baseLines
+    .flatMap((line) => line.split(/(?<=\.)\s+(?=(?:If|Otherwise|Then)\b)/))
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 function EventCardContent({ card }) {
+  const resultLines = formatEventResultLines(card.result);
+
   return (
     <>
       {card.todo && (
@@ -298,7 +397,11 @@ function EventCardContent({ card }) {
       {card.result && (
         <div className="card-special">
           <div className="card-ability-label">Result</div>
-          {card.result}
+          {resultLines.map((line, index) => (
+            <div key={`event-result-${card.id || card.name || "card"}-${index}`} className="card-description">
+              {line}
+            </div>
+          ))}
         </div>
       )}
     </>
@@ -419,6 +522,7 @@ export default function GameBoard({ players, onQuit }) {
   const [diceAnimation, setDiceAnimation] = useState(null);
   const [expandedSidebarPlayers, setExpandedSidebarPlayers] = useState(() => new Set());
   const [viewedCard, setViewedCard] = useState(null);
+  const [queuedAngelsFeatherTotal, setQueuedAngelsFeatherTotal] = useState(null);
   const boardRef = useRef(null);
 
   // Dice rolling animation
@@ -467,16 +571,7 @@ export default function GameBoard({ players, onQuit }) {
 
           const matchedOutcome = getMatchingOutcome(da.outcomes || [], da.total); // FOR DEV ONLY. DELETE EVENTUALLY!
 
-          const resolvedEffects = (matchedOutcome?.effects || []).map((effect) => {
-            if (effect.type === "damage" && effect.amountType === "dice" && effect.resolvedAmount === undefined) {
-              const resolvedAmount = rollDice(effect.dice || 1).reduce((sum, die) => sum + die, 0);
-              return {
-                ...effect,
-                resolvedAmount,
-              };
-            }
-            return effect;
-          });
+          const resolvedEffects = [...(matchedOutcome?.effects || [])];
 
           return {
             ...g,
@@ -490,10 +585,128 @@ export default function GameBoard({ players, onQuit }) {
                 modifier: da.modifier || null,
                 outcomes: [...(da.outcomes || [])], // FOR DEV ONLY. DELETE EVENTUALLY!
               },
-              summary: `Rolled ${da.total}${da.label ? ` on ${da.label}` : ""}. ${describeEventEffects(resolvedEffects)}`,
+              summary: describeEventEffects(resolvedEffects),
               pendingEffects: resolvedEffects,
             },
             message: `${g.eventState.card.name}: roll resolved.`,
+          };
+        });
+        setDiceAnimation(null);
+      } else if (da.purpose === "event-damage-roll") {
+        setGame((g) => {
+          if (!g.eventState) return g;
+
+          const rolledAmount = da.final.reduce((sum, die) => sum + die, 0);
+          const awaitingEffect = g.eventState.awaiting?.effect;
+          const baseEffect = da.effect || awaitingEffect;
+          if (!baseEffect) return g;
+
+          const resolvedEffect = {
+            ...baseEffect,
+            resolvedAmount: rolledAmount,
+          };
+
+          return {
+            ...g,
+            eventState: {
+              ...g.eventState,
+              awaiting: null,
+              summary: appendEventSummary(
+                g.eventState.summary,
+                `${g.players[g.currentPlayerIndex].name} rolls ${rolledAmount} for ${baseEffect.damageType} damage.`
+              ),
+              pendingEffects: [resolvedEffect, ...(g.eventState.pendingEffects || [])],
+            },
+            message: `${g.eventState.card.name}: damage roll resolved.`,
+          };
+        });
+        setDiceAnimation(null);
+      } else if (da.purpose === "event-damage-sequence") {
+        setGame((g) => {
+          const awaiting = g.eventState?.awaiting;
+          if (!g.eventState || awaiting?.type !== "event-damage-sequence-rolling") return g;
+
+          const rolledAmount = da.final.reduce((sum, die) => sum + die, 0);
+          const currentEffect = awaiting.effects?.[awaiting.currentIndex];
+          if (!currentEffect) return g;
+
+          const resolvedEffect = {
+            ...currentEffect,
+            resolvedAmount: rolledAmount,
+            rolledDice: da.final,
+          };
+          const nextResults = [...(awaiting.results || []), resolvedEffect];
+          const hasMoreRolls = awaiting.currentIndex + 1 < (awaiting.effects?.length || 0);
+
+          return {
+            ...g,
+            eventState: {
+              ...g.eventState,
+              summary: appendEventSummary(
+                g.eventState.summary,
+                `${g.players[g.currentPlayerIndex].name} rolls ${rolledAmount} for ${currentEffect.damageType} damage.`
+              ),
+              awaiting: hasMoreRolls
+                ? {
+                    ...awaiting,
+                    type: "event-damage-sequence-ready",
+                    currentIndex: awaiting.currentIndex + 1,
+                    results: nextResults,
+                  }
+                : {
+                    ...awaiting,
+                    type: "event-damage-sequence-complete",
+                    results: nextResults,
+                  },
+            },
+            message: hasMoreRolls
+              ? `${g.eventState.card.name}: rolling next damage die.`
+              : `${g.eventState.card.name}: damage rolls resolved.`,
+          };
+        });
+        setDiceAnimation(null);
+      } else if (da.purpose === "event-trait-sequence-roll") {
+        setGame((g) => {
+          const awaiting = g.eventState?.awaiting;
+          if (!g.eventState || awaiting?.type !== "trait-roll-sequence-rolling") return g;
+
+          const currentStat = awaiting.stats?.[awaiting.currentIndex];
+          if (!currentStat) return g;
+
+          const failed = da.total <= 1;
+          const nextPlayers = failed ? applyStatChange(g.players, g.currentPlayerIndex, currentStat, -1) : g.players;
+          const nextResults = [
+            ...(awaiting.results || []),
+            {
+              stat: currentStat,
+              dice: da.final,
+              total: da.total,
+              modifier: da.modifier || null,
+              failed,
+            },
+          ];
+          const hasMoreRolls = awaiting.currentIndex + 1 < (awaiting.stats?.length || 0);
+
+          return {
+            ...g,
+            players: nextPlayers,
+            eventState: {
+              ...g.eventState,
+              awaiting: hasMoreRolls
+                ? {
+                    ...awaiting,
+                    currentIndex: awaiting.currentIndex + 1,
+                    results: nextResults,
+                  }
+                : {
+                    ...awaiting,
+                    type: "trait-roll-sequence-complete",
+                    results: nextResults,
+                  },
+            },
+            message: hasMoreRolls
+              ? `${g.eventState.card.name}: rolling next trait.`
+              : `${g.eventState.card.name}: trait sequence complete.`,
           };
         });
         setDiceAnimation(null);
@@ -700,6 +913,179 @@ export default function GameBoard({ players, onQuit }) {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.eventState?.awaiting, diceAnimation]);
+
+  useEffect(() => {
+    const awaiting = game.eventState?.awaiting;
+    if (!awaiting || awaiting.type !== "event-damage-roll-ready") return;
+    if (diceAnimation) return;
+
+    const diceCount = awaiting.effect?.dice || 1;
+    const final = rollDice(diceCount);
+
+    setGame((g) => {
+      if (g.eventState?.awaiting?.type !== "event-damage-roll-ready") return g;
+      return {
+        ...g,
+        eventState: {
+          ...g.eventState,
+          awaiting: {
+            ...g.eventState.awaiting,
+            type: "event-damage-rolling",
+          },
+        },
+      };
+    });
+
+    setDiceAnimation({
+      purpose: "event-damage-roll",
+      final,
+      display: Array.from({ length: diceCount }, () => Math.floor(Math.random() * 3)),
+      settled: false,
+      effect: awaiting.effect,
+      label: `${diceCount} damage die${diceCount === 1 ? "" : "s"}`,
+      modifier: null,
+    });
+  }, [game.eventState?.awaiting, diceAnimation]);
+
+  useEffect(() => {
+    const awaiting = game.eventState?.awaiting;
+    if (!awaiting || awaiting.type !== "event-damage-sequence-ready") return;
+    if (diceAnimation) return;
+
+    const effect = awaiting.effects?.[awaiting.currentIndex];
+    if (!effect) return;
+
+    const diceCount = effect.dice || 1;
+    const final = rollDice(diceCount);
+
+    setGame((g) => {
+      if (g.eventState?.awaiting?.type !== "event-damage-sequence-ready") return g;
+      return {
+        ...g,
+        eventState: {
+          ...g.eventState,
+          awaiting: {
+            ...g.eventState.awaiting,
+            type: "event-damage-sequence-rolling",
+          },
+        },
+      };
+    });
+
+    setDiceAnimation({
+      purpose: "event-damage-sequence",
+      final,
+      display: Array.from({ length: diceCount }, () => Math.floor(Math.random() * 3)),
+      settled: false,
+      effect,
+      label: `${diceCount} damage die${diceCount === 1 ? "" : "s"}`,
+      modifier: null,
+    });
+  }, [game.eventState?.awaiting, diceAnimation]);
+
+  useEffect(() => {
+    const awaiting = game.eventState?.awaiting;
+    if (!awaiting || awaiting.type !== "trait-roll-sequence-rolling") return;
+    if (diceAnimation) return;
+
+    const shouldUseOverride =
+      awaiting.overrideTotal !== undefined &&
+      awaiting.overrideTotal !== null &&
+      awaiting.currentIndex === 0 &&
+      (awaiting.results?.length || 0) === 0;
+
+    if (shouldUseOverride) {
+      const forcedTotal = Math.max(0, Math.min(8, awaiting.overrideTotal));
+
+      setGame((g) => {
+        const sequenceAwaiting = g.eventState?.awaiting;
+        if (!sequenceAwaiting || sequenceAwaiting.type !== "trait-roll-sequence-rolling") return g;
+        if (sequenceAwaiting.currentIndex !== 0 || (sequenceAwaiting.results?.length || 0) > 0) return g;
+
+        const currentStat = sequenceAwaiting.stats?.[0];
+        if (!currentStat) return g;
+
+        const failed = forcedTotal <= 1;
+        const nextPlayers = failed ? applyStatChange(g.players, g.currentPlayerIndex, currentStat, -1) : g.players;
+        const nextResults = [
+          ...(sequenceAwaiting.results || []),
+          {
+            stat: currentStat,
+            dice: [forcedTotal],
+            total: forcedTotal,
+            modifier: null,
+            failed,
+          },
+        ];
+        const hasMoreRolls = 1 < (sequenceAwaiting.stats?.length || 0);
+
+        return {
+          ...g,
+          players: nextPlayers,
+          eventState: {
+            ...g.eventState,
+            awaiting: hasMoreRolls
+              ? {
+                  ...sequenceAwaiting,
+                  currentIndex: 1,
+                  results: nextResults,
+                  overrideTotal: undefined,
+                }
+              : {
+                  ...sequenceAwaiting,
+                  type: "trait-roll-sequence-complete",
+                  results: nextResults,
+                  overrideTotal: undefined,
+                },
+          },
+          message: hasMoreRolls
+            ? `${g.eventState.card.name}: rolling next trait.`
+            : `${g.eventState.card.name}: trait sequence complete.`,
+        };
+      });
+
+      return;
+    }
+
+    const stat = awaiting.stats?.[awaiting.currentIndex];
+    if (!stat) return;
+
+    const player = game.players[game.currentPlayerIndex];
+    const baseDiceCount = player.character[stat][player.statIndex[stat]];
+    const roll = resolveTraitRoll(player, {
+      stat,
+      baseDiceCount,
+      context: "event",
+      board: game.board,
+    });
+
+    setDiceAnimation({
+      purpose: "event-trait-sequence-roll",
+      final: roll.dice,
+      display: Array.from({ length: roll.dice.length }, () => Math.floor(Math.random() * 3)),
+      settled: false,
+      total: roll.total,
+      stat,
+      modifier: roll.modifier,
+    });
+  }, [game.eventState?.awaiting, diceAnimation, game.board, game.currentPlayerIndex, game.players]);
+
+  // Auto-close event modal when an event reaches an inert state with nothing left to resolve.
+  useEffect(() => {
+    const eventState = game.eventState;
+    if (!eventState) return;
+    if (eventState.awaiting || eventState.summary || eventState.lastRoll) return;
+    if ((eventState.pendingEffects || []).length > 0) return;
+
+    setGame((g) => {
+      const currentEventState = g.eventState;
+      if (!currentEventState) return g;
+      if (currentEventState.awaiting || currentEventState.summary || currentEventState.lastRoll) return g;
+      if ((currentEventState.pendingEffects || []).length > 0) return g;
+
+      return finalizeEventState(g, g.message || `${currentEventState.card.name} resolved.`).game;
+    });
+  }, [game.eventState, game.message]);
 
   const currentPlayer = game.players[game.currentPlayerIndex];
   const floorTiles = game.board[cameraFloor] || [];
@@ -1345,9 +1731,10 @@ export default function GameBoard({ players, onQuit }) {
 
   // Dismiss drawn card and continue
   function handleDismissCard(options = {}) {
-    const { autoRollIfReady = false } = options;
+    const { autoRollIfReady = false, initialEventChoice = null } = options;
     let nextCameraFloor = null;
     let nextDiceAnimation = null;
+    let shouldClearQueuedAngelsFeather = false;
     setGame((g) => {
       const card = g.drawnCard;
 
@@ -1397,10 +1784,73 @@ export default function GameBoard({ players, onQuit }) {
         let nextState = result.game;
         nextCameraFloor = result.cameraFloor || null;
 
+        if (initialEventChoice !== null && nextState.eventState?.awaiting?.type === "choice") {
+          const choiceStepId = nextState.eventState.awaiting.stepId;
+          const choiceApplied = {
+            ...nextState,
+            eventState: {
+              ...nextState.eventState,
+              awaiting: null,
+              context: {
+                ...nextState.eventState.context,
+                choices: {
+                  ...nextState.eventState.context.choices,
+                  [choiceStepId]: initialEventChoice,
+                },
+              },
+            },
+          };
+          const choiceResult = advanceEventResolution(choiceApplied);
+          nextState = choiceResult.game;
+          nextCameraFloor = choiceResult.cameraFloor || nextCameraFloor;
+        }
+
+        if (queuedAngelsFeatherTotal !== null) {
+          if (
+            nextState.eventState?.awaiting?.type === "roll-ready" &&
+            nextState.eventState.awaiting.rollKind === "trait-roll"
+          ) {
+            nextState = {
+              ...nextState,
+              eventState: {
+                ...nextState.eventState,
+                awaiting: {
+                  ...nextState.eventState.awaiting,
+                  overrideTotal: queuedAngelsFeatherTotal,
+                },
+              },
+            };
+          } else if (nextState.eventState?.awaiting?.type === "trait-roll-sequence-ready") {
+            nextState = {
+              ...nextState,
+              eventState: {
+                ...nextState.eventState,
+                awaiting: {
+                  ...nextState.eventState.awaiting,
+                  overrideTotal: queuedAngelsFeatherTotal,
+                },
+              },
+            };
+          }
+
+          shouldClearQueuedAngelsFeather = true;
+        }
+
         if (autoRollIfReady && nextState.eventState?.awaiting?.type === "roll-ready") {
           const rollReady = resolveRollReadyAwaiting(nextState, nextState.eventState.awaiting);
           nextState = rollReady.game;
           nextDiceAnimation = rollReady.animation;
+        } else if (autoRollIfReady && nextState.eventState?.awaiting?.type === "trait-roll-sequence-ready") {
+          nextState = {
+            ...nextState,
+            eventState: {
+              ...nextState.eventState,
+              awaiting: {
+                ...nextState.eventState.awaiting,
+                type: "trait-roll-sequence-rolling",
+              },
+            },
+          };
         }
 
         return nextState;
@@ -1428,6 +1878,9 @@ export default function GameBoard({ players, onQuit }) {
     }
     if (nextDiceAnimation) {
       setDiceAnimation(nextDiceAnimation);
+    }
+    if (shouldClearQueuedAngelsFeather) {
+      setQueuedAngelsFeatherTotal(null);
     }
   }
 
@@ -1492,6 +1945,66 @@ export default function GameBoard({ players, onQuit }) {
       const connectedMove = getConnectedMoveTarget(game.board, currentTile, game.movePath);
       return connectedMove?.targetFloor || prev;
     });
+  }
+
+  function handleUseSecretPassage(target) {
+    setGame((g) => {
+      const player = g.players[g.currentPlayerIndex];
+      if (g.turnPhase !== "move") return g;
+
+      const currentTile = g.board[player.floor]?.find((tile) => tile.x === player.x && tile.y === player.y);
+      const isOnSecretPassage = (currentTile?.tokens || []).some((token) => token.type === "secret-passage");
+      if (!isOnSecretPassage) return g;
+
+      const destinationTile = getTileAtPosition(g.board, target.x, target.y, target.floor);
+      const destinationHasPassage = (destinationTile?.tokens || []).some((token) => token.type === "secret-passage");
+      if (!destinationTile || !destinationHasPassage) return g;
+
+      const path = g.movePath || [];
+      const previousStep = path.length >= 2 ? path[path.length - 2] : null;
+      const isBacktrack =
+        previousStep &&
+        previousStep.x === target.x &&
+        previousStep.y === target.y &&
+        previousStep.floor === target.floor;
+
+      if (isBacktrack) {
+        const lastStep = path[path.length - 1];
+        const refundedMoves = player.movesLeft + (lastStep?.cost ?? 1);
+        const updatedPlayers = g.players.map((current, index) =>
+          index === g.currentPlayerIndex
+            ? { ...current, x: target.x, y: target.y, floor: target.floor, movesLeft: refundedMoves }
+            : current
+        );
+
+        return {
+          ...g,
+          players: updatedPlayers,
+          movePath: path.slice(0, -1),
+          message: `${player.name} backtracks through the Secret Passage to ${destinationTile.name} — ${refundedMoves} move${refundedMoves !== 1 ? "s" : ""} left`,
+        };
+      }
+
+      if (player.movesLeft < 1) return g;
+
+      const movesLeft = player.movesLeft - 1;
+      const updatedPlayers = g.players.map((current, index) =>
+        index === g.currentPlayerIndex
+          ? { ...current, x: target.x, y: target.y, floor: target.floor, movesLeft }
+          : current
+      );
+
+      return {
+        ...g,
+        players: updatedPlayers,
+        movePath: [...g.movePath, { x: target.x, y: target.y, floor: target.floor, cost: 1 }],
+        message:
+          movesLeft > 0
+            ? `${player.name} uses a Secret Passage to ${destinationTile.name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`
+            : `${player.name} uses a Secret Passage to ${destinationTile.name} — no moves left`,
+      };
+    });
+    setCameraFloor(target.floor);
   }
 
   // End turn
@@ -1634,13 +2147,17 @@ export default function GameBoard({ players, onQuit }) {
     };
   }
 
-  function applyDamageAllocation(players, playerIndex, allocation) {
+  function applyDamageAllocation(players, playerIndex, allocation, adjustmentMode = "decrease") {
     return players.map((pl, i) => {
       if (i !== playerIndex) return pl;
       const newStatIndex = { ...pl.statIndex };
       for (const [stat, amount] of Object.entries(allocation)) {
         if (!amount) continue;
-        newStatIndex[stat] = Math.max(0, newStatIndex[stat] - amount);
+        const maxIndex = pl.character[stat].length - 1;
+        newStatIndex[stat] =
+          adjustmentMode === "increase"
+            ? Math.min(maxIndex, newStatIndex[stat] + amount)
+            : Math.max(0, newStatIndex[stat] - amount);
       }
 
       const isAlive = Object.values(newStatIndex).every((value) => value > 0);
@@ -1782,48 +2299,59 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function getInitialEventPrimaryAction(g, card) {
-    const tempEventState = {
-      card,
-      stepIndex: 0,
-      context: {
-        choices: {},
-        selectedStats: {},
+    const simulatedEvent = {
+      ...g,
+      drawnCard: null,
+      turnPhase: "event",
+      eventState: {
+        card,
+        stepIndex: 0,
+        context: {
+          choices: {},
+          selectedStats: {},
+        },
+        pendingEffects: [],
+        awaiting: null,
+        summary: null,
+        lastRoll: null,
       },
     };
 
-    const steps = card.steps || [];
-    let stepIndex = 0;
-    while (stepIndex < steps.length) {
-      const step = steps[stepIndex];
-      if (matchesEventCondition(step.onlyIf || step.when, g, tempEventState)) {
-        if (step.kind === "trait-roll" && step.stat) {
-          const player = g.players[g.currentPlayerIndex];
-          const baseDiceCount = player.character[step.stat][player.statIndex[step.stat]];
-          return {
-            label: getEventRollButtonLabel(baseDiceCount),
-            autoRoll: true,
-          };
-        }
+    const result = advanceEventResolution(simulatedEvent);
+    const awaiting = result.game.eventState?.awaiting;
 
-        if (step.kind === "dice-roll" || step.kind === "haunt-roll") {
-          const diceCount = step.kind === "haunt-roll" ? g.omenCount : step.dice || 0;
-          return {
-            label: getEventRollButtonLabel(diceCount),
-            autoRoll: true,
-          };
-        }
+    if (awaiting?.type === "roll-ready") {
+      return {
+        type: "roll",
+        label: getEventRollButtonLabel(awaiting.baseDiceCount || 0),
+        autoRoll: true,
+        isTraitRoll: awaiting.rollKind === "trait-roll",
+      };
+    }
 
-        return {
-          label: "Continue",
-          autoRoll: false,
-        };
-      }
-      stepIndex += 1;
+    if (awaiting?.type === "trait-roll-sequence-ready") {
+      return {
+        type: "roll",
+        label: "Roll",
+        autoRoll: true,
+        isTraitRoll: true,
+      };
+    }
+
+    if (awaiting?.type === "choice" && Array.isArray(awaiting.options) && awaiting.options.length > 0) {
+      return {
+        type: "choice",
+        options: awaiting.options,
+        prompt: awaiting.prompt || "Choose an option.",
+        autoRoll: false,
+      };
     }
 
     return {
+      type: "continue",
       label: "Continue",
       autoRoll: false,
+      isTraitRoll: false,
     };
   }
 
@@ -1831,6 +2359,33 @@ export default function GameBoard({ players, onQuit }) {
     const currentPlayerState = g.players[g.currentPlayerIndex];
 
     if (awaiting.rollKind === "trait-roll") {
+      if (awaiting.overrideTotal !== undefined && awaiting.overrideTotal !== null) {
+        const forcedTotal = Math.max(0, Math.min(8, awaiting.overrideTotal));
+        const matchedOutcome = getMatchingOutcome(awaiting.outcomes || [], forcedTotal);
+        const resolvedEffects = [...(matchedOutcome?.effects || [])];
+
+        return {
+          game: {
+            ...g,
+            eventState: {
+              ...g.eventState,
+              awaiting: null,
+              lastRoll: {
+                label: STAT_LABELS[awaiting.rollStat],
+                dice: [forcedTotal],
+                total: forcedTotal,
+                modifier: null,
+                outcomes: [...(awaiting.outcomes || [])], // FOR DEV ONLY. DELETE EVENTUALLY!
+              },
+              summary: describeEventEffects(resolvedEffects),
+              pendingEffects: resolvedEffects,
+            },
+            message: `${g.eventState.card.name}: roll set to ${forcedTotal} by Angel's Feather.`,
+          },
+          animation: null,
+        };
+      }
+
       const roll = resolveTraitRoll(currentPlayerState, {
         stat: awaiting.rollStat,
         baseDiceCount: awaiting.baseDiceCount,
@@ -1956,6 +2511,33 @@ export default function GameBoard({ players, onQuit }) {
     }
 
     if (effect.type === "stat-choice") {
+      if (effect.mode === "gain") {
+        return {
+          game: {
+            ...g,
+            damageChoice: {
+              source: "event-stat-choice",
+              effect,
+              originalDamageType: "general",
+              damageType: "general",
+              adjustmentMode: "increase",
+              amount: effect.amount || 1,
+              allowedStats: [...(effect.options || [])],
+              allocation: Object.fromEntries((effect.options || []).map((stat) => [stat, 0])),
+              playerName: player.name,
+              canConvertToGeneral: false,
+              conversionSourceNames: [],
+              postDamageEffects: [],
+            },
+            eventState: {
+              ...eventState,
+              awaiting: null,
+            },
+            turnPhase: "event",
+          },
+        };
+      }
+
       return {
         game: {
           ...g,
@@ -2103,7 +2685,7 @@ export default function GameBoard({ players, onQuit }) {
             ...eventState,
             awaiting: {
               type: "tile-choice",
-              prompt: `Choose where to place the ${effect.token.replace(/-/g, " ")} token.`,
+              prompt: `Choose where to place the ${effect.token.replace(/-/g, " ")} token ${describeTokenPlacementLocation(effect.location)}.`,
               effect,
               selectedOptionId: null,
               options: options.map(({ tile, floor }) => ({
@@ -2142,6 +2724,22 @@ export default function GameBoard({ players, onQuit }) {
     }
 
     if (effect.type === "damage") {
+      if (effect.amountType === "dice" && effect.resolvedAmount === undefined) {
+        return {
+          game: {
+            ...g,
+            eventState: {
+              ...eventState,
+              awaiting: {
+                type: "event-damage-roll-ready",
+                effect,
+              },
+            },
+            turnPhase: "event",
+          },
+        };
+      }
+
       const rolledDamage =
         effect.resolvedAmount ??
         (effect.amountType === "dice" ? rollDice(effect.dice || 1).reduce((sum, die) => sum + die, 0) : null);
@@ -2220,6 +2818,33 @@ export default function GameBoard({ players, onQuit }) {
 
     while (eventState) {
       if (eventState.pendingEffects?.length > 0) {
+        const sequenceEffects = [];
+        let queuedRemainingEffects = [...eventState.pendingEffects];
+        while (
+          queuedRemainingEffects[0]?.type === "damage" &&
+          queuedRemainingEffects[0]?.amountType === "dice" &&
+          queuedRemainingEffects[0]?.resolvedAmount === undefined
+        ) {
+          sequenceEffects.push(queuedRemainingEffects.shift());
+        }
+
+        if (sequenceEffects.length > 0) {
+          nextGame = {
+            ...nextGame,
+            eventState: {
+              ...eventState,
+              pendingEffects: queuedRemainingEffects,
+              awaiting: {
+                type: "event-damage-sequence-ready",
+                effects: sequenceEffects,
+                currentIndex: 0,
+                results: [],
+              },
+            },
+          };
+          return { game: nextGame };
+        }
+
         const [currentEffect, ...remainingEffects] = eventState.pendingEffects;
         nextGame = {
           ...nextGame,
@@ -2233,6 +2858,22 @@ export default function GameBoard({ players, onQuit }) {
         eventState = nextGame.eventState;
 
         if (effectResult.cameraFloor) {
+          const nextEventState = nextGame.eventState;
+          const eventSteps = nextEventState?.card?.steps || [];
+          const isEventInertAfterMove =
+            !!nextEventState &&
+            !nextEventState.awaiting &&
+            (!nextEventState.pendingEffects || nextEventState.pendingEffects.length === 0) &&
+            (nextEventState.stepIndex || 0) >= eventSteps.length;
+
+          if (isEventInertAfterMove) {
+            const finalized = finalizeEventState(
+              nextGame,
+              nextEventState.summary || `${nextEventState.card.name} resolved.`
+            );
+            return { game: finalized.game, cameraFloor: effectResult.cameraFloor };
+          }
+
           return { game: nextGame, cameraFloor: effectResult.cameraFloor };
         }
 
@@ -2360,45 +3001,22 @@ export default function GameBoard({ players, onQuit }) {
       }
 
       if (step.kind === "trait-roll-sequence") {
-        let updatedPlayers = nextGame.players;
-        const rollSummaries = [];
-        const failedStats = [];
-        let allSucceeded = true;
-
-        for (const stat of step.stats || []) {
-          const currentPlayerState = updatedPlayers[nextGame.currentPlayerIndex];
-          const baseDiceCount = currentPlayerState.character[stat][currentPlayerState.statIndex[stat]];
-          const roll = resolveTraitRoll(currentPlayerState, {
-            stat,
-            baseDiceCount,
-            context: "event",
-            board: nextGame.board,
-          });
-
-          rollSummaries.push(`${STAT_LABELS[stat]} ${roll.total}`);
-          if (roll.total <= 1) {
-            failedStats.push(stat);
-            updatedPlayers = applyStatChange(updatedPlayers, nextGame.currentPlayerIndex, stat, -1);
-            allSucceeded = false;
-          }
-        }
-
-        const rewardOutcome = allSucceeded
-          ? (step.outcomes || []).find((outcome) => outcome.when?.allRolls?.min !== undefined)
-          : null;
-
-        nextGame = {
-          ...nextGame,
-          players: updatedPlayers,
-          eventState: {
-            ...nextEventStateBase,
-            lastRoll: null,
-            summary: `Rolls: ${rollSummaries.join(", ")}.`,
-            pendingEffects: [...(rewardOutcome?.effects || [])],
+        return {
+          game: {
+            ...nextGame,
+            eventState: {
+              ...nextEventStateBase,
+              awaiting: {
+                type: "trait-roll-sequence-ready",
+                prompt: "Roll each trait, one at a time.",
+                stats: [...(step.stats || [])],
+                outcomes: [...(step.outcomes || [])],
+                currentIndex: 0,
+                results: [],
+              },
+            },
           },
         };
-        eventState = nextGame.eventState;
-        return { game: nextGame };
       }
 
       nextGame = {
@@ -2419,7 +3037,10 @@ export default function GameBoard({ players, onQuit }) {
       const currentPlayerState = g.players[g.currentPlayerIndex];
       const currentAmount = choice.allocation[stat] || 0;
       const selectedTotal = Object.values(choice.allocation).reduce((sum, value) => sum + value, 0);
-      const maxForStat = currentPlayerState.statIndex[stat];
+      const maxForStat =
+        choice.adjustmentMode === "increase"
+          ? currentPlayerState.character[stat].length - 1 - currentPlayerState.statIndex[stat]
+          : currentPlayerState.statIndex[stat];
 
       if (delta > 0) {
         if (selectedTotal >= choice.amount) return g;
@@ -2498,7 +3119,12 @@ export default function GameBoard({ players, onQuit }) {
       const selectedTotal = Object.values(choice.allocation).reduce((sum, value) => sum + value, 0);
       if (selectedTotal !== choice.amount) return g;
 
-      const damagedPlayers = applyDamageAllocation(g.players, g.currentPlayerIndex, choice.allocation);
+      const damagedPlayers = applyDamageAllocation(
+        g.players,
+        g.currentPlayerIndex,
+        choice.allocation,
+        choice.adjustmentMode
+      );
       const postDamageResult = applyPostDamagePassiveEffects(damagedPlayers, g.currentPlayerIndex, choice);
       const resolvedPlayers = applyTileEffectConsequences(g, postDamageResult.players, choice.effect);
       const baseState = {
@@ -2509,14 +3135,27 @@ export default function GameBoard({ players, onQuit }) {
       };
 
       if (choice.source === "event-effect") {
-        const finalized = finalizeEventState(
-          {
-            ...baseState,
-            eventState: null,
-          },
-          postDamageResult.message || g.message
-        );
-        return finalized.game;
+        const resumed = advanceEventResolution({
+          ...baseState,
+          eventState: g.eventState
+            ? {
+                ...g.eventState,
+                awaiting: null,
+                summary: null,
+                lastRoll: null,
+                pendingEffects: [...(g.eventState.pendingEffects || [])],
+              }
+            : null,
+          message: postDamageResult.message || g.message,
+        });
+        nextCameraFloor = resumed.cameraFloor || null;
+        return resumed.game;
+      }
+
+      if (choice.source === "event-stat-choice") {
+        const resumed = advanceEventResolution(baseState);
+        nextCameraFloor = resumed.cameraFloor || null;
+        return resumed.game;
       }
 
       const nextState = passTurn(baseState);
@@ -2538,6 +3177,42 @@ export default function GameBoard({ players, onQuit }) {
     let nextCameraFloor = null;
     setGame((g) => {
       if (!g.eventState) return g;
+
+      if (g.eventState.awaiting?.type === "trait-roll-sequence-complete") {
+        const results = g.eventState.awaiting.results || [];
+        const allSucceeded = results.every((entry) => !entry.failed);
+        const rewardOutcome = allSucceeded
+          ? (g.eventState.awaiting.outcomes || []).find((outcome) => outcome.when?.allRolls?.min !== undefined)
+          : null;
+
+        const resumed = advanceEventResolution({
+          ...g,
+          eventState: {
+            ...g.eventState,
+            awaiting: null,
+            summary: null,
+            pendingEffects: [...(rewardOutcome?.effects || [])],
+          },
+        });
+        nextCameraFloor = resumed.cameraFloor || null;
+        return resumed.game;
+      }
+
+      if (g.eventState.awaiting?.type === "event-damage-sequence-complete") {
+        const resolvedEffects = g.eventState.awaiting.results || [];
+        const hydratedState = {
+          ...g,
+          eventState: {
+            ...g.eventState,
+            awaiting: null,
+            pendingEffects: [...resolvedEffects, ...(g.eventState.pendingEffects || [])],
+          },
+        };
+        const resumed = advanceEventResolution(hydratedState);
+        nextCameraFloor = resumed.cameraFloor || null;
+        return resumed.game;
+      }
+
       const result = advanceEventResolution({
         ...g,
         eventState: {
@@ -2546,6 +3221,17 @@ export default function GameBoard({ players, onQuit }) {
           lastRoll: null,
         },
       });
+      const pendingEventState = result.game.eventState;
+      if (
+        pendingEventState &&
+        !pendingEventState.awaiting &&
+        (!pendingEventState.pendingEffects || pendingEventState.pendingEffects.length === 0) &&
+        !pendingEventState.summary &&
+        !pendingEventState.lastRoll
+      ) {
+        nextCameraFloor = result.cameraFloor || null;
+        return finalizeEventState(result.game, result.game.message || `${pendingEventState.card.name} resolved.`).game;
+      }
       nextCameraFloor = result.cameraFloor || null;
       return result.game;
     });
@@ -2564,19 +3250,7 @@ export default function GameBoard({ players, onQuit }) {
 
       const nextTotal = Math.max(0, (lastRoll.total || 0) + delta); // FOR DEV ONLY. DELETE EVENTUALLY!
       const matchedOutcome = getMatchingOutcome(lastRoll.outcomes, nextTotal); // FOR DEV ONLY. DELETE EVENTUALLY!
-      const resolvedEffects = (matchedOutcome?.effects || []).map((effect) => {
-        // FOR DEV ONLY. DELETE EVENTUALLY!
-        if (effect.type === "damage" && effect.amountType === "dice" && effect.resolvedAmount === undefined) {
-          // FOR DEV ONLY. DELETE EVENTUALLY!
-          const resolvedAmount = rollDice(effect.dice || 1).reduce((sum, die) => sum + die, 0); // FOR DEV ONLY. DELETE EVENTUALLY!
-          return {
-            // FOR DEV ONLY. DELETE EVENTUALLY!
-            ...effect, // FOR DEV ONLY. DELETE EVENTUALLY!
-            resolvedAmount, // FOR DEV ONLY. DELETE EVENTUALLY!
-          }; // FOR DEV ONLY. DELETE EVENTUALLY!
-        } // FOR DEV ONLY. DELETE EVENTUALLY!
-        return effect; // FOR DEV ONLY. DELETE EVENTUALLY!
-      }); // FOR DEV ONLY. DELETE EVENTUALLY!
+      const resolvedEffects = [...(matchedOutcome?.effects || [])]; // FOR DEV ONLY. DELETE EVENTUALLY!
 
       return {
         // FOR DEV ONLY. DELETE EVENTUALLY!
@@ -2589,7 +3263,7 @@ export default function GameBoard({ players, onQuit }) {
             ...lastRoll, // FOR DEV ONLY. DELETE EVENTUALLY!
             total: nextTotal, // FOR DEV ONLY. DELETE EVENTUALLY!
           }, // FOR DEV ONLY. DELETE EVENTUALLY!
-          summary: `Rolled ${nextTotal}${lastRoll.label ? ` on ${lastRoll.label}` : ""}. ${describeEventEffects(resolvedEffects)}`, // FOR DEV ONLY. DELETE EVENTUALLY!
+          summary: describeEventEffects(resolvedEffects), // FOR DEV ONLY. DELETE EVENTUALLY!
           pendingEffects: resolvedEffects, // FOR DEV ONLY. DELETE EVENTUALLY!
         }, // FOR DEV ONLY. DELETE EVENTUALLY!
         message: `${eventState.card.name}: roll adjusted to ${nextTotal}.`, // FOR DEV ONLY. DELETE EVENTUALLY!
@@ -2605,6 +3279,23 @@ export default function GameBoard({ players, onQuit }) {
       if (rollReady.animation) {
         setDiceAnimation(rollReady.animation);
       }
+      return;
+    }
+
+    if (immediateAwaiting?.type === "trait-roll-sequence-ready") {
+      setGame((g) => {
+        if (g.eventState?.awaiting?.type !== "trait-roll-sequence-ready") return g;
+        return {
+          ...g,
+          eventState: {
+            ...g.eventState,
+            awaiting: {
+              ...g.eventState.awaiting,
+              type: "trait-roll-sequence-rolling",
+            },
+          },
+        };
+      });
       return;
     }
 
@@ -2823,12 +3514,16 @@ export default function GameBoard({ players, onQuit }) {
     return preview;
   }
 
-  function getStatTrackCellClass(index, currentIndex, previewIndex) {
+  function getStatTrackCellClass(index, currentIndex, previewIndex, adjustmentMode = "decrease") {
     if (index === currentIndex && index === previewIndex) {
       return "stat-track-cell stat-track-cell-current";
     }
     if (index === currentIndex) return "stat-track-cell stat-track-cell-current";
-    if (index === previewIndex) return "stat-track-cell stat-track-cell-preview";
+    if (index === previewIndex) {
+      return `stat-track-cell ${
+        adjustmentMode === "increase" ? "stat-track-cell-preview-gain" : "stat-track-cell-preview-loss"
+      }`;
+    }
     if (index < previewIndex) return "stat-track-cell stat-track-cell-spent";
     return "stat-track-cell";
   }
@@ -2985,11 +3680,80 @@ export default function GameBoard({ players, onQuit }) {
     });
   }
 
-  function handleViewOwnedCard(card, ownerName) {
+  function handleViewOwnedCard(card, ownerName, ownerIndex, ownerCollection, ownerCardIndex) {
     setViewedCard({
       ...card,
       ownerName,
+      ownerIndex,
+      ownerCollection,
+      ownerCardIndex,
+      showUseNowPicker: false,
     });
+  }
+
+  function handleUseAngelsFeatherNow() {
+    setViewedCard((card) => {
+      if (!card || card.id !== "angels-feather") return card;
+      return {
+        ...card,
+        showUseNowPicker: true,
+      };
+    });
+  }
+
+  function handleChooseAngelsFeatherValue(total) {
+    const awaiting = game.eventState?.awaiting;
+    const canApplyNow =
+      (awaiting?.type === "roll-ready" && awaiting.rollKind === "trait-roll") ||
+      awaiting?.type === "trait-roll-sequence-ready";
+    const canQueueForDrawnEvent =
+      game.drawnCard?.type === "event" &&
+      drawnEventPrimaryAction?.type === "roll" &&
+      drawnEventPrimaryAction?.isTraitRoll;
+
+    setGame((g) => {
+      if (!viewedCard) return g;
+      if (viewedCard.id !== "angels-feather") return g;
+      if (viewedCard.ownerCollection !== "inventory") return g;
+      if (viewedCard.ownerIndex !== g.currentPlayerIndex) return g;
+      if (!canApplyNow && !canQueueForDrawnEvent) return g;
+
+      const owner = g.players[viewedCard.ownerIndex];
+      const inventoryCard = owner?.inventory?.[viewedCard.ownerCardIndex];
+      if (!inventoryCard || inventoryCard.id !== "angels-feather") return g;
+
+      const nextPlayers = g.players.map((player, index) => {
+        if (index !== viewedCard.ownerIndex) return player;
+        return {
+          ...player,
+          inventory: player.inventory.filter((_, cardIndex) => cardIndex !== viewedCard.ownerCardIndex),
+        };
+      });
+
+      return {
+        ...g,
+        players: nextPlayers,
+        eventState:
+          canApplyNow && g.eventState
+            ? {
+                ...g.eventState,
+                awaiting: {
+                  ...g.eventState.awaiting,
+                  overrideTotal: total,
+                },
+              }
+            : g.eventState,
+        message: `${owner.name} buries Angel's Feather and sets this roll to ${total}.`,
+      };
+    });
+
+    if (canQueueForDrawnEvent && !canApplyNow) {
+      setQueuedAngelsFeatherTotal(total);
+    } else {
+      setQueuedAngelsFeatherTotal(null);
+    }
+
+    setViewedCard(null);
   }
 
   function handleCloseViewedCard() {
@@ -3061,6 +3825,38 @@ export default function GameBoard({ players, onQuit }) {
     currentTileObj?.id === "mystic-elevator" &&
     game.mysticElevatorReady &&
     !game.mysticElevatorUsed;
+  const secretPassageTargets =
+    game.turnPhase === "move" && !game.pendingExplore && !game.pendingSpecialPlacement && !game.tileEffect
+      ? Object.entries(game.board)
+          .flatMap(([floor, tiles]) =>
+            tiles
+              .filter((tile) => (tile.tokens || []).some((token) => token.type === "secret-passage"))
+              .map((tile) => ({
+                floor,
+                x: tile.x,
+                y: tile.y,
+                name: tile.name,
+              }))
+          )
+          .filter(
+            (tile) => !(tile.floor === currentPlayer.floor && tile.x === currentPlayer.x && tile.y === currentPlayer.y)
+          )
+      : [];
+  const isOnSecretPassageTile = (currentTileObj?.tokens || []).some((token) => token.type === "secret-passage");
+  const canUseSecretPassage = isOnSecretPassageTile && secretPassageTargets.length > 0;
+  const angelsFeatherTraitRollReady =
+    eventState?.awaiting?.type === "roll-ready" &&
+    eventState.awaiting.rollKind === "trait-roll" &&
+    eventState.awaiting.overrideTotal === undefined;
+  const angelsFeatherTraitSequenceReady =
+    eventState?.awaiting?.type === "trait-roll-sequence-ready" && eventState.awaiting.overrideTotal === undefined;
+  const angelsFeatherDrawnEventTraitRollReady =
+    game.drawnCard?.type === "event" &&
+    drawnEventPrimaryAction?.type === "roll" &&
+    drawnEventPrimaryAction?.isTraitRoll &&
+    queuedAngelsFeatherTotal === null;
+  const canUseAngelsFeatherNow =
+    angelsFeatherTraitRollReady || angelsFeatherTraitSequenceReady || angelsFeatherDrawnEventTraitRollReady;
   let stairTarget = null;
   let stairIsBacktrack = false;
   if (game.turnPhase === "move" && !game.pendingExplore) {
@@ -3342,6 +4138,17 @@ export default function GameBoard({ players, onQuit }) {
             Use Elevator
           </button>
         )}
+        {canUseSecretPassage &&
+          secretPassageTargets.map((target) => (
+            <button
+              key={`secret-passage-${target.floor}-${target.x}-${target.y}`}
+              className="btn btn-stairs"
+              onClick={() => handleUseSecretPassage(target)}
+              disabled={currentPlayer.movesLeft < 1}
+            >
+              {`Move to ${target.name} (${target.floor})`}
+            </button>
+          ))}
         {game.turnPhase === "rotate" && (
           <>
             <button className="btn btn-rotate" onClick={() => handleRotateTile(-1)}>
@@ -3431,7 +4238,19 @@ export default function GameBoard({ players, onQuit }) {
                             key={`${p.name}-item-${card.id}-${cardIndex}`}
                             type="button"
                             className="sidebar-card-chip sidebar-card-chip-item"
-                            onClick={() => handleViewOwnedCard(card, p.name)}
+                            onClick={() =>
+                              handleViewOwnedCard(
+                                {
+                                  ...card,
+                                  ownerCollection: "inventory",
+                                  ownerCardIndex: cardIndex,
+                                },
+                                p.name,
+                                i,
+                                "inventory",
+                                cardIndex
+                              )
+                            }
                           >
                             {card.name}
                           </button>
@@ -3453,7 +4272,19 @@ export default function GameBoard({ players, onQuit }) {
                             key={`${p.name}-omen-${card.id}-${cardIndex}`}
                             type="button"
                             className="sidebar-card-chip sidebar-card-chip-omen"
-                            onClick={() => handleViewOwnedCard(card, p.name)}
+                            onClick={() =>
+                              handleViewOwnedCard(
+                                {
+                                  ...card,
+                                  ownerCollection: "omens",
+                                  ownerCardIndex: cardIndex,
+                                },
+                                p.name,
+                                i,
+                                "omens",
+                                cardIndex
+                              )
+                            }
                           >
                             {card.name}
                           </button>
@@ -3481,34 +4312,74 @@ export default function GameBoard({ players, onQuit }) {
             <h2 className="card-name">{game.drawnCard.name}</h2>
             <CardAbilityContent card={game.drawnCard} />
             {game.drawnCard.flavor && <p className="card-flavor">{game.drawnCard.flavor}</p>}
-            <button
-              className="btn btn-primary"
-              onClick={() =>
-                handleDismissCard({
-                  autoRollIfReady: game.drawnCard.type === "event" && drawnEventPrimaryAction?.autoRoll,
-                })
-              }
-            >
-              {game.drawnCard.type === "omen"
-                ? "Roll for Haunt"
-                : game.drawnCard.type === "event"
-                  ? drawnEventPrimaryAction?.label || "Continue"
-                  : "Continue"}
-            </button>
+            {game.drawnCard.type === "event" && drawnEventPrimaryAction?.type === "choice" ? (
+              <>
+                {drawnEventPrimaryAction.prompt && <p className="card-description">{drawnEventPrimaryAction.prompt}</p>}
+                <div className="event-option-list">
+                  {drawnEventPrimaryAction.options.map((option) => (
+                    <button
+                      key={`drawn-event-choice-${option}`}
+                      className="btn btn-primary"
+                      onClick={() =>
+                        handleDismissCard({
+                          initialEventChoice: option,
+                          autoRollIfReady: true,
+                        })
+                      }
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <button
+                className="btn btn-primary"
+                onClick={() =>
+                  handleDismissCard({
+                    autoRollIfReady: game.drawnCard.type === "event" && drawnEventPrimaryAction?.autoRoll,
+                  })
+                }
+              >
+                {game.drawnCard.type === "omen"
+                  ? "Roll for Haunt"
+                  : game.drawnCard.type === "event"
+                    ? drawnEventPrimaryAction?.label || "Continue"
+                    : "Continue"}
+              </button>
+            )}
           </div>
         </div>
       )}
 
       {viewedCard && (
-        <div className="card-overlay" onClick={handleCloseViewedCard}>
-          <div
-            className={`card-modal card-${viewedCard.type} card-viewer`}
-            onClick={(event) => event.stopPropagation()}
-          >
+        <div className="sidebar-card-viewer" role="dialog" aria-label={`${viewedCard.type} details`}>
+          <div className={`card-modal card-${viewedCard.type} card-viewer`}>
             <div className="card-type-label">{viewedCard.type.toUpperCase()}</div>
             <h2 className="card-name">{viewedCard.name}</h2>
             <div className="card-owner-label">Held by {viewedCard.ownerName}</div>
             <CardAbilityContent card={viewedCard} />
+            {viewedCard.id === "angels-feather" &&
+              viewedCard.ownerCollection === "inventory" &&
+              viewedCard.ownerIndex === game.currentPlayerIndex &&
+              canUseAngelsFeatherNow && (
+                <button className="btn btn-primary" onClick={handleUseAngelsFeatherNow}>
+                  Use now
+                </button>
+              )}
+            {viewedCard.id === "angels-feather" && viewedCard.showUseNowPicker && (
+              <div className="event-option-list" style={{ marginTop: "0.75rem" }}>
+                {Array.from({ length: 9 }, (_, value) => (
+                  <button
+                    key={`angels-feather-value-${value}`}
+                    className="btn btn-secondary"
+                    onClick={() => handleChooseAngelsFeatherValue(value)}
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+            )}
             {viewedCard.flavor && <p className="card-flavor">{viewedCard.flavor}</p>}
             <button className="btn btn-primary" onClick={handleCloseViewedCard}>
               Close
@@ -3522,13 +4393,16 @@ export default function GameBoard({ players, onQuit }) {
           <div className="card-modal card-event-resolution">
             <div className="card-type-label">EVENT</div>
             <h2 className="card-name">{eventState.card.name}</h2>
-            {eventState.summary && <p className="card-description">{eventState.summary}</p>}
+            {eventState.summary && !eventState.lastRoll && <p className="card-description">{eventState.summary}</p>}
             {eventState.lastRoll && (
               <>
                 <DiceRow dice={eventState.lastRoll.dice} modifier={eventState.lastRoll.modifier} />
                 <div className="dice-total">
-                  {eventState.lastRoll.label}: {eventState.lastRoll.total}
+                  {/^[0-9]+ dice?$/.test(eventState.lastRoll.label || "")
+                    ? eventState.lastRoll.total
+                    : `${eventState.lastRoll.label}: ${eventState.lastRoll.total}`}
                 </div>
+                {eventState.summary && <p className="card-description">{eventState.summary}</p>}
                 <div className="dev-roll-tools">
                   {" "}
                   {/* FOR DEV ONLY. DELETE EVENTUALLY! */}
@@ -3607,6 +4481,41 @@ export default function GameBoard({ players, onQuit }) {
                 {getEventRollButtonLabel(eventState.awaiting.baseDiceCount || 0)}
               </button>
             )}
+            {eventState.awaiting?.type === "trait-roll-sequence-ready" && (
+              <button className="btn btn-primary" onClick={() => handleEventAwaitingChoice("roll-sequence")}>
+                Roll
+              </button>
+            )}
+            {(eventState.awaiting?.type === "trait-roll-sequence-rolling" ||
+              eventState.awaiting?.type === "trait-roll-sequence-complete") && (
+              <>
+                <div className="event-option-list">
+                  {eventState.awaiting.stats.map((stat, index) => {
+                    const result = eventState.awaiting.results?.[index];
+                    const isRollingNow =
+                      eventState.awaiting.type === "trait-roll-sequence-rolling" &&
+                      eventState.awaiting.currentIndex === index &&
+                      diceAnimation?.purpose === "event-trait-sequence-roll";
+
+                    return (
+                      <div key={`event-trait-sequence-${stat}-${index}`}>
+                        <p className="card-description">{`${STAT_LABELS[stat]} Roll`}</p>
+                        {result?.dice && <DiceRow dice={result.dice} modifier={result.modifier} />}
+                        {isRollingNow && (
+                          <DiceRow dice={diceAnimation.display} modifier={diceAnimation.modifier} rolling />
+                        )}
+                        {result && <p className="card-description">Result: {result.total}</p>}
+                      </div>
+                    );
+                  })}
+                </div>
+                {eventState.awaiting?.type === "trait-roll-sequence-complete" && (
+                  <button className="btn btn-primary" onClick={handleContinueEvent}>
+                    Continue
+                  </button>
+                )}
+              </>
+            )}
             {eventState.awaiting?.type === "rolling" && (
               <>
                 {diceAnimation?.purpose === "event-roll" && (
@@ -3616,6 +4525,39 @@ export default function GameBoard({ players, onQuit }) {
                 {diceAnimation?.settled && (
                   <button className="btn btn-primary" onClick={handleContinueEvent}>
                     Recover
+                  </button>
+                )}
+              </>
+            )}
+            {(eventState.awaiting?.type === "event-damage-sequence-ready" ||
+              eventState.awaiting?.type === "event-damage-sequence-rolling" ||
+              eventState.awaiting?.type === "event-damage-sequence-complete") && (
+              <>
+                <div className="event-option-list">
+                  {eventState.awaiting.effects.map((effect, index) => {
+                    const rolledEffect = eventState.awaiting.results?.[index];
+                    const isRollingNow =
+                      eventState.awaiting.type === "event-damage-sequence-rolling" &&
+                      eventState.awaiting.currentIndex === index &&
+                      diceAnimation?.purpose === "event-damage-sequence";
+
+                    return (
+                      <div key={`event-damage-sequence-${effect.damageType}-${index}`}>
+                        <p className="card-description">
+                          {`${effect.damageType === "physical" ? "Physical" : "Mental"} Damage Roll`}
+                        </p>
+                        {rolledEffect?.rolledDice && <DiceRow dice={rolledEffect.rolledDice} modifier={null} />}
+                        {isRollingNow && <DiceRow dice={diceAnimation.display} modifier={null} rolling />}
+                        {rolledEffect?.resolvedAmount !== undefined && (
+                          <p className="card-description">Result: {rolledEffect.resolvedAmount}</p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {eventState.awaiting?.type === "event-damage-sequence-complete" && (
+                  <button className="btn btn-primary" onClick={handleContinueEvent}>
+                    Okay
                   </button>
                 )}
               </>
@@ -3630,29 +4572,34 @@ export default function GameBoard({ players, onQuit }) {
       )}
 
       {/* Dice roll overlay — animating */}
-      {diceAnimation && !diceAnimation.settled && (
-        <div className="card-overlay">
-          <div
-            className={`card-modal ${diceAnimation.purpose === "haunt" ? "card-haunt-rolling" : "card-tile-rolling"}`}
-          >
-            <div className="card-type-label">
-              {diceAnimation.purpose === "haunt"
-                ? "HAUNT ROLL"
-                : diceAnimation.purpose === "event-roll"
-                  ? "EVENT ROLL"
-                  : diceAnimation.purpose === "mystic-elevator"
-                    ? "MYSTIC ELEVATOR"
-                    : diceAnimation.purpose === "collapsed"
-                      ? "COLLAPSED ROOM"
-                      : diceAnimation.purpose === "collapsed-damage"
-                        ? "COLLAPSED ROOM — DAMAGE"
-                        : "FURNACE ROOM"}
+      {diceAnimation &&
+        !diceAnimation.settled &&
+        diceAnimation.purpose !== "event-damage-sequence" &&
+        diceAnimation.purpose !== "event-trait-sequence-roll" && (
+          <div className="card-overlay">
+            <div
+              className={`card-modal ${diceAnimation.purpose === "haunt" ? "card-haunt-rolling" : "card-tile-rolling"}`}
+            >
+              <div className="card-type-label">
+                {diceAnimation.purpose === "haunt"
+                  ? "HAUNT ROLL"
+                  : diceAnimation.purpose === "event-roll"
+                    ? "EVENT ROLL"
+                    : diceAnimation.purpose === "event-damage-roll"
+                      ? "EVENT DAMAGE ROLL"
+                      : diceAnimation.purpose === "mystic-elevator"
+                        ? "MYSTIC ELEVATOR"
+                        : diceAnimation.purpose === "collapsed"
+                          ? "COLLAPSED ROOM"
+                          : diceAnimation.purpose === "collapsed-damage"
+                            ? "COLLAPSED ROOM — DAMAGE"
+                            : "FURNACE ROOM"}
+              </div>
+              <DiceRow dice={diceAnimation.display} modifier={diceAnimation.modifier} rolling />
+              <h2 className="card-name">Rolling...</h2>
             </div>
-            <DiceRow dice={diceAnimation.display} modifier={diceAnimation.modifier} rolling />
-            <h2 className="card-name">Rolling...</h2>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Haunt roll overlay — settled */}
       {game.hauntRoll && diceAnimation?.settled && diceAnimation.purpose === "haunt" && (
@@ -3712,13 +4659,22 @@ export default function GameBoard({ players, onQuit }) {
       {damageChoice && (
         <div className="card-overlay">
           <div className="card-modal card-damage-choice">
-            <div className="card-type-label">{damageChoice.damageType.toUpperCase()} DAMAGE</div>
-            <h2 className="card-name">Choose where the damage goes</h2>
+            <div className="card-type-label">
+              {damageChoice.adjustmentMode === "increase"
+                ? "STAT GAIN"
+                : `${damageChoice.damageType.toUpperCase()} DAMAGE`}
+            </div>
+            <h2 className="card-name">
+              {damageChoice.adjustmentMode === "increase"
+                ? "Choose where the gain goes"
+                : "Choose where the damage goes"}
+            </h2>
             <p className="card-description">
-              Assign {damageChoice.amount} point{damageChoice.amount === 1 ? "" : "s"} of {damageChoice.damageType}{" "}
-              damage to {damageChoice.playerName}.
+              {damageChoice.adjustmentMode === "increase"
+                ? `Assign ${damageChoice.amount} point${damageChoice.amount === 1 ? "" : "s"} of gain to ${damageChoice.playerName}.`
+                : `Assign ${damageChoice.amount} point${damageChoice.amount === 1 ? "" : "s"} of ${damageChoice.damageType} damage to ${damageChoice.playerName}.`}
             </p>
-            {damageChoice.canConvertToGeneral && (
+            {damageChoice.adjustmentMode !== "increase" && damageChoice.canConvertToGeneral && (
               <div className="damage-conversion-panel">
                 <div className="damage-conversion-copy">
                   {damageChoice.damageType === "general"
@@ -3732,7 +4688,7 @@ export default function GameBoard({ players, onQuit }) {
                 </button>
               </div>
             )}
-            {damageChoice.postDamageEffects.length > 0 && (
+            {damageChoice.adjustmentMode !== "increase" && damageChoice.postDamageEffects.length > 0 && (
               <p className="damage-choice-hint">
                 After taking damage: {describePostDamageEffects(damageChoice.postDamageEffects)}.
               </p>
@@ -3755,8 +4711,10 @@ export default function GameBoard({ players, onQuit }) {
                     ? damageRemaining > 0 && assigned < maxIncrease
                     : damageRemaining > 0 && assigned < currentIndex;
                 const canUndo = assigned > 0;
-                const allocateButtonLabel = damageChoice.adjustmentMode === "increase" ? "+" : "-";
-                const undoButtonLabel = damageChoice.adjustmentMode === "increase" ? "-" : "+";
+                const minusDelta = damageChoice.adjustmentMode === "increase" ? -1 : 1;
+                const plusDelta = damageChoice.adjustmentMode === "increase" ? 1 : -1;
+                const minusEnabled = minusDelta > 0 ? canAllocate : canUndo;
+                const plusEnabled = plusDelta > 0 ? canAllocate : canUndo;
 
                 return (
                   <div key={stat} className="damage-choice-row">
@@ -3768,7 +4726,12 @@ export default function GameBoard({ players, onQuit }) {
                         {currentPlayer.character[stat].map((value, index) => (
                           <div
                             key={`${stat}-${index}`}
-                            className={getStatTrackCellClass(index, currentIndex, previewIndex)}
+                            className={getStatTrackCellClass(
+                              index,
+                              currentIndex,
+                              previewIndex,
+                              damageChoice.adjustmentMode
+                            )}
                           >
                             {value}
                           </div>
@@ -3777,21 +4740,21 @@ export default function GameBoard({ players, onQuit }) {
                     </div>
                     <div className="damage-choice-controls">
                       <button
-                        className="btn btn-primary damage-choice-button"
-                        onClick={() => handleAdjustDamageAllocation(stat, 1)}
-                        disabled={!canAllocate}
-                        aria-label={`${allocateButtonLabel} ${STAT_LABELS[stat]}`}
+                        className="btn btn-secondary damage-choice-button"
+                        onClick={() => handleAdjustDamageAllocation(stat, minusDelta)}
+                        disabled={!minusEnabled}
+                        aria-label={`- ${STAT_LABELS[stat]}`}
                       >
-                        {allocateButtonLabel}
+                        -
                       </button>
                       <div className="damage-choice-count">{assigned}</div>
                       <button
-                        className="btn btn-secondary damage-choice-button"
-                        onClick={() => handleAdjustDamageAllocation(stat, -1)}
-                        disabled={!canUndo}
-                        aria-label={`${undoButtonLabel} ${STAT_LABELS[stat]}`}
+                        className="btn btn-primary damage-choice-button"
+                        onClick={() => handleAdjustDamageAllocation(stat, plusDelta)}
+                        disabled={!plusEnabled}
+                        aria-label={`+ ${STAT_LABELS[stat]}`}
                       >
-                        {undoButtonLabel}
+                        +
                       </button>
                     </div>
                   </div>
@@ -3799,7 +4762,7 @@ export default function GameBoard({ players, onQuit }) {
               })}
             </div>
             <button className="btn btn-primary" onClick={handleConfirmDamageChoice} disabled={damageRemaining !== 0}>
-              Apply damage
+              {damageChoice.adjustmentMode === "increase" ? "Apply gain" : "Apply damage"}
             </button>
           </div>
         </div>

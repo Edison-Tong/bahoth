@@ -136,13 +136,13 @@ export const TILES = [
   //   doors: ["N", "E", "W"],
   //   cardType: "event",
   // },
-  {
-    id: "dining-room",
-    name: "Dining Room",
-    floors: ["ground"],
-    doors: ["N", "E", "S", "W"],
-    cardType: "event",
-  },
+  // {
+  //   id: "dining-room",
+  //   name: "Dining Room",
+  //   floors: ["ground"],
+  //   doors: ["N", "E", "S", "W"],
+  //   cardType: "event",
+  // },
   // {
   //   id: "furnace-room",
   //   name: "Furnace Room",
@@ -161,13 +161,13 @@ export const TILES = [
     description: "Leads to Ballroom",
     connectsTo: "ballroom",
   },
-  // {
-  //   id: "game-room",
-  //   name: "Game Room",
-  //   floors: ["ground", "basement"],
-  //   doors: ["N", "S", "E", "W"],
-  //   cardType: "item",
-  // },
+  {
+    id: "game-room",
+    name: "Game Room",
+    floors: ["ground", "basement"],
+    doors: ["N", "S", "E", "W"],
+    cardType: "item",
+  },
   // {
   //   id: "graveyard",
   //   name: "Graveyard",

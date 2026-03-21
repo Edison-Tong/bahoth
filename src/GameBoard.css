@@ -566,7 +566,7 @@
   background: rgba(26, 18, 16, 0.95);
   border-left: 1px solid var(--border);
   border-radius: 8px 0 0 8px;
-  z-index: 20;
+  z-index: 1101;
   max-height: 80vh;
   overflow-y: auto;
   width: min(320px, 34vw);
@@ -960,6 +960,22 @@
   width: min(360px, calc(100vw - 2rem));
 }
 
+.sidebar-card-viewer {
+  position: fixed;
+  right: calc(min(320px, 34vw) + 18px);
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1150;
+  pointer-events: auto;
+}
+
+.sidebar-card-viewer .card-viewer {
+  width: min(360px, calc(100vw - min(320px, 34vw) - 3rem));
+  max-height: 86vh;
+  overflow-y: auto;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.42);
+}
+
 .card-owner-label {
   margin: -0.45rem 0 1rem;
   font-size: 0.78rem;
@@ -1230,10 +1246,17 @@
   color: #f2e6cd;
 }
 
-.stat-track-cell-preview {
+.stat-track-cell-preview,
+.stat-track-cell-preview-loss {
   border-color: rgba(192, 57, 43, 0.45);
   background: rgba(192, 57, 43, 0.18);
   color: #ffd3ce;
+}
+
+.stat-track-cell-preview-gain {
+  border-color: rgba(59, 164, 112, 0.5);
+  background: rgba(59, 164, 112, 0.2);
+  color: #d8f6e8;
 }
 
 .stat-track-cell-spent {
@@ -1295,6 +1318,21 @@
 @media (max-width: 700px) {
   .player-sidebar {
     width: min(360px, 42vw);
+  }
+
+  .sidebar-card-viewer {
+    right: 0.5rem;
+    left: 0.5rem;
+    top: auto;
+    bottom: 0.5rem;
+    transform: none;
+    display: flex;
+    justify-content: center;
+  }
+
+  .sidebar-card-viewer .card-viewer {
+    width: min(420px, calc(100vw - 1rem));
+    max-height: 60vh;
   }
 
   .card-damage-choice {
