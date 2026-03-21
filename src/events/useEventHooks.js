@@ -356,7 +356,7 @@ export function useDrawnCardHandlers({
   setCameraFloor,
   setDiceAnimation,
   setQueuedAngelsFeatherTotal,
-  queuedAngelsFeatherTotal,
+  getQueuedAngelsFeatherTotal,
   rollDice,
   runAdvanceEventResolution,
   resolveRollReadyAwaiting,
@@ -395,6 +395,7 @@ export function useDrawnCardHandlers({
       }
 
       if (card?.type === "event") {
+        const queuedAngelsFeatherTotal = getQueuedAngelsFeatherTotal?.() ?? null;
         const eventResult = startEventFromDrawnCardState(
           g,
           {

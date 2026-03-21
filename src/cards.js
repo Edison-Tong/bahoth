@@ -129,14 +129,19 @@ export const OMEN_CARDS = [
 ];
 
 export const ITEM_CARDS = [
-  {
-    id: "angels-feather",
-    name: "Angel's Feather",
-    subtype: "trait-roll",
-    isWeapon: false,
-    activeAbility:
-      "When you are required to make a trait roll, you may instead bury Angel's Feather. If you do, choose a number from 0-8. Use that number as the result of the required roll.",
-  },
+  // {
+  //   id: "angels-feather",
+  //   name: "Angel's Feather",
+  //   subtype: "trait-roll",
+  //   isWeapon: false,
+  //   activeAbilityRule: {
+  //     trigger: "trait-roll-required",
+  //     action: "set-trait-roll-total",
+  //     valueSelection: "number-0-8",
+  //   },
+  //   activeAbility:
+  //     "When you are required to make a trait roll, you may instead bury Angel's Feather. If you do, choose a number from 0-8. Use that number as the result of the required roll.",
+  // },
   // {
   //   id: "brooch",
   //   name: "Brooch",
@@ -154,6 +159,7 @@ export const ITEM_CARDS = [
   //   id: "chainsaw",
   //   name: "Chainsaw",
   //   isWeapon: true,
+  //   activeAbilityRule: { trigger: "attack", action: "attack-bonus-die" }, //HAVE NOT TESTED ATTACKS YET
   //   activeAbility: "When you use the Chainsaw to attack, add one die to your attack.",
   // },
   // {
@@ -161,12 +167,14 @@ export const ITEM_CARDS = [
   //   name: "Creepy Doll",
   //   subtype: "trait-roll",
   //   isWeapon: false,
+  //   activeAbilityRule: { trigger: "trait-roll-just-made", action: "reroll-all-trait-dice" },
   //   activeAbility: "Once during your turn, you may reroll all dice on a trait roll you just made. Then lose 1 Sanity.",
   // },
   // {
   //   id: "crossbow",
   //   name: "Crossbow",
   //   isWeapon: true,
+  //   activeAbilityRule: { trigger: "attack", action: "ranged-attack-speed" },
   //   activeAbility:
   //     "When you use the Crossbow to attack, you may attack any character on your tile or an adjacent tile. You and the defender each roll Speed. Roll 1 extra die on the attack. If you lose, you take no damage.",
   // },
@@ -174,16 +182,23 @@ export const ITEM_CARDS = [
   //   id: "dynamite",
   //   name: "Dynamite",
   //   isWeapon: true,
+  //   activeAbilityRule: { trigger: "attack", action: "dynamite-aoe-attack" },
   //   activeAbility:
   //     "You may use Dynamite in place of a regular attack. To do so, bury it and then choose your tile or an adjacent one. Everyone on the chosen tile must make a Speed roll. 4+: Nothing happens. 0-3: Take 4 Physical damage.",
   // },
-  // {
-  //   id: "first-aid-kit",
-  //   name: "First Aid Kit",
-  //   isWeapon: false,
-  //   activeAbility:
-  //     "On your turn, you may bury the First Aid Kit. If you do, heal all of your critical traits. You may also use the First Aid Kit to heal another explorer on your tile.",
-  // },
+  {
+    id: "first-aid-kit",
+    name: "First Aid Kit",
+    isWeapon: false,
+    activeAbilityRule: {
+      trigger: "on-your-turn",
+      action: "heal-stats",
+      target: "critical",
+      consume: "bury-self",
+    },
+    activeAbility:
+      "On your turn, you may bury the First Aid Kit. If you do, heal all of your critical traits. You may also use the First Aid Kit to heal another explorer on your tile.", // HAVEN'T TESTED HEALING ANOTHER CHARACTER YET
+  },
   // {
   //   id: "flashlight",
   //   name: "Flashlight",
@@ -201,6 +216,7 @@ export const ITEM_CARDS = [
   //   id: "gun",
   //   name: "Gun",
   //   isWeapon: true,
+  //   activeAbilityRule: { trigger: "attack", action: "ranged-attack-speed" },
   //   activeAbility:
   //     "When you use the Gun to attack, you may attack any target in line of sight. You and the defender each roll Speed. If you lose, you take no damage.",
   // },
@@ -234,6 +250,7 @@ export const ITEM_CARDS = [
   //   id: "lucky-coin",
   //   name: "Lucky Coin",
   //   isWeapon: false,
+  //   activeAbilityRule: { trigger: "trait-roll-just-made", action: "reroll-blank-trait-dice" },
   //   activeAbility:
   //     "Once during your turn, you may reroll all blank dice on a trait roll you just made. For each blank die on the reroll, take 1 Mental damage.",
   // },
@@ -241,30 +258,35 @@ export const ITEM_CARDS = [
   //   id: "machete",
   //   name: "Machete",
   //   isWeapon: true,
+  //   activeAbilityRule: { trigger: "attack", action: "attack-bonus-total" },
   //   activeAbility: "When you use the Machete to attack, add 1 to the result of your roll.",
   // },
   // {
   //   id: "magic-camera",
   //   name: "Magic Camera",
   //   isWeapon: false,
+  //   activeAbilityRule: { trigger: "trait-roll-required", action: "substitute-sanity-for-knowledge" },
   //   activeAbility: "You may use your Sanity to make Knowledge rolls.",
   // },
   // {
   //   id: "map",
   //   name: "Map",
   //   isWeapon: false,
+  //   activeAbilityRule: { trigger: "on-your-turn", action: "teleport-any-tile" },
   //   activeAbility: "On your turn, you may bury the Map. If you do, place your explorer on any tile.",
   // },
   // {
   //   id: "mirror",
   //   name: "Mirror",
   //   isWeapon: false,
+  //   activeAbilityRule: { trigger: "on-your-turn", action: "heal-knowledge-sanity" },
   //   activeAbility: "On your turn, you may bury the Mirror. If you do, heal your Knowledge and Sanity.",
   // },
   // {
   //   id: "mystical-stopwatch",
   //   name: "Mystical Stopwatch",
   //   isWeapon: false,
+  //   activeAbilityRule: { trigger: "on-your-turn", action: "extra-turn-after-current" },
   //   activeAbility:
   //     "On your turn, you may bury the Mystical Stopwatch. If you do, take another turn after this one. You may only use this ability after the haunt has started.",
   // },
@@ -272,18 +294,21 @@ export const ITEM_CARDS = [
   //   id: "necklace-of-teeth",
   //   name: "Necklace of Teeth",
   //   isWeapon: false,
+  //   activeAbilityRule: { trigger: "on-your-turn", action: "gain-critical-trait" },
   //   activeAbility: "At the end of your turn, you may gain 1 in a critical trait of your choice.",
   // },
   // {
   //   id: "rabbits-foot",
   //   name: "Rabbit's Foot",
   //   isWeapon: false,
+  //   activeAbilityRule: { trigger: "die-just-rolled", action: "reroll-one-die" },
   //   activeAbility: "Once during your turn, you may reroll 1 die that you just rolled.",
   // },
   // {
   //   id: "skeleton-key",
   //   name: "Skeleton Key",
   //   isWeapon: false,
+  //   activeAbilityRule: { trigger: "on-your-turn", action: "move-through-walls" },
   //   activeAbility:
   //     "You may move through walls. Whenever you do so, roll 1 die. If you roll a blank, bury the Skeleton Key. You may not use the Skeleton Key to discover new rooms.",
   // },
@@ -305,6 +330,7 @@ export const ITEM_CARDS = [
   //   id: "strange-medicine",
   //   name: "Strange Medicine",
   //   isWeapon: false,
+  //   activeAbilityRule: { trigger: "on-your-turn", action: "heal-might-speed" },
   //   activeAbility: "On your turn, you may bury the Strange Medicine. If you do, heal your Might and your Speed.",
   // },
 ];
@@ -325,7 +351,125 @@ const createEventCard = ({ steps, tags, ...card }) => ({
   steps,
 });
 
+// FOR TESTING ONLY
+const TEST_ALL_STATS_ADJUST_OPTIONS = ["gain-any", "lose-any"];
+
+const createAllStatsAdjustEffects = () => [
+  createEventStep("effect", {
+    onlyIf: { choice: { step: "all-stats-adjustment", equals: "gain-any" } },
+    effects: [
+      createEventEffect("stat-choice", {
+        mode: "gain",
+        options: ["might", "speed", "knowledge", "sanity"],
+        amountType: "up-to-max",
+      }),
+    ],
+  }),
+  createEventStep("effect", {
+    onlyIf: { choice: { step: "all-stats-adjustment", equals: "lose-any" } },
+    effects: [createEventEffect("damage", { damageType: "general", amountType: "up-to-max" })],
+  }),
+];
+// FOR TESTING ONLY
+
 export const EVENT_CARDS = [
+  createEventCard({
+    id: "test-event", // FOR TESTING ONLY
+    name: "Test Event Sandbox",
+    todo: "Choose a scenario to test.",
+    result:
+      "Pick one branch: Trait roll, Dice roll, Trait sequence, Stat choice, Item choice, Move choice, Token choice, Damage sequence, or All-stats adjust.",
+    steps: [
+      createEventStep("choice", {
+        id: "scenario",
+        prompt: "Choose a test scenario.",
+        options: [
+          "trait-roll",
+          "dice-roll",
+          "trait-roll-sequence",
+          "stat-choice",
+          "item-choice",
+          "tile-choice-move",
+          "tile-choice-token",
+          "damage-sequence",
+          "all-stats-adjust",
+        ],
+      }),
+      createEventStep("choice", {
+        id: "all-stats-adjustment",
+        onlyIf: { choice: { step: "scenario", equals: "all-stats-adjust" } },
+        prompt: "Choose gain/lose amount (0-8).",
+        options: TEST_ALL_STATS_ADJUST_OPTIONS,
+      }),
+      createEventStep("trait-roll", {
+        id: "test-trait-roll",
+        onlyIf: { choice: { step: "scenario", equals: "trait-roll" } },
+        chooseFrom: ["might", "speed", "knowledge", "sanity"],
+        outcomes: [
+          createEventOutcome(
+            { roll: { min: 4 } },
+            createEventEffect("stat-change", { mode: "gain", stat: "chosen", amount: 1 })
+          ),
+          createEventOutcome(
+            { roll: { exact: 3 } },
+            createEventEffect("stat-change", { mode: "lose", stat: "chosen", amount: 1 })
+          ),
+          createEventOutcome({ roll: { max: 2 } }, createEventEffect("damage", { damageType: "general", amount: 1 })),
+        ],
+      }),
+      createEventStep("dice-roll", {
+        onlyIf: { choice: { step: "scenario", equals: "dice-roll" } },
+        dice: 2,
+        outcomes: [
+          createEventOutcome({ roll: { min: 3 } }, createEventEffect("draw-card", { deck: "item", amount: 1 })),
+          createEventOutcome(
+            { roll: { max: 2 } },
+            createEventEffect("damage", { damageType: "mental", amountType: "dice", dice: 1 })
+          ),
+        ],
+      }),
+      createEventStep("trait-roll-sequence", {
+        onlyIf: { choice: { step: "scenario", equals: "trait-roll-sequence" } },
+        stats: ["might", "speed", "sanity", "knowledge"],
+        outcomes: [
+          createEventOutcome(
+            { allRolls: { min: 2 } },
+            createEventEffect("stat-change", { mode: "gain", stat: "sanity", amount: 1 })
+          ),
+        ],
+      }),
+      createEventStep("effect", {
+        onlyIf: { choice: { step: "scenario", equals: "stat-choice" } },
+        effects: [
+          createEventEffect("stat-choice", {
+            mode: "gain",
+            options: ["might", "speed", "knowledge", "sanity"],
+            amount: 2,
+          }),
+        ],
+      }),
+      createEventStep("effect", {
+        onlyIf: { choice: { step: "scenario", equals: "item-choice" } },
+        effects: [createEventEffect("bury-item", { filter: "any-item" })],
+      }),
+      createEventStep("effect", {
+        onlyIf: { choice: { step: "scenario", equals: "tile-choice-move" } },
+        effects: [createEventEffect("move", { destination: "any-tile" })],
+      }),
+      createEventStep("effect", {
+        onlyIf: { choice: { step: "scenario", equals: "tile-choice-token" } },
+        effects: [createEventEffect("place-token", { token: "obstacle", location: "any-other-tile" })],
+      }),
+      createEventStep("effect", {
+        onlyIf: { choice: { step: "scenario", equals: "damage-sequence" } },
+        effects: [
+          createEventEffect("damage", { damageType: "physical", amountType: "dice", dice: 1 }),
+          createEventEffect("damage", { damageType: "mental", amountType: "dice", dice: 1 }),
+        ],
+      }),
+      ...createAllStatsAdjustEffects(),
+    ],
+  }),
   // createEventCard({
   //   id: "a-bite",
   //   name: "A Bite!",
@@ -608,29 +752,29 @@ export const EVENT_CARDS = [
   //     }),
   //   ],
   // }),
-  createEventCard({
-    id: "burning-figure",
-    name: "Burning Figure",
-    todo: "Make a Sanity roll",
-    result:
-      "4+: Gain 1 Sanity. 2-3: Place your explorer on the Entrance Hall. 0-1: Take 1 die of Physical damage and 1 die of Mental damage.",
-    steps: [
-      createEventStep("trait-roll", {
-        stat: "sanity",
-        outcomes: [
-          createEventOutcome(
-            { roll: { min: 4 } },
-            createEventEffect("stat-change", { mode: "gain", stat: "sanity", amount: 1 })
-          ),
-          createEventOutcome({ roll: { min: 2, max: 3 } }, createEventEffect("move", { destination: "entrance-hall" })),
-          createEventOutcome({ roll: { max: 1 } }, [
-            createEventEffect("damage", { damageType: "physical", amountType: "dice", dice: 1 }),
-            createEventEffect("damage", { damageType: "mental", amountType: "dice", dice: 1 }),
-          ]),
-        ],
-      }),
-    ],
-  }),
+  // createEventCard({
+  //   id: "burning-figure",
+  //   name: "Burning Figure",
+  //   todo: "Make a Sanity roll",
+  //   result:
+  //     "4+: Gain 1 Sanity. 2-3: Place your explorer on the Entrance Hall. 0-1: Take 1 die of Physical damage and 1 die of Mental damage.",
+  //   steps: [
+  //     createEventStep("trait-roll", {
+  //       stat: "sanity",
+  //       outcomes: [
+  //         createEventOutcome(
+  //           { roll: { min: 4 } },
+  //           createEventEffect("stat-change", { mode: "gain", stat: "sanity", amount: 1 })
+  //         ),
+  //         createEventOutcome({ roll: { min: 2, max: 3 } }, createEventEffect("move", { destination: "entrance-hall" })),
+  //         createEventOutcome({ roll: { max: 1 } }, [
+  //           createEventEffect("damage", { damageType: "physical", amountType: "dice", dice: 1 }),
+  //           createEventEffect("damage", { damageType: "mental", amountType: "dice", dice: 1 }),
+  //         ]),
+  //       ],
+  //     }),
+  //   ],
+  // }),
   // createEventCard({
   //   id: "cassette-player",
   //   name: "Cassette Player",

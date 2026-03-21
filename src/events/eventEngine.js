@@ -122,6 +122,16 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
 
   if (effect.type === "stat-choice") {
     if (effect.mode === "gain") {
+      const gainOptions = [...(effect.options || [])];
+      const maxFlexibleGain =
+        effect.amountType === "up-to-max"
+          ? gainOptions.reduce((sum, stat) => {
+              const trackLength = player.character?.[stat]?.length || 0;
+              const currentIndex = player.statIndex?.[stat] || 0;
+              return sum + Math.max(0, trackLength - 1 - currentIndex);
+            }, 0)
+          : null;
+
       return {
         game: {
           ...g,
@@ -131,13 +141,14 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
             originalDamageType: "general",
             damageType: "general",
             adjustmentMode: "increase",
-            amount: effect.amount || 1,
-            allowedStats: [...(effect.options || [])],
-            allocation: Object.fromEntries((effect.options || []).map((stat) => [stat, 0])),
+            amount: maxFlexibleGain ?? (effect.amount || 1),
+            allowedStats: gainOptions,
+            allocation: Object.fromEntries(gainOptions.map((stat) => [stat, 0])),
             playerName: player.name,
             canConvertToGeneral: false,
             conversionSourceNames: [],
             postDamageEffects: [],
+            allowPartial: effect.amountType === "up-to-max",
           },
           eventState: {
             ...eventState,
@@ -350,10 +361,27 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
       };
     }
 
+    const getMaxDamageAmount = (targetPlayer, damageType) => {
+      if (!targetPlayer) return 0;
+      if (damageType === "physical") {
+        return (targetPlayer.statIndex.might || 0) + (targetPlayer.statIndex.speed || 0);
+      }
+      if (damageType === "mental") {
+        return (targetPlayer.statIndex.sanity || 0) + (targetPlayer.statIndex.knowledge || 0);
+      }
+      return (
+        (targetPlayer.statIndex.might || 0) +
+        (targetPlayer.statIndex.speed || 0) +
+        (targetPlayer.statIndex.sanity || 0) +
+        (targetPlayer.statIndex.knowledge || 0)
+      );
+    };
+
     const rolledDamage =
       effect.resolvedAmount ??
       (effect.amountType === "dice" ? rollDice(effect.dice || 1).reduce((sum, die) => sum + die, 0) : null);
-    const effectAmount = rolledDamage ?? effect.amount ?? 0;
+    const maxFlexibleDamage = effect.amountType === "up-to-max" ? getMaxDamageAmount(player, effect.damageType) : null;
+    const effectAmount = rolledDamage ?? maxFlexibleDamage ?? effect.amount ?? 0;
     const resolved = resolveDamageEffect(player, {
       type: "event-damage",
       damageType: effect.damageType,
@@ -378,6 +406,7 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
         damageChoice: {
           ...createDamageChoice(resolved, player),
           source: "event-effect",
+          allowPartial: effect.amountType === "up-to-max",
         },
         eventState: {
           ...eventState,
@@ -385,7 +414,9 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
             eventState.summary,
             rolledDamage !== null
               ? `${player.name} rolls ${rolledDamage} for ${effect.damageType} damage.`
-              : `${player.name} takes ${resolved.damage} ${effect.damageType} damage.`
+              : effect.amountType === "up-to-max"
+                ? `${player.name} may take up to ${resolved.damage} ${effect.damageType} damage.`
+                : `${player.name} takes ${resolved.damage} ${effect.damageType} damage.`
           ),
         },
         turnPhase: "event",

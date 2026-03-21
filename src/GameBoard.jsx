@@ -19,7 +19,9 @@ import {
   resolveTraitRoll,
   updateDamageChoiceType,
   rollDice,
-  chooseAngelsFeatherValueState,
+  chooseCardActiveAbilityValueState,
+  chooseCardActiveAbilityNowState,
+  getCardActiveAbilityState,
   resolveEventDamageChoiceState,
 } from "./events/eventActions";
 import { getMatchingOutcome } from "./events/eventEngine";
@@ -62,6 +64,7 @@ const STAT_ICONS = {
 };
 
 const PLAYER_STAT_ORDER = ["might", "speed", "sanity", "knowledge"];
+const CRITICAL_STAT_INDEX = 1;
 
 const TILE_SIZE = 100;
 const GAP = 4;
@@ -72,6 +75,10 @@ function describePostDamageEffects(effects) {
   return effects
     .map((effect) => `gain ${effect.amount} ${STAT_LABELS[effect.stat]} from ${effect.sourceName}`)
     .join(" and ");
+}
+
+function formatStatTrackValue(value) {
+  return value === 0 ? "☠" : value;
 }
 
 function DiceRow({ dice, modifier = null, rolling = false }) {
@@ -181,7 +188,13 @@ export default function GameBoard({ players, onQuit }) {
   const [expandedSidebarPlayers, setExpandedSidebarPlayers] = useState(() => new Set());
   const [viewedCard, setViewedCard] = useState(null);
   const [queuedAngelsFeatherTotal, setQueuedAngelsFeatherTotal] = useState(null);
+  const [pendingAngelsFeatherAutoResolve, setPendingAngelsFeatherAutoResolve] = useState(false);
+  const queuedAngelsFeatherTotalRef = useRef(null);
   const boardRef = useRef(null);
+
+  useEffect(() => {
+    queuedAngelsFeatherTotalRef.current = queuedAngelsFeatherTotal;
+  }, [queuedAngelsFeatherTotal]);
 
   // Dice rolling animation
   useEffect(() => {
@@ -1309,12 +1322,19 @@ export default function GameBoard({ players, onQuit }) {
     setCameraFloor,
     setDiceAnimation,
     setQueuedAngelsFeatherTotal,
-    queuedAngelsFeatherTotal,
+    getQueuedAngelsFeatherTotal: () => queuedAngelsFeatherTotalRef.current,
     rollDice,
     runAdvanceEventResolution,
     resolveRollReadyAwaiting,
     eventFlowDeps,
   });
+
+  useEffect(() => {
+    if (!pendingAngelsFeatherAutoResolve) return;
+    if (game.drawnCard?.type !== "event") return;
+    setPendingAngelsFeatherAutoResolve(false);
+    handleDismissCard({ autoRollIfReady: true });
+  }, [pendingAngelsFeatherAutoResolve, game.drawnCard, handleDismissCard]);
 
   function handleAdjustDamageAllocation(stat, delta) {
     setGame((g) => {
@@ -1404,7 +1424,11 @@ export default function GameBoard({ players, onQuit }) {
       if (!choice) return g;
 
       const selectedTotal = Object.values(choice.allocation).reduce((sum, value) => sum + value, 0);
-      if (selectedTotal !== choice.amount) return g;
+      if (choice.allowPartial) {
+        if (selectedTotal > choice.amount) return g;
+      } else if (selectedTotal !== choice.amount) {
+        return g;
+      }
 
       const damagedPlayers = applyDamageAllocation(
         g.players,
@@ -1636,9 +1660,23 @@ export default function GameBoard({ players, onQuit }) {
     });
   }
 
-  function handleUseAngelsFeatherNow() {
+  function handleUseViewedCardActiveAbilityNow() {
+    if (!viewedCard || !viewedCardActiveAbilityState?.canUseNow) return;
+
+    if (!viewedCardActiveAbilityState.requiresValueSelection) {
+      const result = chooseCardActiveAbilityNowState(game, viewedCard);
+      setGame(result.game);
+      if (result.diceAnimation) {
+        setDiceAnimation(result.diceAnimation);
+      }
+      if (result.closeViewedCard) {
+        setViewedCard(null);
+      }
+      return;
+    }
+
     setViewedCard((card) => {
-      if (!card || card.id !== "angels-feather") return card;
+      if (!card) return card;
       return {
         ...card,
         showUseNowPicker: true,
@@ -1646,23 +1684,22 @@ export default function GameBoard({ players, onQuit }) {
     });
   }
 
-  function handleChooseAngelsFeatherValue(total) {
-    let nextQueueTotal;
-    let shouldCloseViewedCard = false;
-    setGame((g) => {
-      const result = chooseAngelsFeatherValueState(g, total, viewedCard, {
-        drawnEventPrimaryAction,
-        queuedAngelsFeatherTotal,
-      });
-      nextQueueTotal = result.queueTotal;
-      shouldCloseViewedCard = result.closeViewedCard;
-      return result.game;
+  function handleChooseActiveAbilityValue(total) {
+    if (!viewedCard) return;
+
+    const result = chooseCardActiveAbilityValueState(game, total, viewedCard, {
+      drawnEventPrimaryAction,
+      queuedAngelsFeatherTotal: queuedAngelsFeatherTotalRef.current,
     });
 
-    if (nextQueueTotal !== undefined) {
-      setQueuedAngelsFeatherTotal(nextQueueTotal);
+    setGame(result.game);
+
+    if (result.queueTotal !== undefined) {
+      queuedAngelsFeatherTotalRef.current = result.queueTotal;
+      setQueuedAngelsFeatherTotal(result.queueTotal);
+      setPendingAngelsFeatherAutoResolve(result.queueTotal !== null);
     }
-    if (shouldCloseViewedCard) {
+    if (result.closeViewedCard) {
       setViewedCard(null);
     }
   }
@@ -1710,17 +1747,25 @@ export default function GameBoard({ players, onQuit }) {
   );
   const damageChoice = game.damageChoice;
   const eventState = game.eventState;
-  const {
-    drawnEventPrimaryAction,
-    eventTileChoiceOptions,
-    selectedEventTileChoiceId,
-    showEventResolutionModal,
-    canUseAngelsFeatherNow,
-  } = getEventUiState(game, eventEngineDeps, queuedAngelsFeatherTotal);
+  const { drawnEventPrimaryAction, eventTileChoiceOptions, selectedEventTileChoiceId, showEventResolutionModal } =
+    getEventUiState(game, eventEngineDeps, queuedAngelsFeatherTotal);
+  const viewedCardActiveAbilityState = viewedCard
+    ? getCardActiveAbilityState({
+        game,
+        viewedCard,
+        drawnEventPrimaryAction,
+        queuedAngelsFeatherTotal,
+      })
+    : null;
   const damageAllocated = damageChoice
     ? Object.values(damageChoice.allocation).reduce((sum, value) => sum + value, 0)
     : 0;
   const damageRemaining = damageChoice ? damageChoice.amount - damageAllocated : 0;
+  const canConfirmDamageChoice = damageChoice
+    ? damageChoice.allowPartial
+      ? damageAllocated <= damageChoice.amount
+      : damageRemaining === 0
+    : false;
   const damagePreview = damageChoice ? getDamagePreview(currentPlayer, damageChoice) : null;
 
   // Check if current player is on a staircase tile
@@ -2084,7 +2129,7 @@ export default function GameBoard({ players, onQuit }) {
                   {PLAYER_STAT_ORDER.map((stat) => (
                     <span key={`${p.name}-${stat}-summary`} className="sidebar-stats-summary-item">
                       <span>{STAT_ICONS[stat]}</span>
-                      <span>{p.character[stat][p.statIndex[stat]]}</span>
+                      <span>{formatStatTrackValue(p.character[stat][p.statIndex[stat]])}</span>
                     </span>
                   ))}
                 </div>
@@ -2104,12 +2149,13 @@ export default function GameBoard({ players, onQuit }) {
                             "sidebar-stat-cell",
                             index === p.statIndex[stat] ? "sidebar-stat-cell-current" : "",
                             index === p.character.startIndex[stat] ? "sidebar-stat-cell-start" : "",
+                            index === CRITICAL_STAT_INDEX ? "sidebar-stat-cell-critical" : "",
                             value === 0 ? "sidebar-stat-cell-zero" : "",
                           ]
                             .filter(Boolean)
                             .join(" ")}
                         >
-                          {value}
+                          {formatStatTrackValue(value)}
                         </div>
                       ))}
                     </div>
@@ -2207,21 +2253,18 @@ export default function GameBoard({ players, onQuit }) {
             <h2 className="card-name">{viewedCard.name}</h2>
             <div className="card-owner-label">Held by {viewedCard.ownerName}</div>
             <CardAbilityContent card={viewedCard} />
-            {viewedCard.id === "angels-feather" &&
-              viewedCard.ownerCollection === "inventory" &&
-              viewedCard.ownerIndex === game.currentPlayerIndex &&
-              canUseAngelsFeatherNow && (
-                <button className="btn btn-primary" onClick={handleUseAngelsFeatherNow}>
-                  Use now
-                </button>
-              )}
-            {viewedCard.id === "angels-feather" && viewedCard.showUseNowPicker && (
+            {viewedCardActiveAbilityState?.canUseNow && (
+              <button className="btn btn-primary" onClick={handleUseViewedCardActiveAbilityNow}>
+                Use now
+              </button>
+            )}
+            {viewedCard.showUseNowPicker && viewedCardActiveAbilityState?.requiresValueSelection && (
               <div className="event-option-list" style={{ marginTop: "0.75rem" }}>
-                {Array.from({ length: 9 }, (_, value) => (
+                {viewedCardActiveAbilityState.valueOptions.map((value) => (
                   <button
-                    key={`angels-feather-value-${value}`}
+                    key={`active-ability-value-${value}`}
                     className="btn btn-secondary"
-                    onClick={() => handleChooseAngelsFeatherValue(value)}
+                    onClick={() => handleChooseActiveAbilityValue(value)}
                   >
                     {value}
                   </button>
@@ -2350,7 +2393,9 @@ export default function GameBoard({ players, onQuit }) {
             <p className="card-description">
               {damageChoice.adjustmentMode === "increase"
                 ? `Assign ${damageChoice.amount} point${damageChoice.amount === 1 ? "" : "s"} of gain to ${damageChoice.playerName}.`
-                : `Assign ${damageChoice.amount} point${damageChoice.amount === 1 ? "" : "s"} of ${damageChoice.damageType} damage to ${damageChoice.playerName}.`}
+                : damageChoice.allowPartial
+                  ? `Assign up to ${damageChoice.amount} point${damageChoice.amount === 1 ? "" : "s"} of ${damageChoice.damageType} damage to ${damageChoice.playerName}.`
+                  : `Assign ${damageChoice.amount} point${damageChoice.amount === 1 ? "" : "s"} of ${damageChoice.damageType} damage to ${damageChoice.playerName}.`}
             </p>
             {damageChoice.adjustmentMode !== "increase" && damageChoice.canConvertToGeneral && (
               <div className="damage-conversion-panel">
@@ -2404,14 +2449,15 @@ export default function GameBoard({ players, onQuit }) {
                         {currentPlayer.character[stat].map((value, index) => (
                           <div
                             key={`${stat}-${index}`}
-                            className={getStatTrackCellClass(
-                              index,
-                              currentIndex,
-                              previewIndex,
-                              damageChoice.adjustmentMode
-                            )}
+                            className={[
+                              getStatTrackCellClass(index, currentIndex, previewIndex, damageChoice.adjustmentMode),
+                              index === CRITICAL_STAT_INDEX ? "stat-track-cell-critical" : "",
+                              value === 0 ? "stat-track-cell-zero" : "",
+                            ]
+                              .filter(Boolean)
+                              .join(" ")}
                           >
-                            {value}
+                            {formatStatTrackValue(value)}
                           </div>
                         ))}
                       </div>
@@ -2439,7 +2485,7 @@ export default function GameBoard({ players, onQuit }) {
                 );
               })}
             </div>
-            <button className="btn btn-primary" onClick={handleConfirmDamageChoice} disabled={damageRemaining !== 0}>
+            <button className="btn btn-primary" onClick={handleConfirmDamageChoice} disabled={!canConfirmDamageChoice}>
               {damageChoice.adjustmentMode === "increase" ? "Apply gain" : "Apply damage"}
             </button>
           </div>

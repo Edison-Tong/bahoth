@@ -828,14 +828,35 @@
     0 0 8px rgba(103, 186, 173, 0.24);
 }
 
+.sidebar-stat-cell-critical {
+  border-color: rgba(231, 76, 60, 0.52);
+  background: rgba(231, 76, 60, 0.14);
+  color: #ffd7d2;
+}
+
+.sidebar-stat-cell-current.sidebar-stat-cell-critical {
+  border-color: rgba(255, 142, 132, 0.95);
+  background: linear-gradient(180deg, rgba(255, 196, 189, 0.4), rgba(231, 76, 60, 0.28));
+  color: #fff1ef;
+  box-shadow:
+    0 0 0 1px rgba(255, 142, 132, 0.35),
+    0 0 14px rgba(255, 142, 132, 0.34),
+    0 0 8px rgba(231, 76, 60, 0.24);
+}
+
 .sidebar-stat-cell-zero {
-  border-color: rgba(192, 57, 43, 0.55);
-  background: rgba(192, 57, 43, 0.18);
-  color: #ffd3ce;
+  border-color: transparent;
+  background: transparent;
+  color: #f0e8d8;
+  font-size: 0.92rem;
+  font-weight: 800;
+  box-shadow: none;
 }
 
 .sidebar-stat-cell-zero.sidebar-stat-cell-current {
-  box-shadow: inset 0 0 0 1px rgba(255, 211, 206, 0.3);
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .sidebar-quit {
@@ -1244,6 +1265,27 @@
   border-color: rgba(212, 194, 157, 0.45);
   background: rgba(212, 194, 157, 0.16);
   color: #f2e6cd;
+}
+
+.stat-track-cell-critical {
+  border-color: rgba(231, 76, 60, 0.42);
+  background: rgba(231, 76, 60, 0.14);
+  color: #ffd7d2;
+}
+
+.stat-track-cell-current.stat-track-cell-critical {
+  border-color: rgba(255, 142, 132, 0.86);
+  background: linear-gradient(180deg, rgba(255, 196, 189, 0.28), rgba(231, 76, 60, 0.22));
+  color: #fff3f0;
+}
+
+.stat-track-cell-zero {
+  border-color: transparent;
+  background: transparent;
+  color: #f0e8d8;
+  font-size: 1.05rem;
+  font-weight: 800;
+  box-shadow: none;
 }
 
 .stat-track-cell-preview,

@@ -7,6 +7,87 @@ const DAMAGE_STATS = {
   general: ["might", "speed", "sanity", "knowledge"],
 };
 
+const STAT_LABELS = {
+  might: "Might",
+  speed: "Speed",
+  sanity: "Sanity",
+  knowledge: "Knowledge",
+};
+const PLAYER_STAT_ORDER = ["might", "speed", "sanity", "knowledge"];
+const CRITICAL_STAT_INDEX = 1;
+
+function getInventoryCard(game, viewedCard) {
+  if (!viewedCard || viewedCard.ownerCollection !== "inventory") return null;
+  const owner = game.players[viewedCard.ownerIndex];
+  return owner?.inventory?.[viewedCard.ownerCardIndex] || null;
+}
+
+function isCreepyDollAvailableThisTurn(game, viewedCard) {
+  const inventoryCard = getInventoryCard(game, viewedCard);
+  if (!inventoryCard || inventoryCard.id !== "creepy-doll") return false;
+  return inventoryCard.lastActiveAbilityTurnUsed !== game.turnNumber;
+}
+
+function getCriticalStats(player) {
+  if (!player) return [];
+  return PLAYER_STAT_ORDER.filter((stat) => player.statIndex?.[stat] === CRITICAL_STAT_INDEX);
+}
+
+function getHealableStats(player, healRule = {}) {
+  if (!player) return [];
+
+  const target = healRule.target || healRule.healTarget || "critical";
+  let candidateStats;
+  if (target === "all") {
+    candidateStats = PLAYER_STAT_ORDER;
+  } else if (target === "critical") {
+    candidateStats = getCriticalStats(player);
+  } else if (target === "list") {
+    candidateStats = Array.isArray(healRule.stats) ? healRule.stats : [];
+  } else {
+    candidateStats = [];
+  }
+
+  return candidateStats.filter((stat) => {
+    const current = player.statIndex?.[stat];
+    const start = player.character?.startIndex?.[stat];
+    return current !== undefined && start !== undefined && current < start;
+  });
+}
+
+function getActiveHealRule(viewedCard) {
+  const rule = viewedCard?.activeAbilityRule;
+  if (!rule) return null;
+
+  if (rule.action === "heal-stats") {
+    return {
+      target: rule.target || rule.healTarget || "critical",
+      stats: Array.isArray(rule.stats) ? rule.stats : undefined,
+      consume: rule.consume || "bury-self",
+    };
+  }
+
+  if (rule.action === "heal-critical-traits") {
+    return {
+      target: "critical",
+      consume: "bury-self",
+    };
+  }
+
+  return null;
+}
+
+function canUseHealAbilityNow(game, viewedCard) {
+  const inventoryCard = getInventoryCard(game, viewedCard);
+  if (!inventoryCard) return false;
+
+  const owner = game.players[viewedCard.ownerIndex];
+  const healRule = getActiveHealRule(viewedCard);
+  if (!healRule) return false;
+
+  return getHealableStats(owner, healRule).length > 0;
+}
+
 export function continueEventState(g, deps) {
   const { runAdvanceEventResolution, finalizeEventState } = deps;
   if (!g.eventState) return { game: g, cameraFloor: null };
@@ -470,6 +551,184 @@ export function getAngelsFeatherUsageState({ game, drawnEventPrimaryAction, queu
   };
 }
 
+const ACTIVE_ABILITY_TRIGGER_HANDLERS = {
+  "trait-roll-required": ({ game, drawnEventPrimaryAction, queuedAngelsFeatherTotal }) =>
+    getAngelsFeatherUsageState({ game, drawnEventPrimaryAction, queuedAngelsFeatherTotal }).canUseAngelsFeatherNow,
+  "on-your-turn": ({ game, viewedCard }) =>
+    viewedCard.ownerIndex === game.currentPlayerIndex && game.turnPhase !== "card" && !game.drawnCard,
+  "trait-roll-just-made": ({ game, viewedCard }) =>
+    viewedCard.ownerIndex === game.currentPlayerIndex &&
+    !!game.eventState?.lastRoll &&
+    !!game.eventState?.lastRoll?.outcomes &&
+    isCreepyDollAvailableThisTurn(game, viewedCard),
+  "die-just-rolled": ({ game, viewedCard }) => viewedCard.ownerIndex === game.currentPlayerIndex && !!game.eventState,
+  attack: ({ game, viewedCard }) => viewedCard.ownerIndex === game.currentPlayerIndex,
+};
+
+export function getCardActiveAbilityState({ game, viewedCard, drawnEventPrimaryAction, queuedAngelsFeatherTotal }) {
+  if (!viewedCard) return { canUseNow: false, requiresValueSelection: false, valueOptions: [] };
+
+  const rule = viewedCard.activeAbilityRule;
+  if (!rule) return { canUseNow: false, requiresValueSelection: false, valueOptions: [] };
+
+  if (viewedCard.ownerCollection !== "inventory" && viewedCard.ownerCollection !== "omens") {
+    return { canUseNow: false, requiresValueSelection: false, valueOptions: [] };
+  }
+
+  if (viewedCard.ownerIndex !== game.currentPlayerIndex) {
+    return { canUseNow: false, requiresValueSelection: false, valueOptions: [] };
+  }
+
+  const triggerHandler = ACTIVE_ABILITY_TRIGGER_HANDLERS[rule.trigger];
+  const triggerSatisfied = triggerHandler
+    ? triggerHandler({ game, viewedCard, drawnEventPrimaryAction, queuedAngelsFeatherTotal })
+    : false;
+
+  const hasSupportedAction =
+    rule.action === "set-trait-roll-total" ||
+    rule.action === "reroll-all-trait-dice" ||
+    rule.action === "heal-critical-traits" ||
+    rule.action === "heal-stats";
+  const valueOptions =
+    rule.valueSelection === "number-0-8" ? Array.from({ length: 9 }, (_, value) => value) : rule.valueOptions || [];
+  const requiresValueSelection = rule.action === "set-trait-roll-total";
+  const actionSatisfied =
+    rule.action === "heal-critical-traits" || rule.action === "heal-stats"
+      ? canUseHealAbilityNow(game, viewedCard)
+      : true;
+
+  return {
+    canUseNow: triggerSatisfied && hasSupportedAction && actionSatisfied,
+    requiresValueSelection,
+    valueOptions,
+    action: rule.action,
+    trigger: rule.trigger,
+  };
+}
+
+export function applyFirstAidKitNowState(g, viewedCard) {
+  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
+
+  const healRule = getActiveHealRule(viewedCard);
+  if (!healRule) {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+  if (viewedCard.ownerCollection !== "inventory") return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
+
+  const owner = g.players[viewedCard.ownerIndex];
+  const inventoryCard = getInventoryCard(g, viewedCard);
+  if (!inventoryCard) {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  const healableStats = getHealableStats(owner, healRule);
+  if (healableStats.length === 0) {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  const nextPlayers = g.players.map((player, playerIndex) => {
+    if (playerIndex !== viewedCard.ownerIndex) return player;
+
+    const nextInventory =
+      healRule.consume === "bury-self"
+        ? player.inventory.filter((_, cardIndex) => cardIndex !== viewedCard.ownerCardIndex)
+        : player.inventory;
+    const nextStatIndex = { ...player.statIndex };
+    for (const stat of healableStats) {
+      nextStatIndex[stat] = Math.max(nextStatIndex[stat], player.character.startIndex[stat]);
+    }
+    const isAlive = Object.values(nextStatIndex).every((value) => value > 0);
+
+    return {
+      ...player,
+      inventory: nextInventory,
+      statIndex: nextStatIndex,
+      isAlive,
+    };
+  });
+
+  return {
+    game: {
+      ...g,
+      players: nextPlayers,
+      message: `${owner.name} heals ${healableStats.length === 1 ? "a trait" : "traits"} to starting values.`,
+    },
+    closeViewedCard: true,
+    diceAnimation: null,
+  };
+}
+
+export function applyCreepyDollNowState(g, viewedCard) {
+  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (viewedCard.activeAbilityRule?.action !== "reroll-all-trait-dice") {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+  if (viewedCard.ownerCollection !== "inventory") return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (!isCreepyDollAvailableThisTurn(g, viewedCard)) return { game: g, closeViewedCard: false, diceAnimation: null };
+
+  const owner = g.players[viewedCard.ownerIndex];
+  const inventoryCard = owner?.inventory?.[viewedCard.ownerCardIndex];
+  const lastRoll = g.eventState?.lastRoll;
+  if (!inventoryCard || inventoryCard.id !== "creepy-doll" || !lastRoll || !Array.isArray(lastRoll.dice)) {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  const rerolledDice = rollDice(lastRoll.dice.length);
+  const previousDiceTotal = (lastRoll.dice || []).reduce((sum, value) => sum + value, 0);
+  const staticBonus = (lastRoll.total || 0) - previousDiceTotal;
+  const rerolledTotal = rerolledDice.reduce((sum, value) => sum + value, 0) + staticBonus;
+
+  const nextPlayers = g.players.map((player, playerIndex) => {
+    if (playerIndex !== viewedCard.ownerIndex) return player;
+
+    const nextInventory = player.inventory.map((card, cardIndex) =>
+      cardIndex === viewedCard.ownerCardIndex
+        ? {
+            ...card,
+            lastActiveAbilityTurnUsed: g.turnNumber,
+          }
+        : card
+    );
+    const nextStatIndex = {
+      ...player.statIndex,
+      sanity: Math.max(0, player.statIndex.sanity - 1),
+    };
+    const isAlive = Object.values(nextStatIndex).every((value) => value > 0);
+
+    return {
+      ...player,
+      inventory: nextInventory,
+      statIndex: nextStatIndex,
+      isAlive,
+    };
+  });
+
+  return {
+    game: {
+      ...g,
+      players: nextPlayers,
+      eventState: {
+        ...g.eventState,
+        summary: null,
+      },
+      message: `${owner.name} uses Creepy Doll, rerolls the trait roll, and loses 1 Sanity...`,
+    },
+    closeViewedCard: true,
+    diceAnimation: {
+      purpose: "event-roll",
+      final: rerolledDice,
+      display: Array.from({ length: rerolledDice.length }, () => Math.floor(Math.random() * 3)),
+      settled: false,
+      label: lastRoll.label || "Trait",
+      total: rerolledTotal,
+      modifier: lastRoll.modifier || null,
+      outcomes: [...(lastRoll.outcomes || [])],
+    },
+  };
+}
+
 export function chooseAngelsFeatherValueState(
   g,
   total,
@@ -479,7 +738,9 @@ export function chooseAngelsFeatherValueState(
   const usageState = getAngelsFeatherUsageState({ game: g, drawnEventPrimaryAction, queuedAngelsFeatherTotal });
   const { canApplyNow, canQueueForDrawnEvent } = usageState;
   if (!viewedCard) return { game: g, queueTotal: undefined, closeViewedCard: false };
-  if (viewedCard.id !== "angels-feather") return { game: g, queueTotal: undefined, closeViewedCard: false };
+  if (viewedCard.activeAbilityRule?.action !== "set-trait-roll-total") {
+    return { game: g, queueTotal: undefined, closeViewedCard: false };
+  }
   if (viewedCard.ownerCollection !== "inventory") return { game: g, queueTotal: undefined, closeViewedCard: false };
   if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, queueTotal: undefined, closeViewedCard: false };
   if (!canApplyNow && !canQueueForDrawnEvent) return { game: g, queueTotal: undefined, closeViewedCard: false };
@@ -498,6 +759,57 @@ export function chooseAngelsFeatherValueState(
     };
   });
 
+  const forcedTotal = Math.max(0, Math.min(8, Number(total)));
+  const awaiting = g.eventState?.awaiting;
+
+  if (canApplyNow && awaiting?.type === "roll-ready" && awaiting.rollKind === "trait-roll") {
+    const matchedOutcome = getMatchingOutcome(awaiting.outcomes || [], forcedTotal);
+    const resolvedEffects = [...(matchedOutcome?.effects || [])];
+
+    return {
+      game: {
+        ...g,
+        players: nextPlayers,
+        eventState: {
+          ...g.eventState,
+          awaiting: null,
+          lastRoll: {
+            label: STAT_LABELS[awaiting.rollStat] || awaiting.label || "Trait",
+            dice: [forcedTotal],
+            total: forcedTotal,
+            modifier: null,
+            outcomes: [...(awaiting.outcomes || [])],
+          },
+          summary: describeEventEffects(resolvedEffects),
+          pendingEffects: resolvedEffects,
+        },
+        message: `${owner.name} buries Angel's Feather and sets this roll to ${forcedTotal}.`,
+      },
+      queueTotal: null,
+      closeViewedCard: true,
+    };
+  }
+
+  if (canApplyNow && awaiting?.type === "trait-roll-sequence-ready") {
+    return {
+      game: {
+        ...g,
+        players: nextPlayers,
+        eventState: {
+          ...g.eventState,
+          awaiting: {
+            ...awaiting,
+            type: "trait-roll-sequence-rolling",
+            overrideTotal: forcedTotal,
+          },
+        },
+        message: `${owner.name} buries Angel's Feather and sets this roll to ${forcedTotal}.`,
+      },
+      queueTotal: null,
+      closeViewedCard: true,
+    };
+  }
+
   const nextGame = {
     ...g,
     players: nextPlayers,
@@ -507,17 +819,46 @@ export function chooseAngelsFeatherValueState(
             ...g.eventState,
             awaiting: {
               ...g.eventState.awaiting,
-              overrideTotal: total,
+              overrideTotal: forcedTotal,
             },
           }
         : g.eventState,
-    message: `${owner.name} buries Angel's Feather and sets this roll to ${total}.`,
+    message: `${owner.name} buries Angel's Feather and sets this roll to ${forcedTotal}.`,
   };
 
   return {
     game: nextGame,
     queueTotal: canQueueForDrawnEvent && !canApplyNow ? total : null,
     closeViewedCard: true,
+  };
+}
+
+export function chooseCardActiveAbilityValueState(g, total, viewedCard, deps) {
+  const action = viewedCard?.activeAbilityRule?.action;
+  if (action === "set-trait-roll-total") {
+    return chooseAngelsFeatherValueState(g, total, viewedCard, deps);
+  }
+
+  return {
+    game: g,
+    queueTotal: undefined,
+    closeViewedCard: false,
+  };
+}
+
+export function chooseCardActiveAbilityNowState(g, viewedCard) {
+  const action = viewedCard?.activeAbilityRule?.action;
+  if (action === "reroll-all-trait-dice") {
+    return applyCreepyDollNowState(g, viewedCard);
+  }
+  if (action === "heal-critical-traits" || action === "heal-stats") {
+    return applyFirstAidKitNowState(g, viewedCard);
+  }
+
+  return {
+    game: g,
+    closeViewedCard: false,
+    diceAnimation: null,
   };
 }
 
