@@ -350,6 +350,7 @@ export function useEventActionHandlers({
 }
 
 export function useDrawnCardHandlers({
+  game,
   setGame,
   setCameraFloor,
   setDiceAnimation,
@@ -362,90 +363,82 @@ export function useDrawnCardHandlers({
 }) {
   function handleDismissCard(options = {}) {
     const { autoRollIfReady = false, initialEventChoice = null } = options;
-    let nextCameraFloor = null;
-    let nextDiceAnimation = null;
-    let shouldClearQueuedTraitRollOverride = false;
+    const card = game.drawnCard;
 
-    setGame((g) => {
-      const card = g.drawnCard;
+    if (card?.type === "omen") {
+      const numDice = game.omenCount;
+      const finalDice = rollDice(numDice);
+      const updatedPlayers = game.players.map((pl, i) =>
+        i === game.currentPlayerIndex ? { ...pl, omens: [...pl.omens, card] } : pl
+      );
 
-      if (card?.type === "omen") {
-        const numDice = g.omenCount;
-        const finalDice = rollDice(numDice);
-        const updatedPlayers = g.players.map((pl, i) =>
-          i === g.currentPlayerIndex ? { ...pl, omens: [...pl.omens, card] } : pl
-        );
+      setGame({
+        ...game,
+        players: updatedPlayers,
+        drawnCard: null,
+        message: "Rolling for haunt...",
+      });
+      setDiceAnimation({
+        purpose: "haunt",
+        final: finalDice,
+        display: Array.from({ length: numDice }, () => Math.floor(Math.random() * 3)),
+        omenCount: game.omenCount,
+        settled: false,
+      });
+      return;
+    }
 
-        nextDiceAnimation = {
-          purpose: "haunt",
-          final: finalDice,
-          display: Array.from({ length: numDice }, () => Math.floor(Math.random() * 3)),
-          omenCount: g.omenCount,
-          settled: false,
-        };
+    if (card?.type === "event") {
+      const queuedTraitRollOverride = getQueuedTraitRollOverride?.() ?? null;
+      const eventResult = startEventFromDrawnCardState(
+        game,
+        {
+          card,
+          initialEventChoice,
+          autoRollIfReady,
+          queuedTraitRollOverride,
+        },
+        {
+          runAdvanceEventResolution,
+          resolveRollReadyAwaiting,
+          eventFlowDeps,
+        }
+      );
 
-        return {
-          ...g,
-          players: updatedPlayers,
-          drawnCard: null,
-          message: "Rolling for haunt...",
-        };
+      setGame(eventResult.game);
+      if (eventResult.cameraFloor) {
+        setCameraFloor(eventResult.cameraFloor);
       }
-
-      if (card?.type === "event") {
-        const queuedTraitRollOverride = getQueuedTraitRollOverride?.() ?? null;
-        const eventResult = startEventFromDrawnCardState(
-          g,
-          {
-            card,
-            initialEventChoice,
-            autoRollIfReady,
-            queuedTraitRollOverride,
-          },
-          {
-            runAdvanceEventResolution,
-            resolveRollReadyAwaiting,
-            eventFlowDeps,
-          }
-        );
-
-        nextCameraFloor = eventResult.cameraFloor;
-        nextDiceAnimation = eventResult.diceAnimation;
-        shouldClearQueuedTraitRollOverride = eventResult.shouldClearQueuedTraitRollOverride;
-        return eventResult.game;
+      if (eventResult.diceAnimation) {
+        setDiceAnimation(eventResult.diceAnimation);
       }
-
-      if (card?.type === "item") {
-        const updatedPlayers = g.players.map((pl, i) =>
-          i === g.currentPlayerIndex ? { ...pl, inventory: [...pl.inventory, card] } : pl
-        );
-
-        return {
-          ...g,
-          players: updatedPlayers,
-          drawnCard: null,
-          turnPhase: "endTurn",
-          message: `${g.players[g.currentPlayerIndex].name} collected ${card.name}!`,
-        };
+      if (eventResult.shouldClearQueuedTraitRollOverride) {
+        setQueuedTraitRollOverride(null);
       }
+      return;
+    }
 
-      return {
-        ...g,
+    if (card?.type === "item") {
+      const updatedPlayers = game.players.map((pl, i) =>
+        i === game.currentPlayerIndex ? { ...pl, inventory: [...pl.inventory, card] } : pl
+      );
+
+      setGame({
+        ...game,
+        players: updatedPlayers,
         drawnCard: null,
         turnPhase: "endTurn",
-        message: "",
-      };
-    });
+        message: `${game.players[game.currentPlayerIndex].name} collected ${card.name}!`,
+      });
+      return;
+    }
 
-    if (nextCameraFloor) {
-      setCameraFloor(nextCameraFloor);
-    }
-    if (nextDiceAnimation) {
-      setDiceAnimation(nextDiceAnimation);
-    }
-    if (shouldClearQueuedTraitRollOverride) {
-      setQueuedTraitRollOverride(null);
-    }
+    setGame({
+      ...game,
+      drawnCard: null,
+      turnPhase: "endTurn",
+      message: "",
+    });
   }
 
   function handleDismissHauntRoll() {

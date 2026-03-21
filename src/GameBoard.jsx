@@ -1448,6 +1448,7 @@ export default function GameBoard({ players, onQuit }) {
   });
 
   const { handleDismissCard, handleDismissHauntRoll } = useDrawnCardHandlers({
+    game,
     setGame,
     setCameraFloor,
     setDiceAnimation,
