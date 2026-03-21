@@ -760,7 +760,25 @@
 }
 
 .card-event-resolution {
-  max-width: min(560px, 92vw);
+  width: min(860px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+}
+
+.event-sequence-grid {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.event-sequence-grid > div {
+  border: 1px solid rgba(212, 194, 157, 0.22);
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  background: rgba(255, 255, 255, 0.03);
+  text-align: left;
 }
 
 .sidebar-collapsed .sidebar-char {
@@ -883,10 +901,12 @@
   left: 0;
   width: 100vw;
   height: 100vh;
+  padding: 1rem;
   background: rgba(0, 0, 0, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow-y: auto;
   z-index: 1000;
 }
 
@@ -1380,6 +1400,15 @@
   .card-damage-choice {
     width: min(100vw - 1rem, 560px);
     padding: 1.35rem;
+  }
+
+  .card-event-resolution {
+    width: min(100vw - 1rem, 640px);
+    max-height: calc(100vh - 1rem);
+  }
+
+  .event-sequence-grid {
+    grid-template-columns: 1fr;
   }
 
   .damage-choice-row {

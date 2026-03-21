@@ -241,7 +241,7 @@ export default function EventResolutionModal({
         {(eventState.awaiting?.type === "trait-roll-sequence-rolling" ||
           eventState.awaiting?.type === "trait-roll-sequence-complete") && (
           <>
-            <div className="event-option-list">
+            <div className="event-option-list event-sequence-grid">
               {eventState.awaiting.stats.map((stat, index) => {
                 const result = eventState.awaiting.results?.[index];
                 const isRollingNow =
@@ -283,7 +283,7 @@ export default function EventResolutionModal({
           eventState.awaiting?.type === "event-damage-sequence-rolling" ||
           eventState.awaiting?.type === "event-damage-sequence-complete") && (
           <>
-            <div className="event-option-list">
+            <div className="event-option-list event-sequence-grid">
               {eventState.awaiting.effects.map((effect, index) => {
                 const rolledEffect = eventState.awaiting.results?.[index];
                 const isRollingNow =
