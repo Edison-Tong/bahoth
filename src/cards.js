@@ -297,21 +297,21 @@ export const ITEM_CARDS = [
   //   passiveEffects: [{ type: "end-turn-gain-critical-trait" }],
   //   passiveAbility: "At the end of your turn, you may gain 1 in a critical trait of your choice.",
   // },
-  {
-    id: "rabbits-foot",
-    name: "Rabbit's Foot",
-    isWeapon: false,
-    activeAbilityRule: { trigger: "die-just-rolled", action: "reroll-one-die" },
-    activeAbility: "Once during your turn, you may reroll 1 die that you just rolled.",
-  },
-  {
-    id: "skeleton-key",
-    name: "Skeleton Key",
-    isWeapon: false,
-    activeAbilityRule: { trigger: "on-your-turn", action: "move-through-walls" },
-    activeAbility:
-      "You may move through walls. Whenever you do so, roll 1 die. If you roll a blank, bury the Skeleton Key. You may not use the Skeleton Key to discover new rooms.",
-  },
+  // {
+  //   id: "rabbits-foot",
+  //   name: "Rabbit's Foot",
+  //   isWeapon: false,
+  //   activeAbilityRule: { trigger: "die-just-rolled", action: "reroll-one-die" },
+  //   activeAbility: "Once during your turn, you may reroll 1 die that you just rolled.",
+  // },
+  // {
+  //   id: "skeleton-key",
+  //   name: "Skeleton Key",
+  //   isWeapon: false,
+  //   activeAbilityRule: { trigger: "on-your-turn", action: "move-through-walls" },
+  //   activeAbility:
+  //     "You may move through walls. Whenever you do so, roll 1 die. If you roll a blank, bury the Skeleton Key. You may not use the Skeleton Key to discover new rooms.",
+  // },
   // {
   //   id: "strange-amulet",
   //   name: "Strange Amulet",
@@ -326,13 +326,13 @@ export const ITEM_CARDS = [
   //   ],
   //   passiveAbility: "Whenever you take Physical damage, gain 1 Sanity.",
   // },
-  // {
-  //   id: "strange-medicine",
-  //   name: "Strange Medicine",
-  //   isWeapon: false,
-  //   activeAbilityRule: { trigger: "on-your-turn", action: "heal-might-speed" },
-  //   activeAbility: "On your turn, you may bury the Strange Medicine. If you do, heal your Might and your Speed.",
-  // },
+  {
+    id: "strange-medicine",
+    name: "Strange Medicine",
+    isWeapon: false,
+    activeAbilityRule: { trigger: "on-your-turn", action: "heal-might-speed" },
+    activeAbility: "On your turn, you may bury the Strange Medicine. If you do, heal your Might and your Speed.",
+  },
 ];
 
 const createEventEffect = (type, details = {}) => ({ type, ...details });

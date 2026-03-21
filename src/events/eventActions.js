@@ -209,6 +209,7 @@ function getActiveHealRule(viewedCard) {
       target: rule.target || rule.healTarget || "critical",
       stats: Array.isArray(rule.stats) ? rule.stats : undefined,
       consume: rule.consume || "bury-self",
+      selfOnly: !!rule.selfOnly,
     };
   }
 
@@ -223,6 +224,15 @@ function getActiveHealRule(viewedCard) {
     return {
       target: "list",
       stats: ["knowledge", "sanity"],
+      consume: "bury-self",
+      selfOnly: true,
+    };
+  }
+
+  if (rule.action === "heal-might-speed") {
+    return {
+      target: "list",
+      stats: ["might", "speed"],
       consume: "bury-self",
       selfOnly: true,
     };
@@ -827,12 +837,16 @@ export function getCardActiveAbilityState({
     rule.action === "extra-turn-after-current" ||
     rule.action === "heal-critical-traits" ||
     rule.action === "heal-stats" ||
-    rule.action === "heal-knowledge-sanity";
+    rule.action === "heal-knowledge-sanity" ||
+    rule.action === "heal-might-speed";
   const healRule = getActiveHealRule(viewedCard);
   const luckyCoinSequenceOptions =
     rule.action === "reroll-blank-trait-dice" ? getLuckyCoinSequenceRerollOptions(game) : [];
   const healTargetOptions =
-    rule.action === "heal-critical-traits" || rule.action === "heal-stats" || rule.action === "heal-knowledge-sanity"
+    rule.action === "heal-critical-traits" ||
+    rule.action === "heal-stats" ||
+    rule.action === "heal-knowledge-sanity" ||
+    rule.action === "heal-might-speed"
       ? getHealTargetOptions(game, viewedCard, healRule || {})
       : [];
   const valueOptions =
@@ -842,7 +856,8 @@ export function getCardActiveAbilityState({
         : rule.valueOptions || []
       : rule.action === "heal-critical-traits" ||
           rule.action === "heal-stats" ||
-          rule.action === "heal-knowledge-sanity"
+          rule.action === "heal-knowledge-sanity" ||
+          rule.action === "heal-might-speed"
         ? healTargetOptions
         : rule.action === "reroll-blank-trait-dice" && luckyCoinSequenceOptions.length > 0
           ? luckyCoinSequenceOptions
@@ -851,11 +866,15 @@ export function getCardActiveAbilityState({
     rule.action === "set-trait-roll-total" ||
     ((rule.action === "heal-critical-traits" ||
       rule.action === "heal-stats" ||
-      rule.action === "heal-knowledge-sanity") &&
+      rule.action === "heal-knowledge-sanity" ||
+      rule.action === "heal-might-speed") &&
       healTargetOptions.length > 1) ||
     (rule.action === "reroll-blank-trait-dice" && luckyCoinSequenceOptions.length > 0);
   const actionSatisfied =
-    rule.action === "heal-critical-traits" || rule.action === "heal-stats" || rule.action === "heal-knowledge-sanity"
+    rule.action === "heal-critical-traits" ||
+    rule.action === "heal-stats" ||
+    rule.action === "heal-knowledge-sanity" ||
+    rule.action === "heal-might-speed"
       ? canUseHealAbilityNow(game, viewedCard)
       : rule.action === "reroll-all-trait-dice"
         ? isCreepyDollAvailableThisTurn(game, viewedCard)
@@ -1622,7 +1641,12 @@ export function chooseCardActiveAbilityValueState(g, total, viewedCard, deps) {
       diceAnimation: result.diceAnimation || null,
     };
   }
-  if (action === "heal-critical-traits" || action === "heal-stats" || action === "heal-knowledge-sanity") {
+  if (
+    action === "heal-critical-traits" ||
+    action === "heal-stats" ||
+    action === "heal-knowledge-sanity" ||
+    action === "heal-might-speed"
+  ) {
     const result = applyFirstAidKitNowState(g, viewedCard, total);
     return {
       game: result.game,
@@ -1663,7 +1687,12 @@ export function chooseCardActiveAbilityNowState(g, viewedCard, deps = {}) {
   if (action === "extra-turn-after-current") {
     return applyMysticalStopwatchNowState(g, viewedCard);
   }
-  if (action === "heal-critical-traits" || action === "heal-stats" || action === "heal-knowledge-sanity") {
+  if (
+    action === "heal-critical-traits" ||
+    action === "heal-stats" ||
+    action === "heal-knowledge-sanity" ||
+    action === "heal-might-speed"
+  ) {
     return applyFirstAidKitNowState(g, viewedCard);
   }
 
