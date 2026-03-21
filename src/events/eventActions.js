@@ -160,6 +160,15 @@ function getActiveHealRule(viewedCard) {
     };
   }
 
+  if (rule.action === "heal-knowledge-sanity") {
+    return {
+      target: "list",
+      stats: ["knowledge", "sanity"],
+      consume: "bury-self",
+      selfOnly: true,
+    };
+  }
+
   return null;
 }
 
@@ -175,6 +184,11 @@ function canUseHealAbilityNow(game, viewedCard) {
 function getHealTargetIndexes(game, viewedCard, healRule) {
   const owner = game.players[viewedCard.ownerIndex];
   if (!owner) return [];
+
+  if (healRule?.selfOnly) {
+    const ownerStats = getHealableStats(owner, healRule);
+    return ownerStats.length > 0 ? [viewedCard.ownerIndex] : [];
+  }
 
   return game.players
     .map((player, index) => ({ player, index }))
@@ -743,27 +757,36 @@ export function getCardActiveAbilityState({
     rule.action === "substitute-sanity-for-knowledge" ||
     rule.action === "teleport-any-tile" ||
     rule.action === "heal-critical-traits" ||
-    rule.action === "heal-stats";
+    rule.action === "heal-stats" ||
+    rule.action === "heal-knowledge-sanity";
   const healRule = getActiveHealRule(viewedCard);
   const luckyCoinSequenceOptions =
     rule.action === "reroll-blank-trait-dice" ? getLuckyCoinSequenceRerollOptions(game) : [];
+  const healTargetOptions =
+    rule.action === "heal-critical-traits" || rule.action === "heal-stats" || rule.action === "heal-knowledge-sanity"
+      ? getHealTargetOptions(game, viewedCard, healRule || {})
+      : [];
   const valueOptions =
     rule.action === "set-trait-roll-total"
       ? rule.valueSelection === "number-0-8"
         ? Array.from({ length: 9 }, (_, value) => value)
         : rule.valueOptions || []
-      : rule.action === "heal-critical-traits" || rule.action === "heal-stats"
-        ? getHealTargetOptions(game, viewedCard, healRule || {})
+      : rule.action === "heal-critical-traits" || rule.action === "heal-stats" || rule.action === "heal-knowledge-sanity"
+        ? healTargetOptions
         : rule.action === "reroll-blank-trait-dice" && luckyCoinSequenceOptions.length > 0
           ? luckyCoinSequenceOptions
           : rule.valueOptions || [];
   const requiresValueSelection =
     rule.action === "set-trait-roll-total" ||
-    rule.action === "heal-critical-traits" ||
-    rule.action === "heal-stats" ||
+    ((rule.action === "heal-critical-traits" ||
+      rule.action === "heal-stats" ||
+      rule.action === "heal-knowledge-sanity") &&
+      healTargetOptions.length > 1) ||
     (rule.action === "reroll-blank-trait-dice" && luckyCoinSequenceOptions.length > 0);
   const actionSatisfied =
-    rule.action === "heal-critical-traits" || rule.action === "heal-stats"
+    rule.action === "heal-critical-traits" ||
+    rule.action === "heal-stats" ||
+    rule.action === "heal-knowledge-sanity"
       ? canUseHealAbilityNow(game, viewedCard)
       : rule.action === "reroll-all-trait-dice"
         ? isCreepyDollAvailableThisTurn(game, viewedCard)
@@ -1295,7 +1318,7 @@ export function chooseCardActiveAbilityValueState(g, total, viewedCard, deps) {
       diceAnimation: result.diceAnimation || null,
     };
   }
-  if (action === "heal-critical-traits" || action === "heal-stats") {
+  if (action === "heal-critical-traits" || action === "heal-stats" || action === "heal-knowledge-sanity") {
     const result = applyFirstAidKitNowState(g, viewedCard, total);
     return {
       game: result.game,
@@ -1327,7 +1350,7 @@ export function chooseCardActiveAbilityNowState(g, viewedCard, deps = {}) {
   if (action === "teleport-any-tile") {
     return applyMapNowState(g, viewedCard);
   }
-  if (action === "heal-critical-traits" || action === "heal-stats") {
+  if (action === "heal-critical-traits" || action === "heal-stats" || action === "heal-knowledge-sanity") {
     return applyFirstAidKitNowState(g, viewedCard);
   }
 
