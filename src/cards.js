@@ -1,18 +1,19 @@
 export const OMEN_CARDS = [
-  // {
-  //   id: "armor",
-  //   name: "Armor",
-  //   passiveEffects: [
-  //     {
-  //       type: "damage-reduction",
-  //       damageTypes: ["physical"],
-  //       amount: 1,
-  //     },
-  //   ],
-  //   passiveAbility:
-  //     "Whenever you take any physical damage, reduce that damage by 1. (the Armor doesn't prevent General damage or the direct loss of Might and/or Speed)",
-  // },
-  // {
+  {
+    id: "dog",
+    name: "Dog",
+    passiveEffects: [
+      {
+        type: "trait-roll-bonus",
+        stat: "speed",
+        amount: 1,
+      },
+    ],
+    passiveAbility: "Add 1 to the result of your speed rolls",
+    activeAbilityRule: { trigger: "on-your-turn", action: "dog-remote-trade" },
+    activeAbility:
+      "Once during your turn, you may use the Dog to trade any number of Items with another explorer up to 4 tiles away, using normal trading rules.",
+  },
   //   id: "book",
   //   name: "Book",
   //   passiveEffects: [
@@ -27,32 +28,18 @@ export const OMEN_CARDS = [
   //   activeAbility:
   //     "Once during your turn, you may use the book to lose 1 Sanity. On the next trait roll you make this turn that isn't an attack, you may use your knowledge in place of the named trait.",
   // },
-  {
-    id: "dagger",
-    name: "Dagger",
-    activeAbilityRule: {
-      trigger: "attack",
-      action: "optional-speed-loss-for-attack-dice",
-      costStat: "speed",
-      costAmount: 1,
-      bonusDice: 2,
-    },
-    activeAbility:
-      "When you attack, you may lose 1 Speed. If you do, roll 2 extra dice on that attack.",
-  },
   // {
-  //   id: "dog",
-  //   name: "Dog",
-  //   passiveEffects: [
-  //     {
-  //       type: "trait-roll-bonus",
-  //       stat: "speed",
-  //       amount: 1,
-  //     },
-  //   ],
-  //   passiveAbility: "Add 1 to the result of your speed rolls",
+  //   id: "dagger",
+  //   name: "Dagger",
+  //   activeAbilityRule: {
+  //     trigger: "attack",
+  //     action: "optional-speed-loss-for-attack-dice",
+  //     costStat: "speed",
+  //     costAmount: 1,
+  //     bonusDice: 2,
+  //   },
   //   activeAbility:
-  //     "Once during your turn, you may use the Dog to trade any number of Items or Omens with another player up to 4 tiles away, using normal trading rules.",
+  //     "When you attack, you may lose 1 Speed. If you do, roll 2 extra dice on that attack.",
   // },
   // {
   //   id: "holy-symbol",
@@ -126,19 +113,19 @@ export const OMEN_CARDS = [
 ];
 
 export const ITEM_CARDS = [
-  // {
-  //   id: "angels-feather",
-  //   name: "Angel's Feather",
-  //   subtype: "trait-roll",
-  //   isWeapon: false,
-  //   activeAbilityRule: {
-  //     trigger: "trait-roll-required",
-  //     action: "set-trait-roll-total",
-  //     valueSelection: "number-0-8",
-  //   },
-  //   activeAbility:
-  //     "When you are required to make a trait roll, you may instead bury Angel's Feather. If you do, choose a number from 0-8. Use that number as the result of the required roll.",
-  // },
+  {
+    id: "angels-feather",
+    name: "Angel's Feather",
+    subtype: "trait-roll",
+    isWeapon: false,
+    activeAbilityRule: {
+      trigger: "trait-roll-required",
+      action: "set-trait-roll-total",
+      valueSelection: "number-0-8",
+    },
+    activeAbility:
+      "When you are required to make a trait roll, you may instead bury Angel's Feather. If you do, choose a number from 0-8. Use that number as the result of the required roll.",
+  },
   // {
   //   id: "brooch",
   //   name: "Brooch",
@@ -301,14 +288,14 @@ export const ITEM_CARDS = [
   //   activeAbilityRule: { trigger: "die-just-rolled", action: "reroll-one-die" },
   //   activeAbility: "Once during your turn, you may reroll 1 die that you just rolled.",
   // },
-  // {
-  //   id: "skeleton-key",
-  //   name: "Skeleton Key",
-  //   isWeapon: false,
-  //   activeAbilityRule: { trigger: "on-your-turn", action: "move-through-walls" },
-  //   activeAbility:
-  //     "You may move through walls. Whenever you do so, roll 1 die. If you roll a blank, bury the Skeleton Key. You may not use the Skeleton Key to discover new rooms.",
-  // },
+  {
+    id: "skeleton-key",
+    name: "Skeleton Key",
+    isWeapon: false,
+    activeAbilityRule: { trigger: "on-your-turn", action: "move-through-walls" },
+    activeAbility:
+      "You may move through walls. Whenever you do so, roll 1 die. If you roll a blank, bury the Skeleton Key. You may not use the Skeleton Key to discover new rooms.",
+  },
   // {
   //   id: "strange-amulet",
   //   name: "Strange Amulet",

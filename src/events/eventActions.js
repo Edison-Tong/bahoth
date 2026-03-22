@@ -15,6 +15,145 @@ const STAT_LABELS = {
 };
 const PLAYER_STAT_ORDER = ["might", "speed", "sanity", "knowledge"];
 const CRITICAL_STAT_INDEX = 1;
+const DIR = {
+  N: { dx: 0, dy: -1 },
+  S: { dx: 0, dy: 1 },
+  E: { dx: 1, dy: 0 },
+  W: { dx: -1, dy: 0 },
+};
+const OPPOSITE = { N: "S", S: "N", E: "W", W: "E" };
+
+function getLeaveMoveCost(tile) {
+  return tile?.obstacle ? 2 : 1;
+}
+
+function getTileByPosition(board, floor, x, y) {
+  return board?.[floor]?.find((tile) => tile.x === x && tile.y === y) || null;
+}
+
+function getTileById(board, id) {
+  if (!id) return null;
+  for (const floor of ["ground", "upper", "basement"]) {
+    const found = board?.[floor]?.find((tile) => tile.id === id);
+    if (found) return { ...found, floor };
+  }
+  return null;
+}
+
+function getMovementNeighbors(board, current) {
+  if (!current) return [];
+  const neighbors = [];
+  const currentTile = getTileByPosition(board, current.floor, current.x, current.y);
+  if (!currentTile) return neighbors;
+
+  const stepCost = getLeaveMoveCost(currentTile);
+
+  for (const dir of currentTile.doors || []) {
+    const offset = DIR[dir];
+    if (!offset) continue;
+    const nx = current.x + offset.dx;
+    const ny = current.y + offset.dy;
+    const neighbor = getTileByPosition(board, current.floor, nx, ny);
+    if (!neighbor) continue;
+    if (!(neighbor.doors || []).includes(OPPOSITE[dir])) continue;
+    neighbors.push({ floor: current.floor, x: nx, y: ny, cost: stepCost });
+  }
+
+  if (currentTile.connectsTo) {
+    const connected = getTileById(board, currentTile.connectsTo);
+    if (connected) {
+      neighbors.push({ floor: connected.floor, x: connected.x, y: connected.y, cost: stepCost });
+    }
+  }
+
+  for (const floor of ["ground", "upper", "basement"]) {
+    for (const tile of board?.[floor] || []) {
+      if (tile.connectsTo === currentTile.id) {
+        neighbors.push({ floor, x: tile.x, y: tile.y, cost: stepCost });
+      }
+    }
+  }
+
+  return neighbors;
+}
+
+function computeReachableDistances(board, start, maxDistance) {
+  const distances = new Map();
+  const queue = [{ ...start, distance: 0 }];
+  const keyOf = (node) => `${node.floor}:${node.x}:${node.y}`;
+
+  while (queue.length > 0) {
+    queue.sort((a, b) => a.distance - b.distance);
+    const current = queue.shift();
+    const currentKey = keyOf(current);
+    const known = distances.get(currentKey);
+    if (known !== undefined && known <= current.distance) continue;
+    distances.set(currentKey, current.distance);
+
+    for (const neighbor of getMovementNeighbors(board, current)) {
+      const nextDistance = current.distance + neighbor.cost;
+      if (nextDistance > maxDistance) continue;
+      const nextKey = keyOf(neighbor);
+      const knownNext = distances.get(nextKey);
+      if (knownNext !== undefined && knownNext <= nextDistance) continue;
+      queue.push({ ...neighbor, distance: nextDistance });
+    }
+  }
+
+  return distances;
+}
+
+export function getDogTradeTargets(game, ownerIndex, maxDistance = 4) {
+  const owner = game?.players?.[ownerIndex];
+  if (!owner || !owner.isAlive) return [];
+
+  const start = { floor: owner.floor, x: owner.x, y: owner.y };
+  const distances = computeReachableDistances(game.board, start, maxDistance);
+
+  return (game.players || [])
+    .map((player, playerIndex) => ({ player, playerIndex }))
+    .filter(({ player, playerIndex }) => playerIndex !== ownerIndex && player.isAlive)
+    .map(({ player, playerIndex }) => {
+      const key = `${player.floor}:${player.x}:${player.y}`;
+      const distance = distances.get(key);
+      if (distance === undefined || distance > maxDistance) return null;
+      return {
+        playerIndex,
+        name: player.name,
+        floor: player.floor,
+        x: player.x,
+        y: player.y,
+        distance,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.distance - b.distance || a.name.localeCompare(b.name));
+}
+
+export function getDogMoveOptions(game, position, movesLeft) {
+  if (!game || !position || !Number.isFinite(movesLeft) || movesLeft <= 0) return [];
+
+  const nextByKey = new Map();
+  const neighbors = getMovementNeighbors(game.board, position);
+
+  for (const neighbor of neighbors) {
+    const cost = Number(neighbor.cost) || 0;
+    if (cost <= 0 || cost > movesLeft) continue;
+
+    const key = `${neighbor.floor}:${neighbor.x}:${neighbor.y}`;
+    const previous = nextByKey.get(key);
+    if (!previous || cost < previous.cost) {
+      nextByKey.set(key, {
+        floor: neighbor.floor,
+        x: neighbor.x,
+        y: neighbor.y,
+        cost,
+      });
+    }
+  }
+
+  return Array.from(nextByKey.values()).sort((a, b) => a.cost - b.cost || a.y - b.y || a.x - b.x);
+}
 
 function getInventoryCard(game, viewedCard) {
   if (!viewedCard || viewedCard.ownerCollection !== "inventory") return null;
@@ -78,6 +217,21 @@ function isRabbitsFootAvailableThisTurn(game, viewedCard) {
     Array.isArray(game.tileEffect?.dice) &&
     game.tileEffect.dice.length > 0
   );
+}
+
+function isDogTradeAvailableThisTurn(game, viewedCard) {
+  if (!viewedCard || viewedCard.ownerCollection !== "omens") return false;
+  const owner = game.players?.[viewedCard.ownerIndex];
+  const omenCard = owner?.omens?.[viewedCard.ownerCardIndex];
+  if (!owner || !omenCard || omenCard.id !== "dog") return false;
+  if (omenCard.lastActiveAbilityTurnUsed === game.turnNumber) return false;
+
+  const targets = getDogTradeTargets(game, viewedCard.ownerIndex, 4);
+  if (targets.length === 0) return false;
+
+  const ownerHasItems = (owner.inventory || []).length > 0;
+  const anyTargetHasItems = targets.some(({ playerIndex }) => (game.players[playerIndex]?.inventory || []).length > 0);
+  return ownerHasItems || anyTargetHasItems;
 }
 
 function hasSkeletonKeyWallMoveAvailable(game, viewedCard) {
@@ -867,6 +1021,7 @@ export function getCardActiveAbilityState({
     rule.action === "reroll-all-trait-dice" ||
     rule.action === "reroll-blank-trait-dice" ||
     rule.action === "reroll-one-die" ||
+    rule.action === "dog-remote-trade" ||
     rule.action === "move-through-walls" ||
     rule.action === "substitute-sanity-for-knowledge" ||
     rule.action === "substitute-knowledge-for-trait" ||
@@ -919,15 +1074,17 @@ export function getCardActiveAbilityState({
           ? isLuckyCoinAvailableThisTurn(game, viewedCard)
           : rule.action === "reroll-one-die"
             ? isRabbitsFootAvailableThisTurn(game, viewedCard)
-            : rule.action === "move-through-walls"
-              ? canUseNormalMovementNow(game, viewedCard) && hasSkeletonKeyWallMoveAvailable(game, viewedCard)
-              : rule.action === "substitute-sanity-for-knowledge"
-                ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
-                    .canUseMagicCameraNow
-                : rule.action === "substitute-knowledge-for-trait"
-                  ? getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride })
-                      .canUseBookNow
-                  : true;
+            : rule.action === "dog-remote-trade"
+              ? isDogTradeAvailableThisTurn(game, viewedCard)
+              : rule.action === "move-through-walls"
+                ? canUseNormalMovementNow(game, viewedCard) && hasSkeletonKeyWallMoveAvailable(game, viewedCard)
+                : rule.action === "substitute-sanity-for-knowledge"
+                  ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
+                      .canUseMagicCameraNow
+                  : rule.action === "substitute-knowledge-for-trait"
+                    ? getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride })
+                        .canUseBookNow
+                    : true;
 
   return {
     canUseNow: triggerSatisfied && hasSupportedAction && actionSatisfied,
@@ -1510,9 +1667,26 @@ export function applySkeletonKeyNowState(g, viewedCard) {
     return { game: g, closeViewedCard: false, diceAnimation: null };
   }
 
+  const nextPlayers = g.players.map((player, playerIndex) => {
+    if (playerIndex !== viewedCard.ownerIndex) return player;
+
+    return {
+      ...player,
+      inventory: player.inventory.map((card, cardIndex) =>
+        cardIndex === viewedCard.ownerCardIndex
+          ? {
+              ...card,
+              lastActiveAbilityTurnUsed: g.turnNumber,
+            }
+          : card
+      ),
+    };
+  });
+
   return {
     game: {
       ...g,
+      players: nextPlayers,
       skeletonKeyArmed: true,
       message: `${owner.name} uses ${inventoryCard.name}. Your next wall move costs movement normally.`,
     },

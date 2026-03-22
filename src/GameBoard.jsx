@@ -25,6 +25,8 @@ import {
   chooseCardActiveAbilityNowState,
   getCardActiveAbilityState,
   resolveEventDamageChoiceState,
+  getDogTradeTargets,
+  getDogMoveOptions,
 } from "./events/eventActions";
 import { getMatchingOutcome } from "./events/eventEngine";
 import { useDrawnCardHandlers, useEventActionHandlers, useEventRuntimeEffects } from "./events/useEventHooks";
@@ -81,6 +83,15 @@ function describePostDamageEffects(effects) {
 
 function formatStatTrackValue(value) {
   return value === 0 ? "☠" : value;
+}
+
+function isItemTradeLockedThisTurn(card, turnNumber) {
+  if (!card) return false;
+  return (
+    card.lastActiveAbilityTurnUsed === turnNumber ||
+    card.lastAttackTurnUsed === turnNumber ||
+    card.lastUsedTurn === turnNumber
+  );
 }
 
 function getNecklaceOfTeethCriticalStats(player) {
@@ -219,6 +230,7 @@ export default function GameBoard({ players, onQuit }) {
   const [diceAnimation, setDiceAnimation] = useState(null);
   const [expandedSidebarPlayers, setExpandedSidebarPlayers] = useState(() => new Set());
   const [viewedCard, setViewedCard] = useState(null);
+  const [dogTradeState, setDogTradeState] = useState(null);
   const [queuedTraitRollOverride, setQueuedTraitRollOverride] = useState(null);
   const queuedTraitRollOverrideRef = useRef(null);
   const boardRef = useRef(null);
@@ -500,6 +512,8 @@ export default function GameBoard({ players, onQuit }) {
   // Keyboard controls
   useEffect(() => {
     function handleKeyDown(e) {
+      if (dogTradeState) return;
+
       // Rotate phase: R/E to rotate, Enter to place
       if (game.turnPhase === "rotate") {
         if (e.key === "r" || e.key === "R" || e.key === "ArrowRight") {
@@ -1861,6 +1875,32 @@ export default function GameBoard({ players, onQuit }) {
   function handleUseViewedCardActiveAbilityNow() {
     if (!viewedCard || !viewedCardActiveAbilityState?.canUseNow) return;
 
+    if (viewedCard.activeAbilityRule?.action === "dog-remote-trade") {
+      const targets = getDogTradeTargets(game, viewedCard.ownerIndex, 4);
+      if (targets.length === 0) {
+        setGame((g) => ({
+          ...g,
+          message: "Dog cannot find an explorer within 4 move points to trade with.",
+        }));
+        return;
+      }
+
+      setDogTradeState({
+        phase: "move",
+        ownerIndex: viewedCard.ownerIndex,
+        dogOmenIndex: viewedCard.ownerCardIndex,
+        floor: game.players[viewedCard.ownerIndex].floor,
+        x: game.players[viewedCard.ownerIndex].x,
+        y: game.players[viewedCard.ownerIndex].y,
+        movesLeft: 4,
+        targetPlayerIndex: null,
+        ownerGiveIndexes: [],
+        targetGiveIndexes: [],
+      });
+      setViewedCard(null);
+      return;
+    }
+
     if (!viewedCardActiveAbilityState.requiresValueSelection) {
       const result = chooseCardActiveAbilityNowState(game, viewedCard, {
         drawnEventPrimaryAction,
@@ -1913,6 +1953,171 @@ export default function GameBoard({ players, onQuit }) {
 
   function handleCloseViewedCard() {
     setViewedCard(null);
+  }
+
+  function handleStartDogTrade(targetPlayerIndex) {
+    setDogTradeState((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        phase: "trade",
+        targetPlayerIndex,
+        targetGiveIndexes: [],
+      };
+    });
+  }
+
+  function handleMoveDogToken(move) {
+    if (!move) return;
+    setCameraFloor(move.floor);
+    setDogTradeState((prev) => {
+      if (!prev || prev.phase !== "move") return prev;
+      const cost = Number(move?.cost) || 0;
+      if (cost <= 0 || cost > prev.movesLeft) return prev;
+
+      return {
+        ...prev,
+        floor: move.floor,
+        x: move.x,
+        y: move.y,
+        movesLeft: prev.movesLeft - cost,
+      };
+    });
+  }
+
+  function handleBackToDogMove() {
+    setDogTradeState((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        phase: "move",
+        targetPlayerIndex: null,
+        ownerGiveIndexes: [],
+        targetGiveIndexes: [],
+      };
+    });
+  }
+
+  function handleToggleDogOwnerGive(index) {
+    setDogTradeState((prev) => {
+      if (!prev) return prev;
+      const owner = game.players[prev.ownerIndex];
+      const card = owner?.inventory?.[index];
+      if (!card || isItemTradeLockedThisTurn(card, game.turnNumber)) return prev;
+      const exists = prev.ownerGiveIndexes.includes(index);
+      return {
+        ...prev,
+        ownerGiveIndexes: exists
+          ? prev.ownerGiveIndexes.filter((value) => value !== index)
+          : [...prev.ownerGiveIndexes, index],
+      };
+    });
+  }
+
+  function handleToggleDogTargetGive(index) {
+    setDogTradeState((prev) => {
+      if (!prev) return prev;
+      const target = game.players[prev.targetPlayerIndex];
+      const card = target?.inventory?.[index];
+      if (!card || isItemTradeLockedThisTurn(card, game.turnNumber)) return prev;
+      const exists = prev.targetGiveIndexes.includes(index);
+      return {
+        ...prev,
+        targetGiveIndexes: exists
+          ? prev.targetGiveIndexes.filter((value) => value !== index)
+          : [...prev.targetGiveIndexes, index],
+      };
+    });
+  }
+
+  function handleCancelDogTrade() {
+    setDogTradeState(null);
+  }
+
+  function handleConfirmDogTrade() {
+    if (!dogTradeState) return;
+
+    const owner = game.players[dogTradeState.ownerIndex];
+    const target = game.players[dogTradeState.targetPlayerIndex];
+    if (!owner || !target) {
+      setDogTradeState(null);
+      return;
+    }
+
+    const targetOnDogTile =
+      target.floor === dogTradeState.floor && target.x === dogTradeState.x && target.y === dogTradeState.y;
+    if (!targetOnDogTile) {
+      setGame((g) => ({
+        ...g,
+        message: "Dog must be on the same tile as the explorer to trade.",
+      }));
+      return;
+    }
+
+    const ownerGiveSet = new Set(
+      dogTradeState.ownerGiveIndexes.filter(
+        (index) =>
+          Number.isInteger(index) &&
+          index >= 0 &&
+          index < owner.inventory.length &&
+          !isItemTradeLockedThisTurn(owner.inventory[index], game.turnNumber)
+      )
+    );
+    const targetGiveSet = new Set(
+      dogTradeState.targetGiveIndexes.filter(
+        (index) =>
+          Number.isInteger(index) &&
+          index >= 0 &&
+          index < target.inventory.length &&
+          !isItemTradeLockedThisTurn(target.inventory[index], game.turnNumber)
+      )
+    );
+
+    if (ownerGiveSet.size === 0 && targetGiveSet.size === 0) {
+      setGame((g) => ({
+        ...g,
+        message: "Select at least one item for Dog to carry.",
+      }));
+      return;
+    }
+
+    const ownerGivenItems = owner.inventory.filter((_, index) => ownerGiveSet.has(index));
+    const targetGivenItems = target.inventory.filter((_, index) => targetGiveSet.has(index));
+    const ownerRemainingItems = owner.inventory.filter((_, index) => !ownerGiveSet.has(index));
+    const targetRemainingItems = target.inventory.filter((_, index) => !targetGiveSet.has(index));
+
+    const nextPlayers = game.players.map((player, index) => {
+      if (index === dogTradeState.ownerIndex) {
+        return {
+          ...player,
+          inventory: [...ownerRemainingItems, ...targetGivenItems],
+          omens: player.omens.map((card, cardIndex) =>
+            cardIndex === dogTradeState.dogOmenIndex
+              ? {
+                  ...card,
+                  lastActiveAbilityTurnUsed: game.turnNumber,
+                }
+              : card
+          ),
+        };
+      }
+
+      if (index === dogTradeState.targetPlayerIndex) {
+        return {
+          ...player,
+          inventory: [...targetRemainingItems, ...ownerGivenItems],
+        };
+      }
+
+      return player;
+    });
+
+    setGame({
+      ...game,
+      players: nextPlayers,
+      message: `${owner.name}'s Dog completed a trade with ${target.name} (${ownerGivenItems.length} item${ownerGivenItems.length !== 1 ? "s" : ""} sent, ${targetGivenItems.length} item${targetGivenItems.length !== 1 ? "s" : ""} returned).`,
+    });
+    setDogTradeState(null);
   }
 
   function handleSelectRabbitFootDie(dieIndex) {
@@ -2004,6 +2209,37 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   const validMoves = cameraFloor === currentPlayer.floor ? getValidMoves() : [];
+  const dogMoveOptions =
+    dogTradeState?.phase === "move"
+      ? getDogMoveOptions(
+          game,
+          {
+            floor: dogTradeState.floor,
+            x: dogTradeState.x,
+            y: dogTradeState.y,
+          },
+          dogTradeState.movesLeft
+        )
+      : [];
+  const dogMoveOptionsOnFloor = dogMoveOptions.filter((move) => move.floor === cameraFloor);
+  const dogStairMoveOption =
+    dogTradeState?.phase === "move" ? dogMoveOptions.find((move) => move.floor !== dogTradeState.floor) || null : null;
+  const dogStairDestination = dogStairMoveOption
+    ? getTileAtPosition(game.board, dogStairMoveOption.x, dogStairMoveOption.y, dogStairMoveOption.floor)
+    : null;
+  const dogTradeTargetsOnTile =
+    dogTradeState?.phase === "move"
+      ? game.players
+          .map((player, playerIndex) => ({ player, playerIndex }))
+          .filter(
+            ({ player, playerIndex }) =>
+              playerIndex !== dogTradeState.ownerIndex &&
+              player.isAlive &&
+              player.floor === dogTradeState.floor &&
+              player.x === dogTradeState.x &&
+              player.y === dogTradeState.y
+          )
+      : [];
   const pendingSpecialPlacementTargets = (game.pendingSpecialPlacement?.placements || []).filter(
     (placement) => placement.floor === cameraFloor
   );
@@ -2209,6 +2445,14 @@ export default function GameBoard({ players, onQuit }) {
                       ))}
                     </div>
                   )}
+                  {dogTradeState &&
+                    dogTradeState.floor === cameraFloor &&
+                    dogTradeState.x === tile.x &&
+                    dogTradeState.y === tile.y && (
+                      <div className="player-token" title="Dog">
+                        🐕
+                      </div>
+                    )}
                 </div>
               );
             })}
@@ -2261,7 +2505,8 @@ export default function GameBoard({ players, onQuit }) {
               })()}
 
             {/* Explore/move targets */}
-            {!game.pendingExplore &&
+            {!dogTradeState &&
+              !game.pendingExplore &&
               validMoves.map((m) => {
                 // Don't show target if there's already a tile there (move targets are on existing tiles)
                 if (m.type === "move") return null;
@@ -2305,17 +2550,33 @@ export default function GameBoard({ players, onQuit }) {
             />
 
             {/* Clickable overlay on existing tiles for movement/backtrack */}
-            {validMoves
-              .filter((m) => m.type === "move" || m.type === "backtrack" || m.type === "wall-move")
-              .map((m) => {
-                const left = (m.x - minX) * (TILE_SIZE + GAP);
-                const top = (m.y - minY) * (TILE_SIZE + GAP);
+            {!dogTradeState &&
+              validMoves
+                .filter((m) => m.type === "move" || m.type === "backtrack" || m.type === "wall-move")
+                .map((m) => {
+                  const left = (m.x - minX) * (TILE_SIZE + GAP);
+                  const top = (m.y - minY) * (TILE_SIZE + GAP);
+                  return (
+                    <button
+                      key={`move-${m.x}-${m.y}`}
+                      className={m.type === "backtrack" ? "backtrack-overlay" : "move-overlay"}
+                      style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
+                      onClick={() => handleAction(m)}
+                    />
+                  );
+                })}
+
+            {dogTradeState?.phase === "move" &&
+              dogMoveOptionsOnFloor.map((move) => {
+                const left = (move.x - minX) * (TILE_SIZE + GAP);
+                const top = (move.y - minY) * (TILE_SIZE + GAP);
                 return (
                   <button
-                    key={`move-${m.x}-${m.y}`}
-                    className={m.type === "backtrack" ? "backtrack-overlay" : "move-overlay"}
+                    key={`dog-move-${move.floor}-${move.x}-${move.y}`}
+                    className="move-overlay"
                     style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
-                    onClick={() => handleAction(m)}
+                    onClick={() => handleMoveDogToken(move)}
+                    title={`Dog move cost: ${move.cost}`}
                   />
                 );
               })}
@@ -2334,22 +2595,23 @@ export default function GameBoard({ players, onQuit }) {
             Confirm Placement
           </button>
         )}
-        {game.turnPhase === "move" && game.movePath.length > 1 && (
+        {!dogTradeState && game.turnPhase === "move" && game.movePath.length > 1 && (
           <button className="btn btn-confirm" onClick={handleConfirmMove}>
             Move Here
           </button>
         )}
-        {stairTarget && (
+        {!dogTradeState && stairTarget && (
           <button className="btn btn-stairs" onClick={handleChangeFloor}>
             {stairIsBacktrack ? `Go back to ${stairTarget.name}` : `Move to ${stairTarget.name}`}
           </button>
         )}
-        {canUseMysticElevator && (
+        {!dogTradeState && canUseMysticElevator && (
           <button className="btn btn-stairs" onClick={handleRollMysticElevator}>
             Use Elevator
           </button>
         )}
-        {canUseSecretPassage &&
+        {!dogTradeState &&
+          canUseSecretPassage &&
           secretPassageTargets.map((target) => (
             <button
               key={`secret-passage-${target.floor}-${target.x}-${target.y}`}
@@ -2375,11 +2637,37 @@ export default function GameBoard({ players, onQuit }) {
         )}
         {(game.turnPhase === "endTurn" || game.turnPhase === "move") &&
           !game.pendingExplore &&
+          !dogTradeState &&
           !(eventState?.awaiting?.type === "tile-choice" && eventState.awaiting?.source === "item-active-ability") && (
             <button className="btn btn-primary" onClick={handleEndTurn}>
               End Turn — Pass to {endTurnPreviewPlayerName}
             </button>
           )}
+
+        {dogTradeState?.phase === "move" && (
+          <>
+            <button className="btn btn-secondary" disabled>
+              Dog moves left: {dogTradeState.movesLeft}
+            </button>
+            {dogStairMoveOption && (
+              <button className="btn btn-stairs" onClick={() => handleMoveDogToken(dogStairMoveOption)}>
+                Move Dog to {dogStairDestination?.name || "connected tile"} ({dogStairMoveOption.floor})
+              </button>
+            )}
+            {dogTradeTargetsOnTile.map(({ player, playerIndex }) => (
+              <button
+                key={`dog-trade-start-${playerIndex}`}
+                className="btn btn-primary"
+                onClick={() => handleStartDogTrade(playerIndex)}
+              >
+                Trade with {player.name}
+              </button>
+            ))}
+            <button className="btn btn-secondary" onClick={handleCancelDogTrade}>
+              Cancel Dog Ability
+            </button>
+          </>
+        )}
       </div>
 
       {/* Player sidebar */}
@@ -2556,6 +2844,89 @@ export default function GameBoard({ players, onQuit }) {
             {viewedCard.flavor && <p className="card-flavor">{viewedCard.flavor}</p>}
             <button className="btn btn-primary" onClick={handleCloseViewedCard}>
               Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {dogTradeState?.phase === "trade" && (
+        <div className="sidebar-card-viewer" role="dialog" aria-label="Dog trade">
+          <div className="card-modal card-viewer">
+            <div className="card-type-label">OMEN</div>
+            <h2 className="card-name">Dog Trade</h2>
+            {(() => {
+              const owner = game.players[dogTradeState.ownerIndex];
+              const selectedTarget = game.players[dogTradeState.targetPlayerIndex];
+              const selectedTargetIndex = dogTradeState.targetPlayerIndex;
+
+              return (
+                <>
+                  <p>
+                    Dog is on {dogTradeState.floor}. Pick items Dog carries from {owner?.name} and items the target
+                    willingly sends back.
+                  </p>
+
+                  <div style={{ marginBottom: "0.75rem" }}>
+                    Trading with <strong>{selectedTarget?.name || "Unknown"}</strong>
+                  </div>
+
+                  <h3 style={{ marginTop: 0 }}>Send From {owner?.name}</h3>
+                  <div className="event-option-list" style={{ marginBottom: "0.75rem" }}>
+                    {(owner?.inventory || []).length === 0 && (
+                      <div className="sidebar-card-empty">No items to send</div>
+                    )}
+                    {(owner?.inventory || []).map((card, index) => {
+                      const selected = dogTradeState.ownerGiveIndexes.includes(index);
+                      const locked = isItemTradeLockedThisTurn(card, game.turnNumber);
+                      return (
+                        <button
+                          key={`dog-owner-give-${index}`}
+                          className={selected ? "btn btn-primary" : "btn btn-secondary"}
+                          onClick={() => handleToggleDogOwnerGive(index)}
+                          disabled={locked}
+                        >
+                          {selected ? "[Send] " : ""}
+                          {card.name}
+                          {locked ? " (used this turn)" : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <h3 style={{ marginTop: 0 }}>Receive From {selectedTarget?.name || "Target"}</h3>
+                  <div className="event-option-list" style={{ marginBottom: "0.75rem" }}>
+                    {(selectedTarget?.inventory || []).length === 0 && (
+                      <div className="sidebar-card-empty">No items offered</div>
+                    )}
+                    {(selectedTarget?.inventory || []).map((card, index) => {
+                      const selected = dogTradeState.targetGiveIndexes.includes(index);
+                      const locked = isItemTradeLockedThisTurn(card, game.turnNumber);
+                      return (
+                        <button
+                          key={`dog-target-give-${selectedTargetIndex}-${index}`}
+                          className={selected ? "btn btn-primary" : "btn btn-secondary"}
+                          onClick={() => handleToggleDogTargetGive(index)}
+                          disabled={locked}
+                        >
+                          {selected ? "[Offer] " : ""}
+                          {card.name}
+                          {locked ? " (used this turn)" : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              );
+            })()}
+
+            <button className="btn btn-primary" onClick={handleConfirmDogTrade}>
+              Confirm Dog Trade
+            </button>
+            <button className="btn btn-secondary" onClick={handleBackToDogMove}>
+              Back to Dog Movement
+            </button>
+            <button className="btn btn-secondary" onClick={handleCancelDogTrade}>
+              Cancel
             </button>
           </div>
         </div>
