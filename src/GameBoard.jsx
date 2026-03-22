@@ -35,6 +35,15 @@ import EventResolutionModal, {
   DrawnCardModal,
   EventTileChoiceTargets,
 } from "./components/EventResolutionModal";
+import {
+  applyDrawIdolEventCardState,
+  applySkipIdolEventCardState,
+  buildIdolChoiceTileEffect,
+  hasIdol,
+  shouldOfferIdolChoice,
+} from "./abilities/idolAbility";
+import { createDogTradeStartState } from "./abilities/dogAbility";
+import { applyHolySymbolDuringPendingExplore } from "./abilities/holySymbolAbility";
 import "./GameBoard.css";
 
 // Direction offsets
@@ -1238,16 +1247,19 @@ export default function GameBoard({ players, onQuit }) {
         }
 
         const idolOwner = nextPlayers[g.currentPlayerIndex];
-        const hasIdol = (idolOwner?.omens || []).some((card) => card.id === "idol");
-        if (hasIdol && !tileEffect && drawnCard?.type === "event") {
-          tileEffect = {
-            type: "idol-event-choice",
+        if (
+          shouldOfferIdolChoice({
+            player: idolOwner,
+            queuedCard: drawnCard,
+            blockedByTileEffect: !!tileEffect,
+          })
+        ) {
+          tileEffect = buildIdolChoiceTileEffect({
             tileName: placedTile.name,
             queuedCard: drawnCard,
             nextTurnPhase: "move",
             nextMessage: `${p.name} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
-            message: "Use Idol to skip drawing this Event card?",
-          };
+          });
           drawnCard = null;
           turnPhase = "card";
           message = `${p.name} discovered an Event symbol.`;
@@ -1785,20 +1797,16 @@ export default function GameBoard({ players, onQuit }) {
         }
 
         const currentPlayer = g.players[g.currentPlayerIndex];
-        const hasIdol = (currentPlayer?.omens || []).some((card) => card.id === "idol");
         const queuedEventCard = effect.pendingSpecialPlacement ? null : effect.queuedCard || null;
-        const shouldPromptIdol = hasIdol && queuedEventCard?.type === "event";
-        if (shouldPromptIdol) {
+        if (shouldOfferIdolChoice({ player: currentPlayer, queuedCard: queuedEventCard })) {
           return {
             ...g,
-            tileEffect: {
-              type: "idol-event-choice",
+            tileEffect: buildIdolChoiceTileEffect({
               tileName: effect.tileName,
               queuedCard: queuedEventCard,
-              nextTurnPhase: effect.nextTurnPhase === "card" ? "move" : effect.nextTurnPhase,
+              nextTurnPhase: effect.nextTurnPhase,
               nextMessage: effect.nextMessage,
-              message: "Use Idol to skip drawing this Event card?",
-            },
+            }),
             drawnCard: null,
             pendingSpecialPlacement: effect.pendingSpecialPlacement || null,
             turnPhase: "card",
@@ -1857,42 +1865,11 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleDrawIdolEventCard() {
-    setGame((g) => {
-      const effect = g.tileEffect;
-      if (!effect || effect.type !== "idol-event-choice") return g;
-      const eventCard = effect.queuedCard;
-      if (!eventCard || eventCard.type !== "event") {
-        return {
-          ...g,
-          tileEffect: null,
-          turnPhase: effect.nextTurnPhase || "move",
-          message: effect.nextMessage || g.message,
-        };
-      }
-
-      return {
-        ...g,
-        tileEffect: null,
-        drawnCard: eventCard,
-        turnPhase: "card",
-        message: `${g.players[g.currentPlayerIndex].name} draws an Event card.`,
-      };
-    });
+    setGame((g) => applyDrawIdolEventCardState(g));
   }
 
   function handleSkipIdolEventCard() {
-    setGame((g) => {
-      const effect = g.tileEffect;
-      if (!effect || effect.type !== "idol-event-choice") return g;
-
-      return {
-        ...g,
-        tileEffect: null,
-        drawnCard: null,
-        turnPhase: effect.nextTurnPhase || "move",
-        message: effect.nextMessage || `${g.players[g.currentPlayerIndex].name} skips drawing the Event card.`,
-      };
-    });
+    setGame((g) => applySkipIdolEventCardState(g));
   }
 
   function handleSkipNecklaceOfTeethGain() {
@@ -1967,7 +1944,7 @@ export default function GameBoard({ players, onQuit }) {
       const pendingPlacement = g.pendingSpecialPlacement;
       if (!pendingPlacement) return g;
       const currentPlayer = g.players[g.currentPlayerIndex];
-      const hasIdol = (currentPlayer?.omens || []).some((card) => card.id === "idol");
+      const currentPlayerHasIdol = hasIdol(currentPlayer);
       const isQueuedEventCard = pendingPlacement.queuedCard?.type === "event";
 
       const chosenDoors = placement.validRotations[0];
@@ -1993,7 +1970,7 @@ export default function GameBoard({ players, onQuit }) {
 
         setCameraFloor(placement.floor);
 
-        if (hasIdol && isQueuedEventCard) {
+        if (currentPlayerHasIdol && isQueuedEventCard) {
           return {
             ...g,
             board: updatedBoard,
@@ -2001,14 +1978,12 @@ export default function GameBoard({ players, onQuit }) {
             movePath: [{ x: placement.x, y: placement.y, floor: placement.floor, cost: 0 }],
             pendingSpecialPlacement: null,
             drawnCard: null,
-            tileEffect: {
-              type: "idol-event-choice",
+            tileEffect: buildIdolChoiceTileEffect({
               tileName: placedTile.name,
               queuedCard: pendingPlacement.queuedCard,
-              nextTurnPhase: pendingPlacement.nextTurnPhase === "card" ? "move" : pendingPlacement.nextTurnPhase,
+              nextTurnPhase: pendingPlacement.nextTurnPhase,
               nextMessage: pendingPlacement.nextMessage,
-              message: "Use Idol to skip drawing this Event card?",
-            },
+            }),
             turnPhase: "card",
             message: `${currentPlayer.name} discovered an Event symbol.`,
           };
@@ -2026,7 +2001,7 @@ export default function GameBoard({ players, onQuit }) {
         };
       }
 
-      if (hasIdol && isQueuedEventCard) {
+      if (currentPlayerHasIdol && isQueuedEventCard) {
         return {
           ...g,
           board: {
@@ -2035,14 +2010,12 @@ export default function GameBoard({ players, onQuit }) {
           },
           pendingSpecialPlacement: null,
           drawnCard: null,
-          tileEffect: {
-            type: "idol-event-choice",
+          tileEffect: buildIdolChoiceTileEffect({
             tileName: placedTile.name,
             queuedCard: pendingPlacement.queuedCard,
-            nextTurnPhase: pendingPlacement.nextTurnPhase === "card" ? "move" : pendingPlacement.nextTurnPhase,
+            nextTurnPhase: pendingPlacement.nextTurnPhase,
             nextMessage: pendingPlacement.nextMessage,
-            message: "Use Idol to skip drawing this Event card?",
-          },
+          }),
           turnPhase: "card",
           message: `${currentPlayer.name} discovered an Event symbol.`,
         };
@@ -2089,115 +2062,22 @@ export default function GameBoard({ players, onQuit }) {
     if (!viewedCard || !viewedCardActiveAbilityState?.canUseNow) return;
 
     if (viewedCard.activeAbilityRule?.action === "holy-symbol-bury-discovered-tile") {
-      setGame((g) => {
-        const pe = g.pendingExplore;
-        if (!pe || g.turnPhase !== "rotate" || pe.holySymbolReplacement) {
-          return {
-            ...g,
-            message: "Holy Symbol can only be used before placing a newly discovered tile.",
-          };
-        }
-
-        const stackWithoutPending = [...g.tileStack];
-        if (pe.tileIndex < 0 || pe.tileIndex >= stackWithoutPending.length) {
-          return {
-            ...g,
-            message: "Holy Symbol cannot bury this tile right now.",
-          };
-        }
-
-        const [buriedTile] = stackWithoutPending.splice(pe.tileIndex, 1);
-        if (!buriedTile) {
-          return {
-            ...g,
-            message: "Holy Symbol cannot bury this tile right now.",
-          };
-        }
-
-        const stackWithBuriedTile = [...stackWithoutPending, buriedTile];
-        const allDirs = ["N", "E", "S", "W"];
-        const neededDoor = OPPOSITE[pe.dir];
-
-        const replacementIndex = stackWithBuriedTile.findIndex((tile) => {
-          if (!tile.floors?.includes(pe.floor)) return false;
-          for (let rot = 0; rot < 4; rot += 1) {
-            const rotatedDoors = tile.doors.map((door) => {
-              const doorIndex = allDirs.indexOf(door);
-              return allDirs[(doorIndex + rot) % 4];
-            });
-            if (rotatedDoors.includes(neededDoor)) return true;
-          }
-          return false;
-        });
-
-        if (replacementIndex === -1) {
-          return {
-            ...g,
-            message: "Holy Symbol found no valid replacement tile.",
-          };
-        }
-
-        const replacementTile = stackWithBuriedTile[replacementIndex];
-        const validRotations = [];
-        for (let rot = 0; rot < 4; rot += 1) {
-          const rotatedDoors = replacementTile.doors.map((door) => {
-            const doorIndex = allDirs.indexOf(door);
-            return allDirs[(doorIndex + rot) % 4];
-          });
-          if (rotatedDoors.includes(neededDoor)) {
-            validRotations.push(rotatedDoors);
-          }
-        }
-
-        if (validRotations.length === 0) {
-          return {
-            ...g,
-            message: "Holy Symbol found no valid replacement rotation.",
-          };
-        }
-
-        const owner = g.players[g.currentPlayerIndex];
-        return {
-          ...g,
-          tileStack: stackWithBuriedTile,
-          pendingExplore: {
-            ...pe,
-            tile: replacementTile,
-            tileIndex: replacementIndex,
-            validRotations,
-            rotationIndex: 0,
-            holySymbolReplacement: true,
-          },
-          movePath: [{ x: owner.x, y: owner.y, floor: owner.floor, cost: 0 }],
-          message: `${owner.name} buries ${pe.tile.name} with Holy Symbol and discovers ${replacementTile.name}.`,
-        };
-      });
+      setGame((g) => applyHolySymbolDuringPendingExplore(g, OPPOSITE));
       setViewedCard(null);
       return;
     }
 
     if (viewedCard.activeAbilityRule?.action === "dog-remote-trade") {
-      const targets = getDogTradeTargets(game, viewedCard.ownerIndex, 4);
-      if (targets.length === 0) {
+      const dogStart = createDogTradeStartState(game, viewedCard, getDogTradeTargets);
+      if (!dogStart.ok) {
         setGame((g) => ({
           ...g,
-          message: "Dog cannot find an explorer within 4 move points to trade with.",
+          message: dogStart.message || "Dog cannot be used right now.",
         }));
         return;
       }
 
-      setDogTradeState({
-        phase: "move",
-        ownerIndex: viewedCard.ownerIndex,
-        dogOmenIndex: viewedCard.ownerCardIndex,
-        floor: game.players[viewedCard.ownerIndex].floor,
-        x: game.players[viewedCard.ownerIndex].x,
-        y: game.players[viewedCard.ownerIndex].y,
-        movesLeft: 4,
-        targetPlayerIndex: null,
-        ownerGiveIndexes: [],
-        targetGiveIndexes: [],
-      });
+      setDogTradeState(dogStart.dogTradeState);
       setViewedCard(null);
       return;
     }

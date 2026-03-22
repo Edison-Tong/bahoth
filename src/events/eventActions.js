@@ -1,5 +1,16 @@
 import { advanceEventResolution, getMatchingOutcome } from "./eventEngine";
 import { appendEventSummary, describeEventEffects, getEventRollButtonLabel } from "./eventUtils";
+import {
+  applyMaskNowState as applyMaskNowStateFromAbility,
+  confirmMaskTileChoiceState,
+  isMaskPushAvailableThisTurn as isMaskPushAvailableThisTurnFromAbility,
+  previewMaskTileChoiceState,
+} from "../abilities/maskAbility";
+import {
+  applyBookNowState as applyBookNowStateFromAbility,
+  getBookUsageState as getBookUsageStateFromAbility,
+} from "../abilities/bookAbility";
+import { isDogTradeAvailableThisTurn as isDogTradeAvailableThisTurnFromAbility } from "../abilities/dogAbility";
 
 const DAMAGE_STATS = {
   physical: ["might", "speed"],
@@ -222,47 +233,11 @@ function isRabbitsFootAvailableThisTurn(game, viewedCard) {
 }
 
 function isDogTradeAvailableThisTurn(game, viewedCard) {
-  if (!viewedCard || viewedCard.ownerCollection !== "omens") return false;
-  const owner = game.players?.[viewedCard.ownerIndex];
-  const omenCard = owner?.omens?.[viewedCard.ownerCardIndex];
-  if (!owner || !omenCard || omenCard.id !== "dog") return false;
-  if (omenCard.lastActiveAbilityTurnUsed === game.turnNumber) return false;
-
-  const targets = getDogTradeTargets(game, viewedCard.ownerIndex, 4);
-  if (targets.length === 0) return false;
-
-  const ownerHasItems = (owner.inventory || []).length > 0;
-  const anyTargetHasItems = targets.some(({ playerIndex }) => (game.players[playerIndex]?.inventory || []).length > 0);
-  return ownerHasItems || anyTargetHasItems;
+  return isDogTradeAvailableThisTurnFromAbility(game, viewedCard, getDogTradeTargets);
 }
 
 function isMaskPushAvailableThisTurn(game, viewedCard) {
-  if (!viewedCard || viewedCard.ownerCollection !== "omens") return false;
-  const owner = game.players?.[viewedCard.ownerIndex];
-  const omenCard = owner?.omens?.[viewedCard.ownerCardIndex];
-  if (!owner || !omenCard || omenCard.id !== "mask") return false;
-  if (omenCard.lastActiveAbilityTurnUsed === game.turnNumber) return false;
-
-  const hasOtherExplorerOnTile = (game.players || []).some(
-    (player, index) =>
-      index !== viewedCard.ownerIndex &&
-      player.isAlive &&
-      player.floor === owner.floor &&
-      player.x === owner.x &&
-      player.y === owner.y
-  );
-  if (!hasOtherExplorerOnTile) return false;
-
-  const adjacent = getMovementNeighbors(
-    game.board,
-    {
-      floor: owner.floor,
-      x: owner.x,
-      y: owner.y,
-    },
-    { ignoreObstacles: true }
-  );
-  return adjacent.length > 0;
+  return isMaskPushAvailableThisTurnFromAbility(game, viewedCard, getMovementNeighbors);
 }
 
 function hasSkeletonKeyWallMoveAvailable(game, viewedCard) {
@@ -346,34 +321,13 @@ function getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRo
 }
 
 function getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride }) {
-  const owner = game.players?.[viewedCard?.ownerIndex];
-  const omenCard = viewedCard?.ownerCollection === "omens" ? owner?.omens?.[viewedCard.ownerCardIndex] || null : null;
-  if (!omenCard || omenCard.id !== "book") {
-    return {
-      canApplyNow: false,
-      canQueueForDrawnEvent: false,
-      canUseBookNow: false,
-    };
-  }
-  if (omenCard.lastActiveAbilityTurnUsed === game.turnNumber) {
-    return {
-      canApplyNow: false,
-      canQueueForDrawnEvent: false,
-      canUseBookNow: false,
-    };
-  }
-
-  const base = getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride });
-  const awaiting = game.eventState?.awaiting;
-  const canApplyNow =
-    base.canApplyNow && awaiting?.type === "roll-ready" && awaiting.rollKind === "trait-roll" && !!awaiting.rollStat;
-  const canQueueForDrawnEvent = base.canQueueForDrawnEvent && !!drawnEventPrimaryAction?.isTraitRoll;
-
-  return {
-    canApplyNow,
-    canQueueForDrawnEvent,
-    canUseBookNow: canApplyNow || canQueueForDrawnEvent,
-  };
+  return getBookUsageStateFromAbility({
+    game,
+    viewedCard,
+    drawnEventPrimaryAction,
+    queuedTraitRollOverride,
+    getTraitRollRequiredUsageState,
+  });
 }
 
 function getLuckyCoinSequenceRerollOptions(game) {
@@ -704,46 +658,8 @@ export function eventTileChoiceState(g, option, deps) {
   const awaiting = g.eventState?.awaiting;
   if (awaiting?.type !== "tile-choice") return { game: g, cameraFloor: null };
 
-  if (awaiting.effect?.type === "mask-push-players" && awaiting.source === "item-active-ability") {
-    const tile = getTileAtPosition(g.board, option.x, option.y, option.floor);
-    if (!tile) return { game: g, cameraFloor: null };
-
-    const targetPlayerIndexes = Array.isArray(awaiting.effect.targetPlayerIndexes)
-      ? awaiting.effect.targetPlayerIndexes
-      : [];
-    const activeTargetOffset = Number(awaiting.effect.activeTargetOffset) || 0;
-    const targetPlayerIndex = targetPlayerIndexes[activeTargetOffset];
-    if (!Number.isInteger(targetPlayerIndex)) {
-      return { game: g, cameraFloor: null };
-    }
-
-    const targetName = g.players[targetPlayerIndex]?.name || "Explorer";
-
-    return {
-      game: {
-        ...g,
-        players: g.players.map((player, index) =>
-          index === targetPlayerIndex
-            ? {
-                ...player,
-                x: tile.x,
-                y: tile.y,
-                floor: option.floor,
-              }
-            : player
-        ),
-        eventState: {
-          ...g.eventState,
-          awaiting: {
-            ...awaiting,
-            selectedOptionId: option.id,
-          },
-        },
-        message: `Now moving ${targetName}`,
-      },
-      cameraFloor: option.floor,
-    };
-  }
+  const maskPreview = previewMaskTileChoiceState(g, option, getTileAtPosition);
+  if (maskPreview) return maskPreview;
 
   if (awaiting.effect?.type === "move") {
     const tile = getTileAtPosition(g.board, option.x, option.y, option.floor);
@@ -827,72 +743,8 @@ export function confirmEventTileChoiceState(g, deps) {
   }
 
   if (awaiting.effect.type === "mask-push-players" && awaiting.source === "item-active-ability") {
-    const targetPlayerIndexes = Array.isArray(awaiting.effect.targetPlayerIndexes)
-      ? awaiting.effect.targetPlayerIndexes
-      : [];
-    const activeTargetOffset = Number(awaiting.effect.activeTargetOffset) || 0;
-    const targetPlayerIndex = targetPlayerIndexes[activeTargetOffset];
-    if (!Number.isInteger(targetPlayerIndex)) {
-      return {
-        game: {
-          ...g,
-          eventState: null,
-          message: `${g.players[g.currentPlayerIndex].name} finishes using ${awaiting.sourceName || "Mask"}.`,
-        },
-        cameraFloor: null,
-      };
-    }
-
-    const nextPlayers = g.players.map((player, index) =>
-      index === targetPlayerIndex
-        ? {
-            ...player,
-            x: tile.x,
-            y: tile.y,
-            floor: selectedOption.floor,
-          }
-        : player
-    );
-
-    const nextOffset = activeTargetOffset + 1;
-    const hasMoreTargets = nextOffset < targetPlayerIndexes.length;
-    const targetName = g.players[targetPlayerIndex]?.name || "Explorer";
-
-    if (!hasMoreTargets) {
-      return {
-        game: {
-          ...g,
-          players: nextPlayers,
-          eventState: null,
-          message: `${g.players[g.currentPlayerIndex].name} pushes ${targetName} to ${selectedOption.label} with ${awaiting.sourceName || "Mask"}.`,
-        },
-        cameraFloor: selectedOption.floor,
-      };
-    }
-
-    const nextTargetIndex = targetPlayerIndexes[nextOffset];
-    const nextTargetName = g.players[nextTargetIndex]?.name || "explorer";
-
-    return {
-      game: {
-        ...g,
-        players: nextPlayers,
-        eventState: {
-          ...g.eventState,
-          awaiting: {
-            ...awaiting,
-            effect: {
-              ...awaiting.effect,
-              activeTargetOffset: nextOffset,
-            },
-            selectedOptionId: null,
-            prompt: `Choose a doorway-connected adjacent tile for ${nextTargetName}.`,
-          },
-        },
-        message: `Now moving ${nextTargetName}`,
-      },
-      cameraFloor: selectedOption.floor,
-    };
+    const maskResult = confirmMaskTileChoiceState(g, selectedOption, tile);
+    if (maskResult) return maskResult;
   }
 
   if (awaiting.effect.type === "place-token") {
@@ -1392,117 +1244,11 @@ export function applyMapNowState(g, viewedCard) {
 }
 
 export function applyMaskNowState(g, viewedCard) {
-  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.activeAbilityRule?.action !== "mask-push-adjacent-players") {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-  if (viewedCard.ownerCollection !== "omens") return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (!isMaskPushAvailableThisTurn(g, viewedCard)) return { game: g, closeViewedCard: false, diceAnimation: null };
-
-  const owner = g.players[viewedCard.ownerIndex];
-  const omenCard = owner?.omens?.[viewedCard.ownerCardIndex];
-  if (!owner || !omenCard || omenCard.id !== "mask") {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const options = getDogMoveOptions(
-    g,
-    {
-      floor: owner.floor,
-      x: owner.x,
-      y: owner.y,
-    },
-    1
-  ).map((option) => {
-    const tile = getTileByPosition(g.board, option.floor, option.x, option.y);
-    return {
-      id: `${option.floor}:${option.x}:${option.y}`,
-      label: tile?.name || `${option.floor} (${option.x}, ${option.y})`,
-      x: option.x,
-      y: option.y,
-      floor: option.floor,
-    };
+  return applyMaskNowStateFromAbility(g, viewedCard, {
+    isMaskAvailable: isMaskPushAvailableThisTurn,
+    getDogMoveOptions,
+    getTileByPosition,
   });
-
-  if (options.length === 0) {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const targetPlayerIndexes = (g.players || [])
-    .map((player, index) => ({ player, index }))
-    .filter(
-      ({ player, index }) =>
-        index !== viewedCard.ownerIndex &&
-        player.isAlive &&
-        player.floor === owner.floor &&
-        player.x === owner.x &&
-        player.y === owner.y
-    )
-    .map(({ index }) => index);
-
-  if (targetPlayerIndexes.length === 0) {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const firstTargetIndex = targetPlayerIndexes[0];
-  const firstTargetName = g.players[firstTargetIndex]?.name || "explorer";
-
-  const nextPlayers = g.players.map((player, index) =>
-    index === viewedCard.ownerIndex
-      ? {
-          ...player,
-          omens: player.omens.map((card, cardIndex) =>
-            cardIndex === viewedCard.ownerCardIndex
-              ? {
-                  ...card,
-                  lastActiveAbilityTurnUsed: g.turnNumber,
-                }
-              : card
-          ),
-        }
-      : player
-  );
-
-  return {
-    game: {
-      ...g,
-      players: nextPlayers,
-      eventState: {
-        card: {
-          id: "omen-mask-push",
-          name: omenCard.name,
-        },
-        stepIndex: 0,
-        context: {
-          choices: {},
-          selectedStats: {},
-        },
-        pendingEffects: [],
-        summary: null,
-        lastRoll: null,
-        awaiting: {
-          type: "tile-choice",
-          source: "item-active-ability",
-          sourceName: omenCard.name,
-          effect: {
-            type: "mask-push-players",
-            fromFloor: owner.floor,
-            fromX: owner.x,
-            fromY: owner.y,
-            targetPlayerIndexes,
-            activeTargetOffset: 0,
-          },
-          options,
-          selectedOptionId: null,
-          prompt: `Choose a doorway-connected adjacent tile for ${firstTargetName}.`,
-        },
-      },
-      message: `Now moving ${firstTargetName}`,
-    },
-    closeViewedCard: true,
-    diceAnimation: null,
-  };
 }
 
 export function applyMysticalStopwatchNowState(g, viewedCard) {
@@ -1677,94 +1423,13 @@ export function applyMagicCameraNowState(
 }
 
 export function applyBookNowState(g, viewedCard, { drawnEventPrimaryAction, queuedTraitRollOverride = null } = {}) {
-  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  if (viewedCard.activeAbilityRule?.action !== "substitute-knowledge-for-trait") {
-    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  }
-  if (viewedCard.ownerCollection !== "omens") {
-    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  }
-  if (viewedCard.ownerIndex !== g.currentPlayerIndex) {
-    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  }
-
-  const usageState = getBookUsageState({ game: g, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride });
-  if (!usageState.canApplyNow && !usageState.canQueueForDrawnEvent) {
-    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  }
-
-  const owner = g.players[viewedCard.ownerIndex];
-  const omenCard = owner?.omens?.[viewedCard.ownerCardIndex] || null;
-  if (!owner || !omenCard) {
-    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  }
-
-  const nextPlayers = g.players.map((player, playerIndex) => {
-    if (playerIndex !== viewedCard.ownerIndex) return player;
-
-    return {
-      ...player,
-      omens: player.omens.map((card, cardIndex) =>
-        cardIndex === viewedCard.ownerCardIndex
-          ? {
-              ...card,
-              lastActiveAbilityTurnUsed: g.turnNumber,
-            }
-          : card
-      ),
-      statIndex: {
-        ...player.statIndex,
-        sanity: Math.max(0, player.statIndex.sanity - 1),
-      },
-    };
+  return applyBookNowStateFromAbility(g, viewedCard, {
+    drawnEventPrimaryAction,
+    queuedTraitRollOverride,
+    getBookUsageStateForContext: getBookUsageState,
+    getEventRollButtonLabel,
+    statLabels: STAT_LABELS,
   });
-
-  const nextOwner = nextPlayers[viewedCard.ownerIndex];
-  const ownerKnowledgeDice =
-    nextOwner?.character?.knowledge?.[nextOwner?.statIndex?.knowledge] ?? g.eventState?.awaiting?.baseDiceCount;
-
-  if (usageState.canQueueForDrawnEvent && !usageState.canApplyNow) {
-    return {
-      game: {
-        ...g,
-        players: nextPlayers,
-        message: `${owner.name} uses ${omenCard.name}, loses 1 Sanity, and will roll Knowledge for the next trait roll.`,
-      },
-      closeViewedCard: true,
-      diceAnimation: null,
-      queueTraitRollOverride: {
-        kind: "substitute-stat",
-        from: "any",
-        to: "knowledge",
-        sourceName: omenCard.name,
-      },
-    };
-  }
-
-  const awaiting = g.eventState?.awaiting;
-  if (!awaiting || awaiting.type !== "roll-ready" || awaiting.rollKind !== "trait-roll" || !awaiting.rollStat) {
-    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  }
-
-  return {
-    game: {
-      ...g,
-      players: nextPlayers,
-      eventState: {
-        ...g.eventState,
-        awaiting: {
-          ...awaiting,
-          rollStat: "knowledge",
-          baseDiceCount: ownerKnowledgeDice,
-          prompt: `${getEventRollButtonLabel(ownerKnowledgeDice)} for ${STAT_LABELS.knowledge}.`,
-        },
-      },
-      message: `${owner.name} uses ${omenCard.name}, loses 1 Sanity, and will roll Knowledge instead of ${STAT_LABELS[awaiting.rollStat] || awaiting.rollStat}.`,
-    },
-    closeViewedCard: true,
-    diceAnimation: null,
-    queueTraitRollOverride: undefined,
-  };
 }
 
 export function applyLuckyCoinNowState(g, viewedCard, targetRollSelection = null) {
