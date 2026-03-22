@@ -5,12 +5,40 @@ import {
   confirmMaskTileChoiceState,
   isMaskPushAvailableThisTurn as isMaskPushAvailableThisTurnFromAbility,
   previewMaskTileChoiceState,
-} from "../abilities/maskAbility";
+} from "../omens/maskAbility";
 import {
   applyBookNowState as applyBookNowStateFromAbility,
   getBookUsageState as getBookUsageStateFromAbility,
-} from "../abilities/bookAbility";
-import { isDogTradeAvailableThisTurn as isDogTradeAvailableThisTurnFromAbility } from "../abilities/dogAbility";
+} from "../omens/bookAbility";
+import { isDogTradeAvailableThisTurn as isDogTradeAvailableThisTurnFromAbility } from "../omens/dogAbility";
+import {
+  applyFirstAidKitNowState as applyFirstAidKitNowStateFromItemAbility,
+  applyMysticalStopwatchNowState as applyMysticalStopwatchNowStateFromItemAbility,
+  canUseHealAbilityNow as canUseHealAbilityNowFromItemAbility,
+  getActiveHealRule as getActiveHealRuleFromItemAbility,
+  getHealTargetOptions as getHealTargetOptionsFromItemAbility,
+} from "../items/itemAbility";
+import {
+  applyCreepyDollNowState as applyCreepyDollNowStateFromRollAbility,
+  applyLuckyCoinNowState as applyLuckyCoinNowStateFromRollAbility,
+  applyMagicCameraNowState as applyMagicCameraNowStateFromRollAbility,
+  applyRabbitsFootNowState as applyRabbitsFootNowStateFromRollAbility,
+  chooseAngelsFeatherValueState as chooseAngelsFeatherValueStateFromRollAbility,
+  getAngelsFeatherUsageState as getAngelsFeatherUsageStateFromRollAbility,
+  getLuckyCoinSequenceRerollOptions as getLuckyCoinSequenceRerollOptionsFromRollAbility,
+  getMagicCameraUsageState as getMagicCameraUsageStateFromRollAbility,
+  isCreepyDollAvailableThisTurn as isCreepyDollAvailableThisTurnFromRollAbility,
+  isLuckyCoinAvailableThisTurn as isLuckyCoinAvailableThisTurnFromRollAbility,
+  isRabbitsFootAvailableThisTurn as isRabbitsFootAvailableThisTurnFromRollAbility,
+} from "../items/rollManipulationItemAbility";
+import {
+  applyMapNowState as applyMapNowStateFromMovementAbility,
+  applySkeletonKeyNowState as applySkeletonKeyNowStateFromMovementAbility,
+  canUseNormalMovementNow as canUseNormalMovementNowFromMovementAbility,
+  hasSkeletonKeyWallMoveAvailable as hasSkeletonKeyWallMoveAvailableFromMovementAbility,
+} from "../items/movementItemAbility";
+import { getItemAbilitySelectionState } from "../items/itemAvailability";
+import { chooseItemAbilityNowState, chooseItemAbilityValueState } from "../items/itemActionRegistry";
 
 const DAMAGE_STATS = {
   physical: ["might", "speed"],
@@ -25,7 +53,6 @@ const STAT_LABELS = {
   knowledge: "Knowledge",
 };
 const PLAYER_STAT_ORDER = ["might", "speed", "sanity", "knowledge"];
-const CRITICAL_STAT_INDEX = 1;
 const DIR = {
   N: { dx: 0, dy: -1 },
   S: { dx: 0, dy: 1 },
@@ -175,12 +202,10 @@ function getInventoryCard(game, viewedCard) {
 }
 
 function isCreepyDollAvailableThisTurn(game, viewedCard) {
-  const inventoryCard = getInventoryCard(game, viewedCard);
-  if (!inventoryCard || inventoryCard.id !== "creepy-doll") return false;
-  if (inventoryCard.lastActiveAbilityTurnUsed === game.turnNumber) return false;
-
-  const lastRoll = game.eventState?.lastRoll;
-  return !!lastRoll && Array.isArray(lastRoll.dice) && Array.isArray(lastRoll.outcomes) && isTraitRollResult(lastRoll);
+  return isCreepyDollAvailableThisTurnFromRollAbility(game, viewedCard, {
+    getInventoryCard,
+    isTraitRollResult,
+  });
 }
 
 function isTraitRollResult(lastRoll) {
@@ -200,36 +225,16 @@ function isTraitRollJustMadeContext(game) {
 }
 
 function isLuckyCoinAvailableThisTurn(game, viewedCard) {
-  const inventoryCard = getInventoryCard(game, viewedCard);
-  if (!inventoryCard || inventoryCard.id !== "lucky-coin") return false;
-  if (inventoryCard.lastActiveAbilityTurnUsed === game.turnNumber) return false;
-
-  const awaiting = game.eventState?.awaiting;
-  if (awaiting?.type === "trait-roll-sequence-complete" && Array.isArray(awaiting.results)) {
-    return awaiting.results.some((result) => Array.isArray(result?.dice) && result.dice.some((value) => value === 0));
-  }
-
-  const lastRoll = game.eventState?.lastRoll;
-  if (!lastRoll || !Array.isArray(lastRoll.dice) || !Array.isArray(lastRoll.outcomes)) return false;
-  if (!isTraitRollResult(lastRoll)) return false;
-  return lastRoll.dice.some((value) => value === 0);
+  return isLuckyCoinAvailableThisTurnFromRollAbility(game, viewedCard, {
+    getInventoryCard,
+    isTraitRollResult,
+  });
 }
 
 function isRabbitsFootAvailableThisTurn(game, viewedCard) {
-  const inventoryCard = getInventoryCard(game, viewedCard);
-  if (!inventoryCard || inventoryCard.id !== "rabbits-foot") return false;
-  if (inventoryCard.lastActiveAbilityTurnUsed === game.turnNumber) return false;
-
-  const lastRoll = game.eventState?.lastRoll;
-  if (!!lastRoll && Array.isArray(lastRoll.dice) && lastRoll.dice.length > 0 && Array.isArray(lastRoll.outcomes)) {
-    return true;
-  }
-
-  return (
-    game.tileEffect?.type === "skeleton-key-result" &&
-    Array.isArray(game.tileEffect?.dice) &&
-    game.tileEffect.dice.length > 0
-  );
+  return isRabbitsFootAvailableThisTurnFromRollAbility(game, viewedCard, {
+    getInventoryCard,
+  });
 }
 
 function isDogTradeAvailableThisTurn(game, viewedCard) {
@@ -241,45 +246,13 @@ function isMaskPushAvailableThisTurn(game, viewedCard) {
 }
 
 function hasSkeletonKeyWallMoveAvailable(game, viewedCard) {
-  const inventoryCard = getInventoryCard(game, viewedCard);
-  if (!inventoryCard || inventoryCard.id !== "skeleton-key") return false;
-
-  const owner = game.players[viewedCard.ownerIndex];
-  const board = game.board?.[owner?.floor] || [];
-  const currentTile = board.find((tile) => tile.x === owner.x && tile.y === owner.y);
-  if (!owner || !currentTile) return false;
-
-  const dirs = [
-    { name: "N", dx: 0, dy: -1 },
-    { name: "S", dx: 0, dy: 1 },
-    { name: "E", dx: 1, dy: 0 },
-    { name: "W", dx: -1, dy: 0 },
-  ];
-  const opposite = { N: "S", S: "N", E: "W", W: "E" };
-
-  return dirs.some(({ name, dx, dy }) => {
-    const neighbor = board.find((tile) => tile.x === owner.x + dx && tile.y === owner.y + dy);
-    if (!neighbor) return false;
-
-    const normalPassage = currentTile.doors?.includes(name) && neighbor.doors?.includes(opposite[name]);
-    return !normalPassage;
+  return hasSkeletonKeyWallMoveAvailableFromMovementAbility(game, viewedCard, {
+    getInventoryCard,
   });
 }
 
 function canUseNormalMovementNow(game, viewedCard) {
-  const owner = game.players?.[viewedCard?.ownerIndex];
-  if (!owner || !owner.isAlive) return false;
-
-  return (
-    game.turnPhase === "move" &&
-    !game.pendingExplore &&
-    !game.pendingSpecialPlacement &&
-    !game.tileEffect &&
-    !game.damageChoice &&
-    !game.drawnCard &&
-    !game.eventState &&
-    owner.movesLeft > 0
-  );
+  return canUseNormalMovementNowFromMovementAbility(game, viewedCard);
 }
 
 function getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }) {
@@ -301,23 +274,10 @@ function getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedT
 }
 
 function getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }) {
-  const base = getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride });
-  const awaiting = game.eventState?.awaiting;
-  const canApplyNow =
-    base.canApplyNow &&
-    awaiting?.type === "roll-ready" &&
-    awaiting.rollKind === "trait-roll" &&
-    awaiting.rollStat === "knowledge";
-  const canQueueForDrawnEvent =
-    base.canQueueForDrawnEvent &&
-    drawnEventPrimaryAction?.isTraitRoll &&
-    drawnEventPrimaryAction?.rollStat === "knowledge";
-
-  return {
-    canApplyNow,
-    canQueueForDrawnEvent,
-    canUseMagicCameraNow: canApplyNow || canQueueForDrawnEvent,
-  };
+  return getMagicCameraUsageStateFromRollAbility(
+    { game, drawnEventPrimaryAction, queuedTraitRollOverride },
+    { getTraitRollRequiredUsageState }
+  );
 }
 
 function getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride }) {
@@ -331,122 +291,21 @@ function getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTr
 }
 
 function getLuckyCoinSequenceRerollOptions(game) {
-  const awaiting = game.eventState?.awaiting;
-  if (awaiting?.type !== "trait-roll-sequence-complete" || !Array.isArray(awaiting.results)) return [];
-
-  return awaiting.results
-    .map((result, index) => ({ result, index }))
-    .filter(({ result }) => Array.isArray(result?.dice) && result.dice.some((value) => value === 0))
-    .map(({ result, index }) => ({
-      value: `sequence:${index}`,
-      label: `${STAT_LABELS[result.stat] || result.stat || "Trait"} (${result.total})`,
-    }));
-}
-
-function getCriticalStats(player) {
-  if (!player) return [];
-  return PLAYER_STAT_ORDER.filter((stat) => player.statIndex?.[stat] === CRITICAL_STAT_INDEX);
-}
-
-function getHealableStats(player, healRule = {}) {
-  if (!player) return [];
-
-  const target = healRule.target || healRule.healTarget || "critical";
-  let candidateStats;
-  if (target === "all") {
-    candidateStats = PLAYER_STAT_ORDER;
-  } else if (target === "critical") {
-    candidateStats = getCriticalStats(player);
-  } else if (target === "list") {
-    candidateStats = Array.isArray(healRule.stats) ? healRule.stats : [];
-  } else {
-    candidateStats = [];
-  }
-
-  return candidateStats.filter((stat) => {
-    const current = player.statIndex?.[stat];
-    const start = player.character?.startIndex?.[stat];
-    return current !== undefined && start !== undefined && current < start;
+  return getLuckyCoinSequenceRerollOptionsFromRollAbility(game, {
+    statLabels: STAT_LABELS,
   });
 }
 
 function getActiveHealRule(viewedCard) {
-  const rule = viewedCard?.activeAbilityRule;
-  if (!rule) return null;
-
-  if (rule.action === "heal-stats") {
-    return {
-      target: rule.target || rule.healTarget || "critical",
-      stats: Array.isArray(rule.stats) ? rule.stats : undefined,
-      consume: rule.consume || "bury-self",
-      selfOnly: !!rule.selfOnly,
-    };
-  }
-
-  if (rule.action === "heal-critical-traits") {
-    return {
-      target: "critical",
-      consume: "bury-self",
-    };
-  }
-
-  if (rule.action === "heal-knowledge-sanity") {
-    return {
-      target: "list",
-      stats: ["knowledge", "sanity"],
-      consume: "bury-self",
-      selfOnly: true,
-    };
-  }
-
-  if (rule.action === "heal-might-speed") {
-    return {
-      target: "list",
-      stats: ["might", "speed"],
-      consume: "bury-self",
-      selfOnly: true,
-    };
-  }
-
-  return null;
+  return getActiveHealRuleFromItemAbility(viewedCard);
 }
 
 function canUseHealAbilityNow(game, viewedCard) {
-  const inventoryCard = getInventoryCard(game, viewedCard);
-  if (!inventoryCard) return false;
-  const healRule = getActiveHealRule(viewedCard);
-  if (!healRule) return false;
-
-  return getHealTargetIndexes(game, viewedCard, healRule).length > 0;
-}
-
-function getHealTargetIndexes(game, viewedCard, healRule) {
-  const owner = game.players[viewedCard.ownerIndex];
-  if (!owner) return [];
-
-  if (healRule?.selfOnly) {
-    const ownerStats = getHealableStats(owner, healRule);
-    return ownerStats.length > 0 ? [viewedCard.ownerIndex] : [];
-  }
-
-  return game.players
-    .map((player, index) => ({ player, index }))
-    .filter(({ player }) => player.isAlive)
-    .filter(
-      ({ player }) =>
-        player.floor === owner.floor &&
-        player.x === owner.x &&
-        player.y === owner.y &&
-        getHealableStats(player, healRule).length > 0
-    )
-    .map(({ index }) => index);
+  return canUseHealAbilityNowFromItemAbility(game, viewedCard);
 }
 
 function getHealTargetOptions(game, viewedCard, healRule) {
-  return getHealTargetIndexes(game, viewedCard, healRule).map((index) => ({
-    value: index,
-    label: game.players[index]?.name || `Player ${index + 1}`,
-  }));
+  return getHealTargetOptionsFromItemAbility(game, viewedCard, healRule);
 }
 
 export function continueEventState(g, deps) {
@@ -947,11 +806,10 @@ export function resolveEventDamageChoiceState(g, choice, baseState, postDamageMe
 }
 
 export function getAngelsFeatherUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }) {
-  const base = getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride });
-  return {
-    ...base,
-    canUseAngelsFeatherNow: base.canUseNow,
-  };
+  return getAngelsFeatherUsageStateFromRollAbility(
+    { game, drawnEventPrimaryAction, queuedTraitRollOverride },
+    { getTraitRollRequiredUsageState }
+  );
 }
 
 const ACTIVE_ABILITY_TRIGGER_HANDLERS = {
@@ -1032,215 +890,44 @@ export function getCardActiveAbilityState({
     rule.action === "heal-stats" ||
     rule.action === "heal-knowledge-sanity" ||
     rule.action === "heal-might-speed";
-  const healRule = getActiveHealRule(viewedCard);
-  const luckyCoinSequenceOptions =
-    rule.action === "reroll-blank-trait-dice" ? getLuckyCoinSequenceRerollOptions(game) : [];
-  const healTargetOptions =
-    rule.action === "heal-critical-traits" ||
-    rule.action === "heal-stats" ||
-    rule.action === "heal-knowledge-sanity" ||
-    rule.action === "heal-might-speed"
-      ? getHealTargetOptions(game, viewedCard, healRule || {})
-      : [];
-  const valueOptions =
-    rule.action === "set-trait-roll-total"
-      ? rule.valueSelection === "number-0-8"
-        ? Array.from({ length: 9 }, (_, value) => value)
-        : rule.valueOptions || []
-      : rule.action === "heal-critical-traits" ||
-          rule.action === "heal-stats" ||
-          rule.action === "heal-knowledge-sanity" ||
-          rule.action === "heal-might-speed"
-        ? healTargetOptions
-        : rule.action === "reroll-blank-trait-dice" && luckyCoinSequenceOptions.length > 0
-          ? luckyCoinSequenceOptions
-          : rule.valueOptions || [];
-  const requiresValueSelection =
-    rule.action === "set-trait-roll-total" ||
-    ((rule.action === "heal-critical-traits" ||
-      rule.action === "heal-stats" ||
-      rule.action === "heal-knowledge-sanity" ||
-      rule.action === "heal-might-speed") &&
-      healTargetOptions.length > 1) ||
-    (rule.action === "reroll-blank-trait-dice" && luckyCoinSequenceOptions.length > 0);
-  const actionSatisfied =
-    rule.action === "heal-critical-traits" ||
-    rule.action === "heal-stats" ||
-    rule.action === "heal-knowledge-sanity" ||
-    rule.action === "heal-might-speed"
-      ? canUseHealAbilityNow(game, viewedCard)
-      : rule.action === "reroll-all-trait-dice"
-        ? isCreepyDollAvailableThisTurn(game, viewedCard)
-        : rule.action === "reroll-blank-trait-dice"
-          ? isLuckyCoinAvailableThisTurn(game, viewedCard)
-          : rule.action === "reroll-one-die"
-            ? isRabbitsFootAvailableThisTurn(game, viewedCard)
-            : rule.action === "holy-symbol-bury-discovered-tile"
-              ? game.turnPhase === "rotate" && !!game.pendingExplore && !game.pendingExplore.holySymbolReplacement
-              : rule.action === "mask-push-adjacent-players"
-                ? isMaskPushAvailableThisTurn(game, viewedCard)
-                : rule.action === "dog-remote-trade"
-                  ? isDogTradeAvailableThisTurn(game, viewedCard)
-                  : rule.action === "move-through-walls"
-                    ? canUseNormalMovementNow(game, viewedCard) && hasSkeletonKeyWallMoveAvailable(game, viewedCard)
-                    : rule.action === "substitute-sanity-for-knowledge"
-                      ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
-                          .canUseMagicCameraNow
-                      : rule.action === "substitute-knowledge-for-trait"
-                        ? getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride })
-                            .canUseBookNow
-                        : true;
+  const itemAbilitySelectionState = getItemAbilitySelectionState({
+    game,
+    viewedCard,
+    rule,
+    drawnEventPrimaryAction,
+    queuedTraitRollOverride,
+    deps: {
+      getActiveHealRule,
+      getHealTargetOptions,
+      getLuckyCoinSequenceRerollOptions,
+      isCreepyDollAvailableThisTurn,
+      isLuckyCoinAvailableThisTurn,
+      isRabbitsFootAvailableThisTurn,
+      canUseHealAbilityNow,
+      isMaskPushAvailableThisTurn,
+      isDogTradeAvailableThisTurn,
+      canUseNormalMovementNow,
+      hasSkeletonKeyWallMoveAvailable,
+      getMagicCameraUsageState,
+      getBookUsageState,
+    },
+  });
 
   return {
-    canUseNow: triggerSatisfied && hasSupportedAction && actionSatisfied,
-    requiresValueSelection,
-    valueOptions,
+    canUseNow: triggerSatisfied && hasSupportedAction && itemAbilitySelectionState.actionSatisfied,
+    requiresValueSelection: itemAbilitySelectionState.requiresValueSelection,
+    valueOptions: itemAbilitySelectionState.valueOptions,
     action: rule.action,
     trigger: rule.trigger,
   };
 }
 
 export function applyFirstAidKitNowState(g, viewedCard, targetPlayerIndex = null) {
-  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
-
-  const healRule = getActiveHealRule(viewedCard);
-  if (!healRule) {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-  if (viewedCard.ownerCollection !== "inventory") return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
-
-  const owner = g.players[viewedCard.ownerIndex];
-  const inventoryCard = getInventoryCard(g, viewedCard);
-  if (!inventoryCard) {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const healTargetIndexes = getHealTargetIndexes(g, viewedCard, healRule);
-  if (healTargetIndexes.length === 0) {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const resolvedTargetIndex =
-    healTargetIndexes.find((index) => index === Number(targetPlayerIndex)) ??
-    healTargetIndexes.find((index) => index === viewedCard.ownerIndex) ??
-    healTargetIndexes[0];
-  const targetPlayer = g.players[resolvedTargetIndex];
-  const healableStats = getHealableStats(targetPlayer, healRule);
-  if (healableStats.length === 0) {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const nextPlayers = g.players.map((player, playerIndex) => {
-    if (playerIndex !== viewedCard.ownerIndex && playerIndex !== resolvedTargetIndex) return player;
-
-    const nextInventory =
-      healRule.consume === "bury-self"
-        ? player.inventory.filter((_, cardIndex) => cardIndex !== viewedCard.ownerCardIndex)
-        : player.inventory;
-    const nextStatIndex = { ...player.statIndex };
-    if (playerIndex === resolvedTargetIndex) {
-      for (const stat of healableStats) {
-        nextStatIndex[stat] = Math.max(nextStatIndex[stat], player.character.startIndex[stat]);
-      }
-    }
-    const isAlive = Object.values(nextStatIndex).every((value) => value > 0);
-
-    return {
-      ...player,
-      inventory: nextInventory,
-      statIndex: nextStatIndex,
-      isAlive,
-    };
-  });
-
-  return {
-    game: {
-      ...g,
-      players: nextPlayers,
-      message: `${owner.name} uses ${inventoryCard.name} to heal ${targetPlayer.name}'s ${
-        healableStats.length === 1 ? "critical trait" : "critical traits"
-      } to starting values.`,
-    },
-    closeViewedCard: true,
-    diceAnimation: null,
-  };
+  return applyFirstAidKitNowStateFromItemAbility(g, viewedCard, targetPlayerIndex);
 }
 
 export function applyMapNowState(g, viewedCard) {
-  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.activeAbilityRule?.action !== "teleport-any-tile") {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-  if (viewedCard.ownerCollection !== "inventory") return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
-
-  const owner = g.players[viewedCard.ownerIndex];
-  const inventoryCard = getInventoryCard(g, viewedCard);
-  if (!owner || !inventoryCard || inventoryCard.id !== "map") {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const options = Object.entries(g.board)
-    .flatMap(([floor, tiles]) =>
-      (tiles || []).map((tile) => ({
-        id: `${floor}:${tile.x}:${tile.y}`,
-        label: tile.name || tile.id || `${floor} (${tile.x}, ${tile.y})`,
-        x: tile.x,
-        y: tile.y,
-        floor,
-      }))
-    )
-    .filter((option) => !(option.floor === owner.floor && option.x === owner.x && option.y === owner.y));
-
-  if (options.length === 0) {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const nextPlayers = g.players.map((player, index) =>
-    index === viewedCard.ownerIndex
-      ? {
-          ...player,
-          inventory: player.inventory.filter((_, cardIndex) => cardIndex !== viewedCard.ownerCardIndex),
-        }
-      : player
-  );
-
-  return {
-    game: {
-      ...g,
-      players: nextPlayers,
-      eventState: {
-        card: {
-          id: "item-map-teleport",
-          name: inventoryCard.name,
-        },
-        stepIndex: 0,
-        context: {
-          choices: {},
-          selectedStats: {},
-        },
-        pendingEffects: [],
-        summary: null,
-        lastRoll: null,
-        awaiting: {
-          type: "tile-choice",
-          source: "item-active-ability",
-          sourceName: inventoryCard.name,
-          effect: {
-            type: "move",
-            destination: "any-tile",
-          },
-          options,
-          selectedOptionId: null,
-          prompt: "Choose any discovered tile.",
-        },
-      },
-      message: `${owner.name} uses ${inventoryCard.name}. Choose a destination tile.`,
-    },
-    closeViewedCard: true,
-    diceAnimation: null,
-  };
+  return applyMapNowStateFromMovementAbility(g, viewedCard);
 }
 
 export function applyMaskNowState(g, viewedCard) {
@@ -1252,108 +939,15 @@ export function applyMaskNowState(g, viewedCard) {
 }
 
 export function applyMysticalStopwatchNowState(g, viewedCard) {
-  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.activeAbilityRule?.action !== "extra-turn-after-current") {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-  if (viewedCard.ownerCollection !== "inventory") return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
-
-  const owner = g.players[viewedCard.ownerIndex];
-  const inventoryCard = getInventoryCard(g, viewedCard);
-  if (!owner || !inventoryCard || inventoryCard.id !== "mystical-stopwatch") {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const nextPlayers = g.players.map((player, index) =>
-    index === viewedCard.ownerIndex
-      ? {
-          ...player,
-          inventory: player.inventory.filter((_, cardIndex) => cardIndex !== viewedCard.ownerCardIndex),
-        }
-      : player
-  );
-
-  return {
-    game: {
-      ...g,
-      players: nextPlayers,
-      extraTurnAfterCurrent: true,
-      message: `${owner.name} uses ${inventoryCard.name} and will take another turn after this one.`,
-    },
-    closeViewedCard: true,
-    diceAnimation: null,
-  };
+  return applyMysticalStopwatchNowStateFromItemAbility(g, viewedCard);
 }
 
 export function applyCreepyDollNowState(g, viewedCard) {
-  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.activeAbilityRule?.action !== "reroll-all-trait-dice") {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-  if (viewedCard.ownerCollection !== "inventory") return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (!isCreepyDollAvailableThisTurn(g, viewedCard)) return { game: g, closeViewedCard: false, diceAnimation: null };
-
-  const owner = g.players[viewedCard.ownerIndex];
-  const inventoryCard = owner?.inventory?.[viewedCard.ownerCardIndex];
-  const lastRoll = g.eventState?.lastRoll;
-  if (!inventoryCard || inventoryCard.id !== "creepy-doll" || !lastRoll || !Array.isArray(lastRoll.dice)) {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const rerolledDice = rollDice(lastRoll.dice.length);
-  const previousDiceTotal = (lastRoll.dice || []).reduce((sum, value) => sum + value, 0);
-  const staticBonus = (lastRoll.total || 0) - previousDiceTotal;
-  const rerolledTotal = rerolledDice.reduce((sum, value) => sum + value, 0) + staticBonus;
-
-  const nextPlayers = g.players.map((player, playerIndex) => {
-    if (playerIndex !== viewedCard.ownerIndex) return player;
-
-    const nextInventory = player.inventory.map((card, cardIndex) =>
-      cardIndex === viewedCard.ownerCardIndex
-        ? {
-            ...card,
-            lastActiveAbilityTurnUsed: g.turnNumber,
-          }
-        : card
-    );
-    const nextStatIndex = {
-      ...player.statIndex,
-      sanity: Math.max(0, player.statIndex.sanity - 1),
-    };
-    const isAlive = Object.values(nextStatIndex).every((value) => value > 0);
-
-    return {
-      ...player,
-      inventory: nextInventory,
-      statIndex: nextStatIndex,
-      isAlive,
-    };
+  return applyCreepyDollNowStateFromRollAbility(g, viewedCard, {
+    isCreepyDollAvailable: isCreepyDollAvailableThisTurn,
+    getInventoryCard,
+    rollDice,
   });
-
-  return {
-    game: {
-      ...g,
-      players: nextPlayers,
-      eventState: {
-        ...g.eventState,
-        summary: null,
-      },
-      message: `${owner.name} uses Creepy Doll, rerolls the trait roll, and loses 1 Sanity...`,
-    },
-    closeViewedCard: true,
-    diceAnimation: {
-      purpose: "event-roll",
-      final: rerolledDice,
-      display: Array.from({ length: rerolledDice.length }, () => Math.floor(Math.random() * 3)),
-      settled: false,
-      label: lastRoll.label || "Trait",
-      total: rerolledTotal,
-      modifier: lastRoll.modifier || null,
-      outcomes: [...(lastRoll.outcomes || [])],
-    },
-  };
 }
 
 export function applyMagicCameraNowState(
@@ -1361,65 +955,17 @@ export function applyMagicCameraNowState(
   viewedCard,
   { drawnEventPrimaryAction, queuedTraitRollOverride = null } = {}
 ) {
-  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  if (viewedCard.activeAbilityRule?.action !== "substitute-sanity-for-knowledge") {
-    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  }
-  if (viewedCard.ownerCollection !== "inventory") {
-    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  }
-  if (viewedCard.ownerIndex !== g.currentPlayerIndex) {
-    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  }
-
-  const usageState = getMagicCameraUsageState({ game: g, drawnEventPrimaryAction, queuedTraitRollOverride });
-  if (!usageState.canApplyNow && !usageState.canQueueForDrawnEvent) {
-    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  }
-
-  const owner = g.players[viewedCard.ownerIndex];
-  const inventoryCard = getInventoryCard(g, viewedCard);
-
-  if (usageState.canQueueForDrawnEvent && !usageState.canApplyNow) {
-    return {
-      game: {
-        ...g,
-        message: `${owner.name} will use ${inventoryCard?.name || "Magic Camera"} on this Knowledge roll.`,
-      },
-      closeViewedCard: true,
-      diceAnimation: null,
-      queueTraitRollOverride: {
-        kind: "substitute-stat",
-        from: "knowledge",
-        to: "sanity",
-      },
-    };
-  }
-
-  const awaiting = g.eventState?.awaiting;
-  if (!owner || !inventoryCard || !awaiting || awaiting.type !== "roll-ready") {
-    return { game: g, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  }
-
-  const sanityDiceCount = owner.character?.sanity?.[owner.statIndex?.sanity] ?? awaiting.baseDiceCount;
-  return {
-    game: {
-      ...g,
-      eventState: {
-        ...g.eventState,
-        awaiting: {
-          ...awaiting,
-          rollStat: "sanity",
-          baseDiceCount: sanityDiceCount,
-          prompt: `${getEventRollButtonLabel(sanityDiceCount)} for ${STAT_LABELS.sanity}.`,
-        },
-      },
-      message: `${owner.name} uses ${inventoryCard.name} and will roll Sanity instead of Knowledge.`,
-    },
-    closeViewedCard: true,
-    diceAnimation: null,
-    queueTraitRollOverride: undefined,
-  };
+  return applyMagicCameraNowStateFromRollAbility(
+    g,
+    viewedCard,
+    { drawnEventPrimaryAction, queuedTraitRollOverride },
+    {
+      getMagicCameraUsageState,
+      getInventoryCard,
+      getEventRollButtonLabel,
+      statLabels: STAT_LABELS,
+    }
+  );
 }
 
 export function applyBookNowState(g, viewedCard, { drawnEventPrimaryAction, queuedTraitRollOverride = null } = {}) {
@@ -1433,198 +979,28 @@ export function applyBookNowState(g, viewedCard, { drawnEventPrimaryAction, queu
 }
 
 export function applyLuckyCoinNowState(g, viewedCard, targetRollSelection = null) {
-  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.activeAbilityRule?.action !== "reroll-blank-trait-dice") {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-  if (viewedCard.ownerCollection !== "inventory") return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (!isLuckyCoinAvailableThisTurn(g, viewedCard)) return { game: g, closeViewedCard: false, diceAnimation: null };
-
-  const owner = g.players[viewedCard.ownerIndex];
-  const inventoryCard = getInventoryCard(g, viewedCard);
-  if (!inventoryCard) {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const awaiting = g.eventState?.awaiting;
-  const sequenceOptions = getLuckyCoinSequenceRerollOptions(g);
-  const sequenceTargetValue = String(targetRollSelection || "");
-  const resolvedSequenceTarget =
-    sequenceOptions.find((option) => option.value === sequenceTargetValue) ||
-    (sequenceOptions.length > 0 && awaiting?.type === "trait-roll-sequence-complete" ? sequenceOptions[0] : null);
-
-  const baseRoll =
-    resolvedSequenceTarget && awaiting?.type === "trait-roll-sequence-complete"
-      ? awaiting.results?.[Number(String(resolvedSequenceTarget.value).replace("sequence:", ""))]
-      : g.eventState?.lastRoll;
-  if (!baseRoll || !Array.isArray(baseRoll.dice)) {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const blankIndexes = baseRoll.dice.reduce((acc, die, index) => {
-    if (die === 0) acc.push(index);
-    return acc;
-  }, []);
-  if (blankIndexes.length === 0) {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const rerolledBlankDice = rollDice(blankIndexes.length);
-  const nextDice = [...baseRoll.dice];
-  blankIndexes.forEach((dieIndex, index) => {
-    nextDice[dieIndex] = rerolledBlankDice[index];
+  return applyLuckyCoinNowStateFromRollAbility(g, viewedCard, targetRollSelection, {
+    isLuckyCoinAvailable: isLuckyCoinAvailableThisTurn,
+    getInventoryCard,
+    getLuckyCoinSequenceRerollOptions,
+    rollDice,
+    statLabels: STAT_LABELS,
   });
-
-  const previousDiceTotal = (baseRoll.dice || []).reduce((sum, value) => sum + value, 0);
-  const staticBonus = (baseRoll.total || 0) - previousDiceTotal;
-  const nextTotal = nextDice.reduce((sum, value) => sum + value, 0) + staticBonus;
-  const rerollBlankCount = rerolledBlankDice.filter((value) => value === 0).length;
-  const nextPlayers = g.players.map((player, playerIndex) => {
-    if (playerIndex !== viewedCard.ownerIndex) return player;
-
-    const nextInventory = player.inventory.map((card, cardIndex) =>
-      cardIndex === viewedCard.ownerCardIndex
-        ? {
-            ...card,
-            lastActiveAbilityTurnUsed: g.turnNumber,
-          }
-        : card
-    );
-
-    return {
-      ...player,
-      inventory: nextInventory,
-    };
-  });
-
-  return {
-    game: {
-      ...g,
-      players: nextPlayers,
-      message: `${owner.name} flips Lucky Coin and rerolls blank dice...`,
-    },
-    closeViewedCard: true,
-    diceAnimation: {
-      purpose: "event-partial-reroll",
-      final: nextDice,
-      display: [...baseRoll.dice],
-      settled: false,
-      label: baseRoll.label || STAT_LABELS[baseRoll.stat] || "Trait",
-      total: nextTotal,
-      modifier: baseRoll.modifier || null,
-      outcomes:
-        resolvedSequenceTarget && awaiting?.type === "trait-roll-sequence-complete"
-          ? [...(awaiting.outcomes || [])]
-          : [...(baseRoll.outcomes || [])],
-      rerollIndexes: blankIndexes,
-      rerollDescription: "blank dice",
-      ownerIndex: viewedCard.ownerIndex,
-      sanityLoss: rerollBlankCount,
-      sourceName: inventoryCard.name,
-      sequenceResultIndex:
-        resolvedSequenceTarget && awaiting?.type === "trait-roll-sequence-complete"
-          ? Number(String(resolvedSequenceTarget.value).replace("sequence:", ""))
-          : undefined,
-      sequenceStat:
-        resolvedSequenceTarget && awaiting?.type === "trait-roll-sequence-complete"
-          ? awaiting.results?.[Number(String(resolvedSequenceTarget.value).replace("sequence:", ""))]?.stat
-          : undefined,
-    },
-  };
 }
 
 export function applyRabbitsFootNowState(g, viewedCard) {
-  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.activeAbilityRule?.action !== "reroll-one-die") {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-  if (viewedCard.ownerCollection !== "inventory") return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (!isRabbitsFootAvailableThisTurn(g, viewedCard)) return { game: g, closeViewedCard: false, diceAnimation: null };
-
-  const owner = g.players[viewedCard.ownerIndex];
-  const inventoryCard = getInventoryCard(g, viewedCard);
-  const lastRoll = g.eventState?.lastRoll;
-  const skeletonKeyRollDice =
-    g.tileEffect?.type === "skeleton-key-result" && Array.isArray(g.tileEffect?.dice) ? g.tileEffect.dice : null;
-  if (
-    !owner ||
-    !inventoryCard ||
-    ((!lastRoll || !Array.isArray(lastRoll.dice) || lastRoll.dice.length === 0 || !Array.isArray(lastRoll.outcomes)) &&
-      (!skeletonKeyRollDice || skeletonKeyRollDice.length === 0))
-  ) {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const sourceType =
-    !!lastRoll && Array.isArray(lastRoll.dice) && lastRoll.dice.length > 0 && Array.isArray(lastRoll.outcomes)
-      ? "event-last-roll"
-      : "skeleton-key-roll";
-
-  return {
-    game: {
-      ...g,
-      rabbitFootPendingReroll: {
-        ownerIndex: viewedCard.ownerIndex,
-        ownerCardIndex: viewedCard.ownerCardIndex,
-        sourceName: inventoryCard.name,
-        sourceType,
-        selectedDieIndex: null,
-      },
-      message: `${owner.name} uses ${inventoryCard.name}. Select one die, then press Reroll.`,
-    },
-    closeViewedCard: true,
-    diceAnimation: null,
-  };
+  return applyRabbitsFootNowStateFromRollAbility(g, viewedCard, {
+    isRabbitsFootAvailable: isRabbitsFootAvailableThisTurn,
+    getInventoryCard,
+  });
 }
 
 export function applySkeletonKeyNowState(g, viewedCard) {
-  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.activeAbilityRule?.action !== "move-through-walls") {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-  if (viewedCard.ownerCollection !== "inventory") return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (!canUseNormalMovementNow(g, viewedCard)) {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-  if (!hasSkeletonKeyWallMoveAvailable(g, viewedCard)) {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const owner = g.players[viewedCard.ownerIndex];
-  const inventoryCard = getInventoryCard(g, viewedCard);
-  if (!owner || !inventoryCard || inventoryCard.id !== "skeleton-key") {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const nextPlayers = g.players.map((player, playerIndex) => {
-    if (playerIndex !== viewedCard.ownerIndex) return player;
-
-    return {
-      ...player,
-      inventory: player.inventory.map((card, cardIndex) =>
-        cardIndex === viewedCard.ownerCardIndex
-          ? {
-              ...card,
-              lastActiveAbilityTurnUsed: g.turnNumber,
-            }
-          : card
-      ),
-    };
+  return applySkeletonKeyNowStateFromMovementAbility(g, viewedCard, {
+    canUseNormalMovementNow,
+    hasSkeletonKeyWallMoveAvailable,
+    getInventoryCard,
   });
-
-  return {
-    game: {
-      ...g,
-      players: nextPlayers,
-      skeletonKeyArmed: true,
-      message: `${owner.name} uses ${inventoryCard.name}. Your next wall move costs movement normally.`,
-    },
-    closeViewedCard: true,
-    diceAnimation: null,
-  };
 }
 
 export function chooseRabbitFootDieState(g, dieIndex) {
@@ -1751,200 +1127,41 @@ export function chooseAngelsFeatherValueState(
   viewedCard,
   { drawnEventPrimaryAction, queuedTraitRollOverride = null }
 ) {
-  const usageState = getAngelsFeatherUsageState({ game: g, drawnEventPrimaryAction, queuedTraitRollOverride });
-  const { canApplyNow, canQueueForDrawnEvent } = usageState;
-  if (!viewedCard) return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
-  if (viewedCard.activeAbilityRule?.action !== "set-trait-roll-total") {
-    return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
-  }
-  if (viewedCard.ownerCollection !== "inventory")
-    return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
-  if (viewedCard.ownerIndex !== g.currentPlayerIndex) {
-    return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
-  }
-  if (!canApplyNow && !canQueueForDrawnEvent) {
-    return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
-  }
-
-  const owner = g.players[viewedCard.ownerIndex];
-  const inventoryCard = owner?.inventory?.[viewedCard.ownerCardIndex];
-  if (!inventoryCard || inventoryCard.id !== "angels-feather") {
-    return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
-  }
-
-  const nextPlayers = g.players.map((player, index) => {
-    if (index !== viewedCard.ownerIndex) return player;
-    return {
-      ...player,
-      inventory: player.inventory.filter((_, cardIndex) => cardIndex !== viewedCard.ownerCardIndex),
-    };
-  });
-
-  const forcedTotal = Math.max(0, Math.min(8, Number(total)));
-  const awaiting = g.eventState?.awaiting;
-
-  if (canApplyNow && awaiting?.type === "roll-ready" && awaiting.rollKind === "trait-roll") {
-    const matchedOutcome = getMatchingOutcome(awaiting.outcomes || [], forcedTotal);
-    const resolvedEffects = [...(matchedOutcome?.effects || [])];
-
-    return {
-      game: {
-        ...g,
-        players: nextPlayers,
-        eventState: {
-          ...g.eventState,
-          awaiting: null,
-          lastRoll: {
-            label: STAT_LABELS[awaiting.rollStat] || awaiting.label || "Trait",
-            dice: [forcedTotal],
-            total: forcedTotal,
-            modifier: null,
-            outcomes: [...(awaiting.outcomes || [])],
-          },
-          summary: describeEventEffects(resolvedEffects),
-          pendingEffects: resolvedEffects,
-        },
-        message: `${owner.name} buries Angel's Feather and sets this roll to ${forcedTotal}.`,
-      },
-      queueTraitRollOverride: null,
-      closeViewedCard: true,
-    };
-  }
-
-  if (canApplyNow && awaiting?.type === "trait-roll-sequence-ready") {
-    return {
-      game: {
-        ...g,
-        players: nextPlayers,
-        eventState: {
-          ...g.eventState,
-          awaiting: {
-            ...awaiting,
-            type: "trait-roll-sequence-rolling",
-            overrideTotal: forcedTotal,
-          },
-        },
-        message: `${owner.name} buries Angel's Feather and sets this roll to ${forcedTotal}.`,
-      },
-      queueTraitRollOverride: null,
-      closeViewedCard: true,
-    };
-  }
-
-  const nextGame = {
-    ...g,
-    players: nextPlayers,
-    eventState:
-      canApplyNow && g.eventState
-        ? {
-            ...g.eventState,
-            awaiting: {
-              ...g.eventState.awaiting,
-              overrideTotal: forcedTotal,
-            },
-          }
-        : g.eventState,
-    message: `${owner.name} buries Angel's Feather and sets this roll to ${forcedTotal}.`,
-  };
-
-  return {
-    game: nextGame,
-    queueTraitRollOverride:
-      canQueueForDrawnEvent && !canApplyNow
-        ? {
-            kind: "set-total",
-            total: forcedTotal,
-          }
-        : null,
-    closeViewedCard: true,
-  };
+  return chooseAngelsFeatherValueStateFromRollAbility(
+    g,
+    total,
+    viewedCard,
+    { drawnEventPrimaryAction, queuedTraitRollOverride },
+    {
+      getMatchingOutcome,
+      describeEventEffects,
+      statLabels: STAT_LABELS,
+      getAngelsFeatherUsageState,
+    }
+  );
 }
 
 export function chooseCardActiveAbilityValueState(g, total, viewedCard, deps) {
-  const action = viewedCard?.activeAbilityRule?.action;
-  if (action === "set-trait-roll-total") {
-    const result = chooseAngelsFeatherValueState(g, total, viewedCard, deps);
-    return {
-      ...result,
-      diceAnimation: null,
-    };
-  }
-  if (action === "reroll-blank-trait-dice") {
-    const result = applyLuckyCoinNowState(g, viewedCard, total);
-    return {
-      game: result.game,
-      queueTraitRollOverride: undefined,
-      closeViewedCard: result.closeViewedCard,
-      diceAnimation: result.diceAnimation || null,
-    };
-  }
-  if (
-    action === "heal-critical-traits" ||
-    action === "heal-stats" ||
-    action === "heal-knowledge-sanity" ||
-    action === "heal-might-speed"
-  ) {
-    const result = applyFirstAidKitNowState(g, viewedCard, total);
-    return {
-      game: result.game,
-      queueTraitRollOverride: undefined,
-      closeViewedCard: result.closeViewedCard,
-      diceAnimation: null,
-    };
-  }
-
-  return {
-    game: g,
-    queueTraitRollOverride: undefined,
-    closeViewedCard: false,
-    diceAnimation: null,
-  };
+  return chooseItemAbilityValueState(g, total, viewedCard, deps, {
+    chooseAngelsFeatherValueState,
+    applyLuckyCoinNowState,
+    applyFirstAidKitNowState,
+  });
 }
 
 export function chooseCardActiveAbilityNowState(g, viewedCard, deps = {}) {
-  const action = viewedCard?.activeAbilityRule?.action;
-  if (action === "reroll-all-trait-dice") {
-    return applyCreepyDollNowState(g, viewedCard);
-  }
-  if (action === "reroll-blank-trait-dice") {
-    return applyLuckyCoinNowState(g, viewedCard);
-  }
-  if (action === "reroll-one-die") {
-    return applyRabbitsFootNowState(g, viewedCard);
-  }
-  if (action === "move-through-walls") {
-    return applySkeletonKeyNowState(g, viewedCard);
-  }
-  if (action === "substitute-sanity-for-knowledge") {
-    return applyMagicCameraNowState(g, viewedCard, deps);
-  }
-  if (action === "substitute-knowledge-for-trait") {
-    return applyBookNowState(g, viewedCard, deps);
-  }
-  if (action === "teleport-any-tile") {
-    return applyMapNowState(g, viewedCard);
-  }
-  if (action === "mask-push-adjacent-players") {
-    return applyMaskNowState(g, viewedCard);
-  }
-  if (action === "extra-turn-after-current") {
-    return applyMysticalStopwatchNowState(g, viewedCard);
-  }
-  if (
-    action === "heal-critical-traits" ||
-    action === "heal-stats" ||
-    action === "heal-knowledge-sanity" ||
-    action === "heal-might-speed"
-  ) {
-    return applyFirstAidKitNowState(g, viewedCard);
-  }
-
-  return {
-    game: g,
-    closeViewedCard: false,
-    diceAnimation: null,
-    queueTraitRollOverride: undefined,
-  };
+  return chooseItemAbilityNowState(g, viewedCard, deps, {
+    applyCreepyDollNowState,
+    applyLuckyCoinNowState,
+    applyRabbitsFootNowState,
+    applySkeletonKeyNowState,
+    applyMagicCameraNowState,
+    applyBookNowState,
+    applyMapNowState,
+    applyMaskNowState,
+    applyMysticalStopwatchNowState,
+    applyFirstAidKitNowState,
+  });
 }
 
 export function createDamageChoice(effect, player) {

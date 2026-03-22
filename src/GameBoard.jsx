@@ -41,9 +41,9 @@ import {
   buildIdolChoiceTileEffect,
   hasIdol,
   shouldOfferIdolChoice,
-} from "./abilities/idolAbility";
-import { createDogTradeStartState } from "./abilities/dogAbility";
-import { applyHolySymbolDuringPendingExplore } from "./abilities/holySymbolAbility";
+} from "./omens/idolAbility";
+import { createDogTradeStartState } from "./omens/dogAbility";
+import { applyHolySymbolDuringPendingExplore } from "./omens/holySymbolAbility";
 import "./GameBoard.css";
 
 // Direction offsets
