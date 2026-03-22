@@ -1,3 +1,5 @@
+// Registry picks the correct handler for now or value activation.
+
 export function chooseItemAbilityNowState(g, viewedCard, deps = {}, handlers = {}) {
   const action = viewedCard?.activeAbilityRule?.action;
 

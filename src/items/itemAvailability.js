@@ -1,3 +1,5 @@
+// Availability is checked first to decide if a button should be enabled and whether a selection is needed.
+
 export function getItemAbilitySelectionState({
   game,
   viewedCard,

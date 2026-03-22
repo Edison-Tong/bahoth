@@ -1477,14 +1477,14 @@ export const EVENT_CARDS = [
     ],
   }),
   createEventCard({
-    id: "wandering-ghost",
+    id: "wandering-ghost", // THE EVENT ALLOWS YOU TO BURY AN ITEM EVEN IF YOU DON'T HAVE AN ITEM
     name: "Wandering Ghost",
     todo: "You may bury one of your Items. If you do, gain 1 in any trait. Otherwise, make a Sanity roll.",
     result:
       "If you bury an Item, gain 1 in any trait. Otherwise, make a Sanity roll: 4+ draw an Item card, 0-3 take 1 General damage.",
     steps: [
       createEventStep("choice", {
-        id: "bury-item",
+        id: "bury-item",  
         prompt: "Bury one of your Items?",
         options: ["yes", "no"],
       }),

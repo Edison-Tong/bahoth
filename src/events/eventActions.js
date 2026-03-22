@@ -12,12 +12,12 @@ import {
 } from "../omens/bookAbility";
 import { isDogTradeAvailableThisTurn as isDogTradeAvailableThisTurnFromAbility } from "../omens/dogAbility";
 import {
-  applyFirstAidKitNowState as applyFirstAidKitNowStateFromItemAbility,
-  applyMysticalStopwatchNowState as applyMysticalStopwatchNowStateFromItemAbility,
-  canUseHealAbilityNow as canUseHealAbilityNowFromItemAbility,
-  getActiveHealRule as getActiveHealRuleFromItemAbility,
-  getHealTargetOptions as getHealTargetOptionsFromItemAbility,
-} from "../items/itemAbility";
+  applyFirstAidKitNowState as applyFirstAidKitNowStateFromTurnStateAbility,
+  applyMysticalStopwatchNowState as applyMysticalStopwatchNowStateFromTurnStateAbility,
+  canUseHealAbilityNow as canUseHealAbilityNowFromTurnStateAbility,
+  getActiveHealRule as getActiveHealRuleFromTurnStateAbility,
+  getHealTargetOptions as getHealTargetOptionsFromTurnStateAbility,
+} from "../items/turnStateItemAbility";
 import {
   applyCreepyDollNowState as applyCreepyDollNowStateFromRollAbility,
   applyLuckyCoinNowState as applyLuckyCoinNowStateFromRollAbility,
@@ -37,8 +37,17 @@ import {
   canUseNormalMovementNow as canUseNormalMovementNowFromMovementAbility,
   hasSkeletonKeyWallMoveAvailable as hasSkeletonKeyWallMoveAvailableFromMovementAbility,
 } from "../items/movementItemAbility";
+import {
+  getDamageConversionOptions as getDamageConversionOptionsFromPassiveGroup,
+  getDamageReduction as getDamageReductionFromPassiveGroup,
+  getPassiveEffects as getPassiveEffectsFromPassiveGroup,
+  getPostDamageEffectsForChoice as getPostDamageEffectsForChoiceFromPassiveGroup,
+  getTraitRollBonus as getTraitRollBonusFromPassiveGroup,
+  getTraitRollDiceBonus as getTraitRollDiceBonusFromPassiveGroup,
+} from "../items/passiveItemEffectAbility";
 import { getItemAbilitySelectionState } from "../items/itemAvailability";
 import { chooseItemAbilityNowState, chooseItemAbilityValueState } from "../items/itemActionRegistry";
+import { isUnsupportedItemAction } from "../items/unsupportedItemAbility";
 
 const DAMAGE_STATS = {
   physical: ["might", "speed"],
@@ -52,7 +61,6 @@ const STAT_LABELS = {
   sanity: "Sanity",
   knowledge: "Knowledge",
 };
-const PLAYER_STAT_ORDER = ["might", "speed", "sanity", "knowledge"];
 const DIR = {
   N: { dx: 0, dy: -1 },
   S: { dx: 0, dy: 1 },
@@ -195,15 +203,8 @@ export function getDogMoveOptions(game, position, movesLeft) {
   return Array.from(nextByKey.values()).sort((a, b) => a.cost - b.cost || a.y - b.y || a.x - b.x);
 }
 
-function getInventoryCard(game, viewedCard) {
-  if (!viewedCard || viewedCard.ownerCollection !== "inventory") return null;
-  const owner = game.players[viewedCard.ownerIndex];
-  return owner?.inventory?.[viewedCard.ownerCardIndex] || null;
-}
-
 function isCreepyDollAvailableThisTurn(game, viewedCard) {
   return isCreepyDollAvailableThisTurnFromRollAbility(game, viewedCard, {
-    getInventoryCard,
     isTraitRollResult,
   });
 }
@@ -226,15 +227,12 @@ function isTraitRollJustMadeContext(game) {
 
 function isLuckyCoinAvailableThisTurn(game, viewedCard) {
   return isLuckyCoinAvailableThisTurnFromRollAbility(game, viewedCard, {
-    getInventoryCard,
     isTraitRollResult,
   });
 }
 
 function isRabbitsFootAvailableThisTurn(game, viewedCard) {
-  return isRabbitsFootAvailableThisTurnFromRollAbility(game, viewedCard, {
-    getInventoryCard,
-  });
+  return isRabbitsFootAvailableThisTurnFromRollAbility(game, viewedCard, {});
 }
 
 function isDogTradeAvailableThisTurn(game, viewedCard) {
@@ -246,9 +244,7 @@ function isMaskPushAvailableThisTurn(game, viewedCard) {
 }
 
 function hasSkeletonKeyWallMoveAvailable(game, viewedCard) {
-  return hasSkeletonKeyWallMoveAvailableFromMovementAbility(game, viewedCard, {
-    getInventoryCard,
-  });
+  return hasSkeletonKeyWallMoveAvailableFromMovementAbility(game, viewedCard);
 }
 
 function canUseNormalMovementNow(game, viewedCard) {
@@ -297,15 +293,15 @@ function getLuckyCoinSequenceRerollOptions(game) {
 }
 
 function getActiveHealRule(viewedCard) {
-  return getActiveHealRuleFromItemAbility(viewedCard);
+  return getActiveHealRuleFromTurnStateAbility(viewedCard);
 }
 
 function canUseHealAbilityNow(game, viewedCard) {
-  return canUseHealAbilityNowFromItemAbility(game, viewedCard);
+  return canUseHealAbilityNowFromTurnStateAbility(game, viewedCard);
 }
 
 function getHealTargetOptions(game, viewedCard, healRule) {
-  return getHealTargetOptionsFromItemAbility(game, viewedCard, healRule);
+  return getHealTargetOptionsFromTurnStateAbility(game, viewedCard, healRule);
 }
 
 export function continueEventState(g, deps) {
@@ -890,6 +886,8 @@ export function getCardActiveAbilityState({
     rule.action === "heal-stats" ||
     rule.action === "heal-knowledge-sanity" ||
     rule.action === "heal-might-speed";
+  const isSupportedInventoryAction =
+    viewedCard.ownerCollection !== "inventory" || !isUnsupportedItemAction(rule.action);
   const itemAbilitySelectionState = getItemAbilitySelectionState({
     game,
     viewedCard,
@@ -914,7 +912,8 @@ export function getCardActiveAbilityState({
   });
 
   return {
-    canUseNow: triggerSatisfied && hasSupportedAction && itemAbilitySelectionState.actionSatisfied,
+    canUseNow:
+      triggerSatisfied && hasSupportedAction && isSupportedInventoryAction && itemAbilitySelectionState.actionSatisfied,
     requiresValueSelection: itemAbilitySelectionState.requiresValueSelection,
     valueOptions: itemAbilitySelectionState.valueOptions,
     action: rule.action,
@@ -923,7 +922,7 @@ export function getCardActiveAbilityState({
 }
 
 export function applyFirstAidKitNowState(g, viewedCard, targetPlayerIndex = null) {
-  return applyFirstAidKitNowStateFromItemAbility(g, viewedCard, targetPlayerIndex);
+  return applyFirstAidKitNowStateFromTurnStateAbility(g, viewedCard, targetPlayerIndex);
 }
 
 export function applyMapNowState(g, viewedCard) {
@@ -939,13 +938,12 @@ export function applyMaskNowState(g, viewedCard) {
 }
 
 export function applyMysticalStopwatchNowState(g, viewedCard) {
-  return applyMysticalStopwatchNowStateFromItemAbility(g, viewedCard);
+  return applyMysticalStopwatchNowStateFromTurnStateAbility(g, viewedCard);
 }
 
 export function applyCreepyDollNowState(g, viewedCard) {
   return applyCreepyDollNowStateFromRollAbility(g, viewedCard, {
     isCreepyDollAvailable: isCreepyDollAvailableThisTurn,
-    getInventoryCard,
     rollDice,
   });
 }
@@ -961,7 +959,6 @@ export function applyMagicCameraNowState(
     { drawnEventPrimaryAction, queuedTraitRollOverride },
     {
       getMagicCameraUsageState,
-      getInventoryCard,
       getEventRollButtonLabel,
       statLabels: STAT_LABELS,
     }
@@ -981,7 +978,6 @@ export function applyBookNowState(g, viewedCard, { drawnEventPrimaryAction, queu
 export function applyLuckyCoinNowState(g, viewedCard, targetRollSelection = null) {
   return applyLuckyCoinNowStateFromRollAbility(g, viewedCard, targetRollSelection, {
     isLuckyCoinAvailable: isLuckyCoinAvailableThisTurn,
-    getInventoryCard,
     getLuckyCoinSequenceRerollOptions,
     rollDice,
     statLabels: STAT_LABELS,
@@ -991,16 +987,11 @@ export function applyLuckyCoinNowState(g, viewedCard, targetRollSelection = null
 export function applyRabbitsFootNowState(g, viewedCard) {
   return applyRabbitsFootNowStateFromRollAbility(g, viewedCard, {
     isRabbitsFootAvailable: isRabbitsFootAvailableThisTurn,
-    getInventoryCard,
   });
 }
 
 export function applySkeletonKeyNowState(g, viewedCard) {
-  return applySkeletonKeyNowStateFromMovementAbility(g, viewedCard, {
-    canUseNormalMovementNow,
-    hasSkeletonKeyWallMoveAvailable,
-    getInventoryCard,
-  });
+  return applySkeletonKeyNowStateFromMovementAbility(g, viewedCard);
 }
 
 export function chooseRabbitFootDieState(g, dieIndex) {
@@ -1326,63 +1317,23 @@ export function getBoardTraitRollDiceBonus(board, player) {
 }
 
 export function getPassiveEffects(player) {
-  const ownedCards = [...(player?.omens ?? []), ...(player?.inventory ?? [])];
-
-  return ownedCards.flatMap((card) =>
-    (card.passiveEffects ?? []).map((effect) => ({
-      ...effect,
-      sourceName: card.name,
-    }))
-  );
+  return getPassiveEffectsFromPassiveGroup(player);
 }
 
 export function getTraitRollBonus(player, stat) {
-  const matchingEffects = getPassiveEffects(player).filter(
-    (effect) => effect.type === "trait-roll-bonus" && effect.stat === stat
-  );
-
-  return {
-    amount: matchingEffects.reduce((sum, effect) => sum + (effect.amount || 0), 0),
-    sourceNames: matchingEffects.map((effect) => effect.sourceName),
-  };
+  return getTraitRollBonusFromPassiveGroup(player, stat);
 }
 
 export function getDamageReduction(player, damageType) {
-  const matchingEffects = getPassiveEffects(player).filter(
-    (effect) => effect.type === "damage-reduction" && effect.damageTypes?.includes(damageType)
-  );
-
-  return {
-    amount: matchingEffects.reduce((sum, effect) => sum + (effect.amount || 0), 0),
-    sourceNames: matchingEffects.map((effect) => effect.sourceName),
-  };
+  return getDamageReductionFromPassiveGroup(player, damageType);
 }
 
 export function getTraitRollDiceBonus(player, context) {
-  const matchingEffects = getPassiveEffects(player).filter(
-    (effect) =>
-      effect.type === "trait-roll-dice-bonus" &&
-      (!effect.contexts || effect.contexts.length === 0 || effect.contexts.includes(context))
-  );
-
-  return {
-    amount: matchingEffects.reduce((sum, effect) => sum + (effect.amount || 0), 0),
-    sourceNames: matchingEffects.map((effect) => effect.sourceName),
-  };
+  return getTraitRollDiceBonusFromPassiveGroup(player, context);
 }
 
 export function getDamageConversionOptions(player, damageType) {
-  const matchingEffects = getPassiveEffects(player).filter(
-    (effect) =>
-      effect.type === "damage-conversion-option" &&
-      effect.damageTypes?.includes(damageType) &&
-      effect.convertTo === "general"
-  );
-
-  return {
-    canConvertToGeneral: matchingEffects.length > 0,
-    sourceNames: matchingEffects.map((effect) => effect.sourceName),
-  };
+  return getDamageConversionOptionsFromPassiveGroup(player, damageType);
 }
 
 export function createTraitRollModifier(traitBonus, diceBonus) {
@@ -1448,30 +1399,8 @@ export function resolveDamageEffect(player, effect) {
   };
 }
 
-export function getDamageTypesFromAllocation(choice) {
-  if (!choice) return [];
-
-  if (choice.damageType !== "general") {
-    return [choice.damageType];
-  }
-
-  const damageTypes = new Set();
-  for (const [stat, amount] of Object.entries(choice.allocation || {})) {
-    if (!amount) continue;
-    if (stat === "might" || stat === "speed") damageTypes.add("physical");
-    if (stat === "sanity" || stat === "knowledge") damageTypes.add("mental");
-  }
-
-  return [...damageTypes];
-}
-
 export function getPostDamageEffectsForChoice(player, choice) {
-  const damageTypes = getDamageTypesFromAllocation(choice);
-  if (damageTypes.length === 0) return [];
-
-  return getPassiveEffects(player).filter(
-    (effect) => effect.type === "stat-gain-on-damage" && effect.damageTypes?.some((type) => damageTypes.includes(type))
-  );
+  return getPostDamageEffectsForChoiceFromPassiveGroup(player, choice);
 }
 
 export function getInitialEventPrimaryAction(g, card, eventEngineDeps) {

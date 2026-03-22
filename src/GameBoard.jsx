@@ -44,6 +44,11 @@ import {
 } from "./omens/idolAbility";
 import { createDogTradeStartState } from "./omens/dogAbility";
 import { applyHolySymbolDuringPendingExplore } from "./omens/holySymbolAbility";
+import {
+  isNecklaceOfTeethChoiceEffect,
+  resolveNecklaceOfTeethChoiceState,
+  resolveNecklaceOfTeethEndTurnState,
+} from "./items/turnStateItemAbility";
 import "./GameBoard.css";
 
 // Direction offsets
@@ -101,33 +106,6 @@ function isItemTradeLockedThisTurn(card, turnNumber) {
     card.lastAttackTurnUsed === turnNumber ||
     card.lastUsedTurn === turnNumber
   );
-}
-
-function getNecklaceOfTeethCriticalStats(player) {
-  if (!player) return [];
-
-  return PLAYER_STAT_ORDER.filter((stat) => {
-    const currentIndex = player.statIndex?.[stat];
-    const maxIndex = (player.character?.[stat] || []).length - 1;
-    return currentIndex === CRITICAL_STAT_INDEX && currentIndex < maxIndex;
-  });
-}
-
-function applyNecklaceOfTeethGain(players, playerIndex, stat) {
-  return players.map((player, index) => {
-    if (index !== playerIndex) return player;
-
-    const maxIndex = player.character[stat].length - 1;
-    const nextIndex = Math.min(maxIndex, player.statIndex[stat] + 1);
-
-    return {
-      ...player,
-      statIndex: {
-        ...player.statIndex,
-        [stat]: nextIndex,
-      },
-    };
-  });
 }
 
 function DiceRow({ dice, modifier = null, rolling = false }) {
@@ -1844,21 +1822,19 @@ export default function GameBoard({ players, onQuit }) {
 
   function handleChooseNecklaceOfTeethStat(stat) {
     setGame((g) => {
-      const effect = g.tileEffect;
-      if (!effect || effect.type !== "necklace-of-teeth-choice") return g;
-      if (!Array.isArray(effect.statOptions) || !effect.statOptions.includes(stat)) return g;
+      const resolution = resolveNecklaceOfTeethChoiceState(g, stat);
+      if (!resolution) return g;
 
       const current = g.players[g.currentPlayerIndex];
-      const healedPlayers = applyNecklaceOfTeethGain(g.players, g.currentPlayerIndex, stat);
       const nextState = passTurnCore({
         ...g,
-        players: healedPlayers,
+        players: resolution.players,
         tileEffect: null,
       });
 
       return {
         ...nextState,
-        message: `${current.name} gains 1 ${STAT_LABELS[stat]} with Necklace of Teeth. ${nextState.message}`,
+        message: `${current.name} gains 1 ${STAT_LABELS[resolution.gainedStat]} with Necklace of Teeth. ${nextState.message}`,
       };
     });
     setDiceAnimation(null);
@@ -1874,8 +1850,7 @@ export default function GameBoard({ players, onQuit }) {
 
   function handleSkipNecklaceOfTeethGain() {
     setGame((g) => {
-      const effect = g.tileEffect;
-      if (!effect || effect.type !== "necklace-of-teeth-choice") return g;
+      if (!isNecklaceOfTeethChoiceEffect(g.tileEffect)) return g;
 
       const current = g.players[g.currentPlayerIndex];
       const nextState = passTurnCore({
@@ -2356,33 +2331,25 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function passTurn(g) {
-    const currentPlayerState = g.players[g.currentPlayerIndex];
-    const necklaceCard = currentPlayerState?.inventory?.find((card) => card.id === "necklace-of-teeth");
-    const criticalStats = getNecklaceOfTeethCriticalStats(currentPlayerState);
+    const currentPlayer = g.players[g.currentPlayerIndex];
+    const necklaceResolution = resolveNecklaceOfTeethEndTurnState(g);
 
-    if (necklaceCard && criticalStats.length > 1) {
+    if (necklaceResolution.type === "choice") {
       return {
         ...g,
-        tileEffect: {
-          type: "necklace-of-teeth-choice",
-          tileName: necklaceCard.name,
-          statOptions: criticalStats,
-          message: "Choose a critical trait to gain 1, or skip.",
-        },
+        tileEffect: necklaceResolution.tileEffect,
       };
     }
 
-    if (necklaceCard && criticalStats.length === 1) {
-      const gainedStat = criticalStats[0];
-      const healedPlayers = applyNecklaceOfTeethGain(g.players, g.currentPlayerIndex, gainedStat);
+    if (necklaceResolution.type === "auto-gain") {
       const nextState = passTurnCore({
         ...g,
-        players: healedPlayers,
+        players: necklaceResolution.players,
       });
 
       return {
         ...nextState,
-        message: `${currentPlayerState.name} gains 1 ${STAT_LABELS[gainedStat]} with Necklace of Teeth. ${nextState.message}`,
+        message: `${currentPlayer.name} gains 1 ${STAT_LABELS[necklaceResolution.gainedStat]} with Necklace of Teeth. ${nextState.message}`,
       };
     }
 

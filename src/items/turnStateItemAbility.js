@@ -1,5 +1,7 @@
 const PLAYER_STAT_ORDER = ["might", "speed", "sanity", "knowledge"];
 const CRITICAL_STAT_INDEX = 1;
+const NECKLACE_OF_TEETH_ID = "necklace-of-teeth";
+const NECKLACE_OF_TEETH_CHOICE_TYPE = "necklace-of-teeth-choice";
 
 function getInventoryCard(game, viewedCard) {
   if (!viewedCard || viewedCard.ownerCollection !== "inventory") return null;
@@ -10,6 +12,84 @@ function getInventoryCard(game, viewedCard) {
 function getCriticalStats(player) {
   if (!player) return [];
   return PLAYER_STAT_ORDER.filter((stat) => player.statIndex?.[stat] === CRITICAL_STAT_INDEX);
+}
+
+function getNecklaceOfTeethCriticalStats(player) {
+  if (!player) return [];
+
+  return PLAYER_STAT_ORDER.filter((stat) => {
+    const currentIndex = player.statIndex?.[stat];
+    const maxIndex = (player.character?.[stat] || []).length - 1;
+    return currentIndex === CRITICAL_STAT_INDEX && currentIndex < maxIndex;
+  });
+}
+
+function applyNecklaceOfTeethGain(players, playerIndex, stat) {
+  return players.map((player, index) => {
+    if (index !== playerIndex) return player;
+
+    const statTrack = player.character?.[stat];
+    const currentIndex = player.statIndex?.[stat];
+    if (!Array.isArray(statTrack) || currentIndex === undefined) return player;
+
+    const maxIndex = statTrack.length - 1;
+    const nextIndex = Math.min(maxIndex, currentIndex + 1);
+
+    return {
+      ...player,
+      statIndex: {
+        ...player.statIndex,
+        [stat]: nextIndex,
+      },
+    };
+  });
+}
+
+export function isNecklaceOfTeethChoiceEffect(effect) {
+  return effect?.type === NECKLACE_OF_TEETH_CHOICE_TYPE;
+}
+
+export function resolveNecklaceOfTeethEndTurnState(game) {
+  const currentPlayer = game?.players?.[game.currentPlayerIndex];
+  if (!currentPlayer) return { type: "none" };
+
+  const necklaceCard = currentPlayer.inventory?.find((card) => card.id === NECKLACE_OF_TEETH_ID);
+  if (!necklaceCard) return { type: "none" };
+
+  const criticalStats = getNecklaceOfTeethCriticalStats(currentPlayer);
+  if (criticalStats.length > 1) {
+    return {
+      type: "choice",
+      tileEffect: {
+        type: NECKLACE_OF_TEETH_CHOICE_TYPE,
+        tileName: necklaceCard.name,
+        statOptions: criticalStats,
+        message: "Choose a critical trait to gain 1, or skip.",
+      },
+    };
+  }
+
+  if (criticalStats.length === 1) {
+    const gainedStat = criticalStats[0];
+    return {
+      type: "auto-gain",
+      gainedStat,
+      players: applyNecklaceOfTeethGain(game.players, game.currentPlayerIndex, gainedStat),
+    };
+  }
+
+  return { type: "none" };
+}
+
+export function resolveNecklaceOfTeethChoiceState(game, stat) {
+  const effect = game?.tileEffect;
+  if (!isNecklaceOfTeethChoiceEffect(effect)) return null;
+  if (!Array.isArray(effect.statOptions) || !effect.statOptions.includes(stat)) return null;
+
+  return {
+    gainedStat: stat,
+    players: applyNecklaceOfTeethGain(game.players, game.currentPlayerIndex, stat),
+  };
 }
 
 function getHealableStats(player, healRule = {}) {
@@ -174,82 +254,6 @@ export function applyFirstAidKitNowState(game, viewedCard, targetPlayerIndex = n
       message: `${owner.name} uses ${inventoryCard.name} to heal ${targetPlayer.name}'s ${
         healableStats.length === 1 ? "critical trait" : "critical traits"
       } to starting values.`,
-    },
-    closeViewedCard: true,
-    diceAnimation: null,
-  };
-}
-
-export function applyMapNowState(game, viewedCard) {
-  if (!viewedCard) return { game, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.activeAbilityRule?.action !== "teleport-any-tile") {
-    return { game, closeViewedCard: false, diceAnimation: null };
-  }
-  if (viewedCard.ownerCollection !== "inventory") return { game, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.ownerIndex !== game.currentPlayerIndex) return { game, closeViewedCard: false, diceAnimation: null };
-
-  const owner = game.players[viewedCard.ownerIndex];
-  const inventoryCard = getInventoryCard(game, viewedCard);
-  if (!owner || !inventoryCard || inventoryCard.id !== "map") {
-    return { game, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const options = Object.entries(game.board)
-    .flatMap(([floor, tiles]) =>
-      (tiles || []).map((tile) => ({
-        id: `${floor}:${tile.x}:${tile.y}`,
-        label: tile.name || tile.id || `${floor} (${tile.x}, ${tile.y})`,
-        x: tile.x,
-        y: tile.y,
-        floor,
-      }))
-    )
-    .filter((option) => !(option.floor === owner.floor && option.x === owner.x && option.y === owner.y));
-
-  if (options.length === 0) {
-    return { game, closeViewedCard: false, diceAnimation: null };
-  }
-
-  const nextPlayers = game.players.map((player, index) =>
-    index === viewedCard.ownerIndex
-      ? {
-          ...player,
-          inventory: player.inventory.filter((_, cardIndex) => cardIndex !== viewedCard.ownerCardIndex),
-        }
-      : player
-  );
-
-  return {
-    game: {
-      ...game,
-      players: nextPlayers,
-      eventState: {
-        card: {
-          id: "item-map-teleport",
-          name: inventoryCard.name,
-        },
-        stepIndex: 0,
-        context: {
-          choices: {},
-          selectedStats: {},
-        },
-        pendingEffects: [],
-        summary: null,
-        lastRoll: null,
-        awaiting: {
-          type: "tile-choice",
-          source: "item-active-ability",
-          sourceName: inventoryCard.name,
-          effect: {
-            type: "move",
-            destination: "any-tile",
-          },
-          options,
-          selectedOptionId: null,
-          prompt: "Choose any discovered tile.",
-        },
-      },
-      message: `${owner.name} uses ${inventoryCard.name}. Choose a destination tile.`,
     },
     closeViewedCard: true,
     diceAnimation: null,
