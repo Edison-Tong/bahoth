@@ -42,13 +42,18 @@ import {
   hasIdol,
   shouldOfferIdolChoice,
 } from "./omens/idolAbility";
-import { createDogTradeStartState } from "./omens/dogAbility";
-import { applyHolySymbolDuringPendingExplore } from "./omens/holySymbolAbility";
+import { resolveSpecialOmenNowAbilityState } from "./omens/activeOmenNowAbility";
 import {
-  isNecklaceOfTeethChoiceEffect,
-  resolveNecklaceOfTeethChoiceState,
-  resolveNecklaceOfTeethEndTurnState,
+  isEndTurnItemChoiceEffect,
+  resolveEndTurnItemPassiveChoiceState,
+  resolveEndTurnItemPassiveState,
 } from "./items/turnStateItemAbility";
+import {
+  canUseArmedSkeletonKeyMovement,
+  createSkeletonKeyResultTileEffect,
+  isSkeletonKeyResultEffect,
+  resolveSkeletonKeyResultAfterDismiss,
+} from "./items/movementItemAbility";
 import "./GameBoard.css";
 
 // Direction offsets
@@ -516,21 +521,9 @@ export default function GameBoard({ players, onQuit }) {
         });
       } else if (da.purpose === "skeleton-key") {
         setGame((g) => {
-          const rolled = da.final?.[0] ?? 0;
-          const keyLost = rolled === 0;
-
           return {
             ...g,
-            tileEffect: {
-              type: "skeleton-key-result",
-              tileName: "Skeleton Key",
-              dice: da.final,
-              message: keyLost
-                ? `You rolled ${rolled}. The Skeleton Key breaks and is buried.`
-                : `You rolled ${rolled}. You keep the Skeleton Key.`,
-              nextTurnPhase: "move",
-              nextMessage: g.message,
-            },
+            tileEffect: createSkeletonKeyResultTileEffect(da.final, g.message),
           };
         });
         setDiceAnimation(null);
@@ -754,8 +747,7 @@ export default function GameBoard({ players, onQuit }) {
 
     const moves = [];
     const moveCost = getLeaveMoveCost(tile);
-    const canUseSkeletonKeyMovement =
-      game.skeletonKeyArmed && currentPlayer.inventory.some((card) => card.id === "skeleton-key");
+    const canUseSkeletonKeyMovement = canUseArmedSkeletonKeyMovement(game, currentPlayer);
     for (const dir of tile.doors) {
       const { dx, dy } = DIR[dir];
       const nx = currentPlayer.x + dx;
@@ -814,8 +806,7 @@ export default function GameBoard({ players, onQuit }) {
       const resolvedCost = cost ?? getLeaveMoveCost(currentTile);
       if (player.movesLeft < resolvedCost) return g;
 
-      const hasSkeletonKey = player.inventory.some((card) => card.id === "skeleton-key");
-      if (useSkeletonKey && (!g.skeletonKeyArmed || !hasSkeletonKey)) return g;
+      if (useSkeletonKey && !canUseArmedSkeletonKeyMovement(g, player)) return g;
 
       const movesLeft = player.movesLeft - resolvedCost;
       const newPath = [...g.movePath, { x: nx, y: ny, floor: player.floor, cost: resolvedCost }];
@@ -1747,31 +1738,8 @@ export default function GameBoard({ players, onQuit }) {
           setCameraFloor(effect.pendingSpecialPlacement.placements[0]?.floor || cameraFloor);
         }
 
-        if (effect.type === "skeleton-key-result") {
-          const rollResult = Number(effect.pendingSkeletonKeyRoll ?? effect.dice?.[0] ?? 0);
-          const keyLost = rollResult === 0;
-          const currentPlayerIndex = g.currentPlayerIndex;
-          const nextPlayers = g.players.map((player, index) => {
-            if (index !== currentPlayerIndex) return player;
-            if (!keyLost) return player;
-
-            return {
-              ...player,
-              inventory: player.inventory.filter((card) => card.id !== "skeleton-key"),
-            };
-          });
-
-          return {
-            ...g,
-            players: nextPlayers,
-            skeletonKeyArmed: false,
-            rabbitFootPendingReroll: null,
-            tileEffect: null,
-            drawnCard: effect.pendingSpecialPlacement ? null : effect.queuedCard || null,
-            pendingSpecialPlacement: effect.pendingSpecialPlacement || null,
-            turnPhase: effect.nextTurnPhase,
-            message: keyLost ? "The Skeleton Key is buried." : "You keep the Skeleton Key.",
-          };
+        if (isSkeletonKeyResultEffect(effect)) {
+          return resolveSkeletonKeyResultAfterDismiss(g, effect);
         }
 
         const currentPlayer = g.players[g.currentPlayerIndex];
@@ -1822,7 +1790,7 @@ export default function GameBoard({ players, onQuit }) {
 
   function handleChooseNecklaceOfTeethStat(stat) {
     setGame((g) => {
-      const resolution = resolveNecklaceOfTeethChoiceState(g, stat);
+      const resolution = resolveEndTurnItemPassiveChoiceState(g, { stat });
       if (!resolution) return g;
 
       const current = g.players[g.currentPlayerIndex];
@@ -1834,7 +1802,9 @@ export default function GameBoard({ players, onQuit }) {
 
       return {
         ...nextState,
-        message: `${current.name} gains 1 ${STAT_LABELS[resolution.gainedStat]} with Necklace of Teeth. ${nextState.message}`,
+        message: `${current.name} gains 1 ${STAT_LABELS[resolution.gainedStat]} with ${
+          resolution.sourceName || "Necklace of Teeth"
+        }. ${nextState.message}`,
       };
     });
     setDiceAnimation(null);
@@ -1850,7 +1820,7 @@ export default function GameBoard({ players, onQuit }) {
 
   function handleSkipNecklaceOfTeethGain() {
     setGame((g) => {
-      if (!isNecklaceOfTeethChoiceEffect(g.tileEffect)) return g;
+      if (!isEndTurnItemChoiceEffect(g.tileEffect)) return g;
 
       const current = g.players[g.currentPlayerIndex];
       const nextState = passTurnCore({
@@ -2036,24 +2006,20 @@ export default function GameBoard({ players, onQuit }) {
   function handleUseViewedCardActiveAbilityNow() {
     if (!viewedCard || !viewedCardActiveAbilityState?.canUseNow) return;
 
-    if (viewedCard.activeAbilityRule?.action === "holy-symbol-bury-discovered-tile") {
-      setGame((g) => applyHolySymbolDuringPendingExplore(g, OPPOSITE));
-      setViewedCard(null);
-      return;
-    }
-
-    if (viewedCard.activeAbilityRule?.action === "dog-remote-trade") {
-      const dogStart = createDogTradeStartState(game, viewedCard, getDogTradeTargets);
-      if (!dogStart.ok) {
-        setGame((g) => ({
-          ...g,
-          message: dogStart.message || "Dog cannot be used right now.",
-        }));
-        return;
+    const specialOmenNow = resolveSpecialOmenNowAbilityState(game, viewedCard, {
+      oppositeByDirection: OPPOSITE,
+      getDogTradeTargets,
+    });
+    if (specialOmenNow.handled) {
+      if (specialOmenNow.game) {
+        setGame(specialOmenNow.game);
       }
-
-      setDogTradeState(dogStart.dogTradeState);
-      setViewedCard(null);
+      if (specialOmenNow.dogTradeState) {
+        setDogTradeState(specialOmenNow.dogTradeState);
+      }
+      if (specialOmenNow.closeViewedCard) {
+        setViewedCard(null);
+      }
       return;
     }
 
@@ -2332,24 +2298,26 @@ export default function GameBoard({ players, onQuit }) {
 
   function passTurn(g) {
     const currentPlayer = g.players[g.currentPlayerIndex];
-    const necklaceResolution = resolveNecklaceOfTeethEndTurnState(g);
+    const endTurnItemResolution = resolveEndTurnItemPassiveState(g);
 
-    if (necklaceResolution.type === "choice") {
+    if (endTurnItemResolution.type === "choice") {
       return {
         ...g,
-        tileEffect: necklaceResolution.tileEffect,
+        tileEffect: endTurnItemResolution.tileEffect,
       };
     }
 
-    if (necklaceResolution.type === "auto-gain") {
+    if (endTurnItemResolution.type === "auto-apply") {
       const nextState = passTurnCore({
         ...g,
-        players: necklaceResolution.players,
+        players: endTurnItemResolution.players,
       });
 
       return {
         ...nextState,
-        message: `${currentPlayer.name} gains 1 ${STAT_LABELS[necklaceResolution.gainedStat]} with Necklace of Teeth. ${nextState.message}`,
+        message: `${currentPlayer.name} gains 1 ${STAT_LABELS[endTurnItemResolution.gainedStat]} with ${
+          endTurnItemResolution.sourceName || "Necklace of Teeth"
+        }. ${nextState.message}`,
       };
     }
 
@@ -3173,7 +3141,7 @@ export default function GameBoard({ players, onQuit }) {
             <div className="card-type-label">{game.tileEffect.tileName}</div>
             {game.tileEffect.dice &&
               !(
-                game.tileEffect.type === "skeleton-key-result" &&
+                isSkeletonKeyResultEffect(game.tileEffect) &&
                 game.rabbitFootPendingReroll?.sourceType === "skeleton-key-roll"
               ) && <DiceRow dice={game.tileEffect.dice} modifier={game.tileEffect.diceModifier} />}
             {game.tileEffect.total !== undefined && <div className="dice-total">Total: {game.tileEffect.total}</div>}
@@ -3185,7 +3153,7 @@ export default function GameBoard({ players, onQuit }) {
                 <DiceRow dice={game.tileEffect.damageDice} modifier={game.tileEffect.damageDiceModifier} />
               </>
             )}
-            {game.tileEffect.type === "skeleton-key-result" &&
+            {isSkeletonKeyResultEffect(game.tileEffect) &&
               game.rabbitFootPendingReroll?.sourceType === "skeleton-key-roll" && (
                 <div className="dice-row">
                   <div className="dice-container">
@@ -3206,7 +3174,7 @@ export default function GameBoard({ players, onQuit }) {
                 </div>
               )}
             <p className="card-description">{game.tileEffect.message}</p>
-            {game.tileEffect.type === "skeleton-key-result" &&
+            {isSkeletonKeyResultEffect(game.tileEffect) &&
             game.rabbitFootPendingReroll?.sourceType === "skeleton-key-roll" ? (
               <button
                 className="btn btn-primary"

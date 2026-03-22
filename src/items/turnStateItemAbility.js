@@ -49,7 +49,7 @@ export function isNecklaceOfTeethChoiceEffect(effect) {
   return effect?.type === NECKLACE_OF_TEETH_CHOICE_TYPE;
 }
 
-export function resolveNecklaceOfTeethEndTurnState(game) {
+function resolveNecklaceOfTeethEndTurnState(game) {
   const currentPlayer = game?.players?.[game.currentPlayerIndex];
   if (!currentPlayer) return { type: "none" };
 
@@ -81,7 +81,7 @@ export function resolveNecklaceOfTeethEndTurnState(game) {
   return { type: "none" };
 }
 
-export function resolveNecklaceOfTeethChoiceState(game, stat) {
+function resolveNecklaceOfTeethChoiceState(game, stat) {
   const effect = game?.tileEffect;
   if (!isNecklaceOfTeethChoiceEffect(effect)) return null;
   if (!Array.isArray(effect.statOptions) || !effect.statOptions.includes(stat)) return null;
@@ -89,6 +89,49 @@ export function resolveNecklaceOfTeethChoiceState(game, stat) {
   return {
     gainedStat: stat,
     players: applyNecklaceOfTeethGain(game.players, game.currentPlayerIndex, stat),
+  };
+}
+
+export function resolveEndTurnItemPassiveState(game) {
+  const necklaceResolution = resolveNecklaceOfTeethEndTurnState(game);
+  if (necklaceResolution.type === "choice") {
+    return {
+      type: "choice",
+      source: NECKLACE_OF_TEETH_ID,
+      tileEffect: necklaceResolution.tileEffect,
+    };
+  }
+
+  if (necklaceResolution.type === "auto-gain") {
+    return {
+      type: "auto-apply",
+      source: NECKLACE_OF_TEETH_ID,
+      sourceName: "Necklace of Teeth",
+      gainedStat: necklaceResolution.gainedStat,
+      players: necklaceResolution.players,
+    };
+  }
+
+  return { type: "none" };
+}
+
+export function isEndTurnItemChoiceEffect(effect) {
+  return isNecklaceOfTeethChoiceEffect(effect);
+}
+
+export function resolveEndTurnItemPassiveChoiceState(game, choice = {}) {
+  const effect = game?.tileEffect;
+  if (!isEndTurnItemChoiceEffect(effect)) return null;
+
+  const necklaceChoice = resolveNecklaceOfTeethChoiceState(game, choice.stat);
+  if (!necklaceChoice) return null;
+
+  return {
+    type: "auto-apply",
+    source: NECKLACE_OF_TEETH_ID,
+    sourceName: effect.tileName || "Necklace of Teeth",
+    gainedStat: necklaceChoice.gainedStat,
+    players: necklaceChoice.players,
   };
 }
 

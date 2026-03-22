@@ -35,7 +35,9 @@ import {
   applyMapNowState as applyMapNowStateFromMovementAbility,
   applySkeletonKeyNowState as applySkeletonKeyNowStateFromMovementAbility,
   canUseNormalMovementNow as canUseNormalMovementNowFromMovementAbility,
+  getSkeletonKeyResultDice,
   hasSkeletonKeyWallMoveAvailable as hasSkeletonKeyWallMoveAvailableFromMovementAbility,
+  isSkeletonKeyResultEffectType,
 } from "../items/movementItemAbility";
 import {
   getDamageConversionOptions as getDamageConversionOptionsFromPassiveGroup,
@@ -997,11 +999,7 @@ export function applySkeletonKeyNowState(g, viewedCard) {
 export function chooseRabbitFootDieState(g, dieIndex) {
   const pending = g.rabbitFootPendingReroll;
   const dice =
-    pending?.sourceType === "skeleton-key-roll"
-      ? g.tileEffect?.type === "skeleton-key-result"
-        ? g.tileEffect?.dice
-        : null
-      : g.eventState?.lastRoll?.dice;
+    pending?.sourceType === "skeleton-key-roll" ? getSkeletonKeyResultDice(g.tileEffect) : g.eventState?.lastRoll?.dice;
   const selectedIndex = Number(dieIndex);
   if (!pending || !Array.isArray(dice)) return g;
   if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= dice.length) return g;
@@ -1019,8 +1017,7 @@ export function applyRabbitFootRerollState(g) {
   const pending = g.rabbitFootPendingReroll;
   const isSkeletonKeyRoll = pending?.sourceType === "skeleton-key-roll";
   const lastRoll = g.eventState?.lastRoll;
-  const skeletonKeyRollDice =
-    g.tileEffect?.type === "skeleton-key-result" && Array.isArray(g.tileEffect?.dice) ? g.tileEffect.dice : null;
+  const skeletonKeyRollDice = getSkeletonKeyResultDice(g.tileEffect);
 
   if (
     !pending ||
@@ -1229,14 +1226,10 @@ export function getMysticElevatorDestination(total) {
 }
 
 export function isQueuedTileEffectType(type) {
-  return [
-    "discover-gain",
-    "armory",
-    "junk-room",
-    "panic-room",
-    "mystic-elevator-result",
-    "skeleton-key-result",
-  ].includes(type);
+  return (
+    ["discover-gain", "armory", "junk-room", "panic-room", "mystic-elevator-result"].includes(type) ||
+    isSkeletonKeyResultEffectType(type)
+  );
 }
 
 export function applyTileEffectConsequences(g, players, effect) {
