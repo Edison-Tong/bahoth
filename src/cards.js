@@ -1,19 +1,4 @@
 export const OMEN_CARDS = [
-  {
-    id: "dog",
-    name: "Dog",
-    passiveEffects: [
-      {
-        type: "trait-roll-bonus",
-        stat: "speed",
-        amount: 1,
-      },
-    ],
-    passiveAbility: "Add 1 to the result of your speed rolls",
-    activeAbilityRule: { trigger: "on-your-turn", action: "dog-remote-trade" },
-    activeAbility:
-      "Once during your turn, you may use the Dog to trade any number of Items with another explorer up to 4 tiles away, using normal trading rules.",
-  },
   //   id: "book",
   //   name: "Book",
   //   passiveEffects: [
@@ -27,7 +12,6 @@ export const OMEN_CARDS = [
   //   activeAbilityRule: { trigger: "trait-roll-required", action: "substitute-knowledge-for-trait" },
   //   activeAbility:
   //     "Once during your turn, you may use the book to lose 1 Sanity. On the next trait roll you make this turn that isn't an attack, you may use your knowledge in place of the named trait.",
-  // },
   // {
   //   id: "dagger",
   //   name: "Dagger",
@@ -41,20 +25,37 @@ export const OMEN_CARDS = [
   //   activeAbility:
   //     "When you attack, you may lose 1 Speed. If you do, roll 2 extra dice on that attack.",
   // },
-  // {
-  //   id: "holy-symbol",
-  //   name: "Holy Symbol",
+  // },
+  //   {
+  //   id: "dog",
+  //   name: "Dog",
   //   passiveEffects: [
   //     {
   //       type: "trait-roll-bonus",
-  //       stat: "sanity",
+  //       stat: "speed",
   //       amount: 1,
   //     },
   //   ],
-  //   passiveAbility: "Add 1 to the result of your Sanity rolls.",
+  //   passiveAbility: "Add 1 to the result of your speed rolls",
+  //   activeAbilityRule: { trigger: "on-your-turn", action: "dog-remote-trade" },
   //   activeAbility:
-  //     "Whenever you discover a tile, you may choose to bury it and discover the next tile instead. If you do this, do not resolve any effects for the first tile.",
+  //     "Once during your turn, you may use the Dog to trade any number of Items with another explorer up to 4 tiles away, using normal trading rules.",
   // },
+  {
+    id: "holy-symbol",
+    name: "Holy Symbol",
+    passiveEffects: [
+      {
+        type: "trait-roll-bonus",
+        stat: "sanity",
+        amount: 1,
+      },
+    ],
+    passiveAbility: "Add 1 to the result of your Sanity rolls.",
+    activeAbilityRule: { trigger: "on-your-turn", action: "holy-symbol-bury-discovered-tile" },
+    activeAbility:
+      "Whenever you discover a tile, you may choose to bury it and discover the next tile instead. If you do this, do not resolve any effects for the first tile.",
+  },
   // {
   //   id: "idol",
   //   name: "Idol",

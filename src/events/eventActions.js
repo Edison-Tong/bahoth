@@ -1029,6 +1029,7 @@ export function getCardActiveAbilityState({
     rule.action === "reroll-all-trait-dice" ||
     rule.action === "reroll-blank-trait-dice" ||
     rule.action === "reroll-one-die" ||
+    rule.action === "holy-symbol-bury-discovered-tile" ||
     rule.action === "dog-remote-trade" ||
     rule.action === "move-through-walls" ||
     rule.action === "substitute-sanity-for-knowledge" ||
@@ -1082,17 +1083,19 @@ export function getCardActiveAbilityState({
           ? isLuckyCoinAvailableThisTurn(game, viewedCard)
           : rule.action === "reroll-one-die"
             ? isRabbitsFootAvailableThisTurn(game, viewedCard)
-            : rule.action === "dog-remote-trade"
-              ? isDogTradeAvailableThisTurn(game, viewedCard)
-              : rule.action === "move-through-walls"
-                ? canUseNormalMovementNow(game, viewedCard) && hasSkeletonKeyWallMoveAvailable(game, viewedCard)
-                : rule.action === "substitute-sanity-for-knowledge"
-                  ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
-                      .canUseMagicCameraNow
-                  : rule.action === "substitute-knowledge-for-trait"
-                    ? getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride })
-                        .canUseBookNow
-                    : true;
+            : rule.action === "holy-symbol-bury-discovered-tile"
+              ? game.turnPhase === "rotate" && !!game.pendingExplore && !game.pendingExplore.holySymbolReplacement
+              : rule.action === "dog-remote-trade"
+                ? isDogTradeAvailableThisTurn(game, viewedCard)
+                : rule.action === "move-through-walls"
+                  ? canUseNormalMovementNow(game, viewedCard) && hasSkeletonKeyWallMoveAvailable(game, viewedCard)
+                  : rule.action === "substitute-sanity-for-knowledge"
+                    ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
+                        .canUseMagicCameraNow
+                    : rule.action === "substitute-knowledge-for-trait"
+                      ? getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride })
+                          .canUseBookNow
+                      : true;
 
   return {
     canUseNow: triggerSatisfied && hasSupportedAction && actionSatisfied,

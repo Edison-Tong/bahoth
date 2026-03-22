@@ -975,96 +975,122 @@ export default function GameBoard({ players, onQuit }) {
 
       const newStack = [...g.tileStack];
       newStack.splice(pe.tileIndex, 1);
-      let newItemDeck = [...g.itemDeck];
-      let newOmenDeck = [...g.omenDeck];
-      let newEventDeck = [...g.eventDeck];
+      const resolvePlacedTileOutcome = ({ board, tileStack, itemDeck, omenDeck, eventDeck, players, omenCount }) => {
+        let nextBoard = board;
+        let nextStack = tileStack;
+        let nextItemDeck = itemDeck;
+        let nextOmenDeck = omenDeck;
+        let nextEventDeck = eventDeck;
+        let message = `${p.name} placed ${placedTile.name}!`;
+        let turnPhase = "move";
+        let drawnCard = null;
+        let nextOmenCount = omenCount;
+        let nextPlayers = players;
+        let tileEffect = null;
 
-      let message = `${p.name} placed ${pe.tile.name}!`;
-      let turnPhase = "move";
-      let drawnCard = null;
-      let newOmenCount = g.omenCount;
-      let updatedPlayers = g.players;
-      let tileEffect = null;
-
-      if (pe.tile.cardType) {
-        const cardType = pe.tile.cardType;
-        if (cardType === "item") {
-          const nextItem = newItemDeck.shift();
-          drawnCard = nextItem ? createDrawnItemCard(nextItem) : null;
-        } else if (cardType === "omen") {
-          const nextOmen = newOmenDeck.shift();
-          drawnCard = nextOmen ? createDrawnOmenCard(nextOmen) : null;
+        if (pe.tile.cardType) {
+          const cardType = pe.tile.cardType;
+          if (cardType === "item") {
+            const deck = [...nextItemDeck];
+            const nextItem = deck.shift();
+            nextItemDeck = deck;
+            drawnCard = nextItem ? createDrawnItemCard(nextItem) : null;
+          } else if (cardType === "omen") {
+            const deck = [...nextOmenDeck];
+            const nextOmen = deck.shift();
+            nextOmenDeck = deck;
+            drawnCard = nextOmen ? createDrawnOmenCard(nextOmen) : null;
+          } else {
+            const deck = [...nextEventDeck];
+            const nextEvent = deck.shift();
+            nextEventDeck = deck;
+            drawnCard = nextEvent ? createDrawnEventCard(nextEvent) : null;
+          }
+          if (cardType === "omen") {
+            nextOmenCount += 1;
+          }
+          if (drawnCard) {
+            message += ` A${cardType === "omen" || cardType === "event" ? "n" : "n"} ${cardType} card appears...`;
+          }
+          turnPhase = "card";
         } else {
-          const nextEvent = newEventDeck.shift();
-          drawnCard = nextEvent ? createDrawnEventCard(nextEvent) : null;
+          message += ` ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`;
         }
-        if (cardType === "omen") {
-          newOmenCount++;
+
+        if (placedTile.discoverEffect === "junk-room") {
+          nextBoard = {
+            ...nextBoard,
+            [pe.floor]: nextBoard[pe.floor].map((tile) =>
+              tile.x === placedTile.x && tile.y === placedTile.y ? { ...tile, obstacle: true } : tile
+            ),
+          };
+
+          const junkMessage = `${p.name} places an obstacle token in the Junk Room.`;
+          tileEffect = {
+            type: "junk-room",
+            tileName: placedTile.name,
+            message: junkMessage,
+            queuedCard: drawnCard,
+            nextTurnPhase: drawnCard ? "card" : "move",
+            nextMessage: drawnCard
+              ? `${junkMessage} ${drawnCard.type.toUpperCase()} card appears...`
+              : `${junkMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
+          };
+
+          drawnCard = null;
+          turnPhase = "card";
+          message = junkMessage;
         }
-        if (drawnCard) {
-          message += ` A${cardType === "omen" || cardType === "event" ? "n" : "n"} ${cardType} card appears...`;
-        }
-        turnPhase = "card";
-      } else {
-        message += ` ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`;
-      }
 
-      if (placedTile.discoverEffect === "junk-room") {
-        newBoard[pe.floor] = newBoard[pe.floor].map((tile) =>
-          tile.x === placedTile.x && tile.y === placedTile.y ? { ...tile, obstacle: true } : tile
-        );
+        if (placedTile.discoverEffect === "panic-room") {
+          const secretAlreadyPlaced = Object.values(nextBoard).some((tiles) =>
+            tiles.some((tile) => tile.id === "secret-staircase")
+          );
+          const secretIndex = nextStack.findIndex((tile) => tile.id === "secret-staircase");
 
-        const junkMessage = `${p.name} places an obstacle token in the Junk Room.`;
-        tileEffect = {
-          type: "junk-room",
-          tileName: placedTile.name,
-          message: junkMessage,
-          queuedCard: drawnCard,
-          nextTurnPhase: drawnCard ? "card" : "move",
-          nextMessage: drawnCard
-            ? `${junkMessage} ${drawnCard.type.toUpperCase()} card appears...`
-            : `${junkMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
-        };
+          let panicMessage = "";
+          if (!secretAlreadyPlaced && secretIndex !== -1) {
+            const secretTile = nextStack[secretIndex];
+            const placements = getPlacementOptions(nextBoard, secretTile);
 
-        drawnCard = null;
-        turnPhase = "card";
-        message = junkMessage;
-      }
+            if (placements.length > 0) {
+              nextStack = [...nextStack];
+              nextStack.splice(secretIndex, 1);
+              panicMessage = `${p.name} reveals the Secret Staircase. Choose any open doorway to place it.`;
 
-      if (placedTile.discoverEffect === "panic-room") {
-        const secretAlreadyPlaced = Object.values(newBoard).some((tiles) =>
-          tiles.some((tile) => tile.id === "secret-staircase")
-        );
-        const secretIndex = newStack.findIndex((tile) => tile.id === "secret-staircase");
+              tileEffect = {
+                type: "panic-room",
+                tileName: placedTile.name,
+                message: `${panicMessage} The tile stack is shuffled.`,
+                queuedCard: drawnCard,
+                nextTurnPhase: "special-place",
+                nextMessage: "Place the Secret Staircase on any open doorway.",
+                pendingSpecialPlacement: {
+                  tile: secretTile,
+                  placements,
+                  queuedCard: drawnCard,
+                  nextTurnPhase: drawnCard ? "card" : "move",
+                  nextMessage: drawnCard
+                    ? `${p.name} placed the Secret Staircase. An omen card appears...`
+                    : `${p.name} placed the Secret Staircase. ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
+                },
+              };
+            } else {
+              panicMessage = `${p.name} found the Secret Staircase, but there was nowhere to place it.`;
 
-        let panicMessage = "";
-        if (!secretAlreadyPlaced && secretIndex !== -1) {
-          const secretTile = newStack[secretIndex];
-          const placements = getPlacementOptions(newBoard, secretTile);
-
-          if (placements.length > 0) {
-            newStack.splice(secretIndex, 1);
-            panicMessage = `${p.name} reveals the Secret Staircase. Choose any open doorway to place it.`;
-
-            tileEffect = {
-              type: "panic-room",
-              tileName: placedTile.name,
-              message: `${panicMessage} The tile stack is shuffled.`,
-              queuedCard: drawnCard,
-              nextTurnPhase: "special-place",
-              nextMessage: "Place the Secret Staircase on any open doorway.",
-              pendingSpecialPlacement: {
-                tile: secretTile,
-                placements,
+              tileEffect = {
+                type: "panic-room",
+                tileName: placedTile.name,
+                message: `${panicMessage} The tile stack is shuffled.`,
                 queuedCard: drawnCard,
                 nextTurnPhase: drawnCard ? "card" : "move",
                 nextMessage: drawnCard
-                  ? `${p.name} placed the Secret Staircase. An omen card appears...`
-                  : `${p.name} placed the Secret Staircase. ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
-              },
-            };
+                  ? `${panicMessage} An omen card appears...`
+                  : `${panicMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
+              };
+            }
           } else {
-            panicMessage = `${p.name} found the Secret Staircase, but there was nowhere to place it.`;
+            panicMessage = "The Secret Staircase is already in play.";
 
             tileEffect = {
               type: "panic-room",
@@ -1077,109 +1103,110 @@ export default function GameBoard({ players, onQuit }) {
                 : `${panicMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
             };
           }
-        } else {
-          panicMessage = "The Secret Staircase is already in play.";
+
+          nextStack = [...nextStack].sort(() => Math.random() - 0.5);
+          drawnCard = null;
+          turnPhase = tileEffect?.nextTurnPhase || "card";
+          message = panicMessage;
+        }
+
+        if (placedTile.discoverEffect === "armory") {
+          const { weaponCard, remainingDeck } = drawWeaponItem(nextItemDeck);
+          nextItemDeck = remainingDeck;
+
+          const armoryMessage = weaponCard
+            ? `${p.name} searched the Armory and found ${weaponCard.name}.`
+            : `${p.name} searched the Armory but found no weapon.`;
 
           tileEffect = {
-            type: "panic-room",
+            type: "armory",
             tileName: placedTile.name,
-            message: `${panicMessage} The tile stack is shuffled.`,
+            message: armoryMessage,
+            queuedCard: weaponCard ? createDrawnItemCard(weaponCard) : null,
+            nextTurnPhase: weaponCard ? "card" : "move",
+            nextMessage: weaponCard
+              ? `${armoryMessage} A weapon item is taken.`
+              : `${armoryMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
+          };
+
+          drawnCard = null;
+          turnPhase = weaponCard ? "card" : "move";
+          message = armoryMessage;
+        }
+
+        const enableMysticElevator = placedTile.enterEffect === "mystic-elevator" && !g.mysticElevatorUsed;
+        if (enableMysticElevator) {
+          tileEffect = null;
+          turnPhase = "move";
+          message = `${p.name} placed Mystic Elevator! Use Elevator to roll 2 dice.`;
+        }
+
+        if (placedTile.discoverGain) {
+          const { stat, amount } = placedTile.discoverGain;
+          const currentIndex = p.statIndex[stat];
+          const maxIndex = p.character[stat].length - 1;
+          const appliedAmount = Math.min(amount, maxIndex - currentIndex);
+
+          nextPlayers = applyStatChange(nextPlayers, g.currentPlayerIndex, stat, appliedAmount);
+
+          const nextValue =
+            nextPlayers[g.currentPlayerIndex].character[stat][nextPlayers[g.currentPlayerIndex].statIndex[stat]];
+          const gainMessage =
+            appliedAmount > 0
+              ? `${p.name} gains ${appliedAmount} ${STAT_LABELS[stat]} from ${placedTile.name}. ${STAT_LABELS[stat]} is now ${nextValue}.`
+              : `${p.name} cannot gain more ${STAT_LABELS[stat]} from ${placedTile.name}.`;
+
+          tileEffect = {
+            type: "discover-gain",
+            tileName: placedTile.name,
+            gainStat: stat,
+            gainAmount: appliedAmount,
+            message: gainMessage,
             queuedCard: drawnCard,
             nextTurnPhase: drawnCard ? "card" : "move",
             nextMessage: drawnCard
-              ? `${panicMessage} An omen card appears...`
-              : `${panicMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
+              ? `${gainMessage} ${drawnCard.type.toUpperCase()} card appears...`
+              : `${gainMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
           };
+
+          drawnCard = null;
+          turnPhase = "card";
+          message = gainMessage;
         }
 
-        newStack.sort(() => Math.random() - 0.5);
-        drawnCard = null;
-        turnPhase = tileEffect?.nextTurnPhase || "card";
-        message = panicMessage;
-      }
-
-      if (placedTile.discoverEffect === "armory") {
-        const { weaponCard, remainingDeck } = drawWeaponItem(newItemDeck);
-        newItemDeck = remainingDeck;
-
-        const armoryMessage = weaponCard
-          ? `${p.name} searched the Armory and found ${weaponCard.name}.`
-          : `${p.name} searched the Armory but found no weapon.`;
-
-        tileEffect = {
-          type: "armory",
-          tileName: placedTile.name,
-          message: armoryMessage,
-          queuedCard: weaponCard ? createDrawnItemCard(weaponCard) : null,
-          nextTurnPhase: weaponCard ? "card" : "move",
-          nextMessage: weaponCard
-            ? `${armoryMessage} A weapon item is taken.`
-            : `${armoryMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
+        return {
+          board: nextBoard,
+          tileStack: nextStack,
+          itemDeck: nextItemDeck,
+          omenDeck: nextOmenDeck,
+          eventDeck: nextEventDeck,
+          players: nextPlayers,
+          movePath: [{ x: p.x, y: p.y, floor: p.floor, cost: 0 }],
+          pendingExplore: null,
+          pendingSpecialPlacement: null,
+          mysticElevatorReady: enableMysticElevator ? true : g.mysticElevatorReady,
+          mysticElevatorUsed: g.mysticElevatorUsed,
+          omenCount: nextOmenCount,
+          drawnCard,
+          tileEffect,
+          turnPhase,
+          message,
         };
+      };
 
-        drawnCard = null;
-        turnPhase = weaponCard ? "card" : "move";
-        message = armoryMessage;
-      }
-
-      const enableMysticElevator = placedTile.enterEffect === "mystic-elevator" && !g.mysticElevatorUsed;
-      if (enableMysticElevator) {
-        tileEffect = null;
-        turnPhase = "move";
-        message = `${p.name} placed Mystic Elevator! Use Elevator to roll 2 dice.`;
-      }
-
-      if (placedTile.discoverGain) {
-        const { stat, amount } = placedTile.discoverGain;
-        const currentIndex = p.statIndex[stat];
-        const maxIndex = p.character[stat].length - 1;
-        const appliedAmount = Math.min(amount, maxIndex - currentIndex);
-
-        updatedPlayers = applyStatChange(g.players, g.currentPlayerIndex, stat, appliedAmount);
-
-        const nextValue =
-          updatedPlayers[g.currentPlayerIndex].character[stat][updatedPlayers[g.currentPlayerIndex].statIndex[stat]];
-        const gainMessage =
-          appliedAmount > 0
-            ? `${p.name} gains ${appliedAmount} ${STAT_LABELS[stat]} from ${placedTile.name}. ${STAT_LABELS[stat]} is now ${nextValue}.`
-            : `${p.name} cannot gain more ${STAT_LABELS[stat]} from ${placedTile.name}.`;
-
-        tileEffect = {
-          type: "discover-gain",
-          tileName: placedTile.name,
-          gainStat: stat,
-          gainAmount: appliedAmount,
-          message: gainMessage,
-          queuedCard: drawnCard,
-          nextTurnPhase: drawnCard ? "card" : "move",
-          nextMessage: drawnCard
-            ? `${gainMessage} ${drawnCard.type.toUpperCase()} card appears...`
-            : `${gainMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
-        };
-
-        drawnCard = null;
-        turnPhase = "card";
-        message = gainMessage;
-      }
+      const outcome = resolvePlacedTileOutcome({
+        board: newBoard,
+        tileStack: newStack,
+        itemDeck: [...g.itemDeck],
+        omenDeck: [...g.omenDeck],
+        eventDeck: [...g.eventDeck],
+        players: g.players,
+        omenCount: g.omenCount,
+      });
 
       return {
         ...g,
-        board: newBoard,
-        tileStack: newStack,
-        itemDeck: newItemDeck,
-        omenDeck: newOmenDeck,
-        eventDeck: newEventDeck,
-        players: updatedPlayers,
-        movePath: [{ x: p.x, y: p.y, floor: p.floor, cost: 0 }],
-        pendingExplore: null,
-        pendingSpecialPlacement: null,
-        mysticElevatorReady: enableMysticElevator ? true : g.mysticElevatorReady,
-        mysticElevatorUsed: g.mysticElevatorUsed,
-        omenCount: newOmenCount,
-        drawnCard,
-        tileEffect,
-        turnPhase,
-        message,
+        ...outcome,
       };
     });
   }
@@ -1874,6 +1901,94 @@ export default function GameBoard({ players, onQuit }) {
 
   function handleUseViewedCardActiveAbilityNow() {
     if (!viewedCard || !viewedCardActiveAbilityState?.canUseNow) return;
+
+    if (viewedCard.activeAbilityRule?.action === "holy-symbol-bury-discovered-tile") {
+      setGame((g) => {
+        const pe = g.pendingExplore;
+        if (!pe || g.turnPhase !== "rotate" || pe.holySymbolReplacement) {
+          return {
+            ...g,
+            message: "Holy Symbol can only be used before placing a newly discovered tile.",
+          };
+        }
+
+        const stackWithoutPending = [...g.tileStack];
+        if (pe.tileIndex < 0 || pe.tileIndex >= stackWithoutPending.length) {
+          return {
+            ...g,
+            message: "Holy Symbol cannot bury this tile right now.",
+          };
+        }
+
+        const [buriedTile] = stackWithoutPending.splice(pe.tileIndex, 1);
+        if (!buriedTile) {
+          return {
+            ...g,
+            message: "Holy Symbol cannot bury this tile right now.",
+          };
+        }
+
+        const stackWithBuriedTile = [...stackWithoutPending, buriedTile];
+        const allDirs = ["N", "E", "S", "W"];
+        const neededDoor = OPPOSITE[pe.dir];
+
+        const replacementIndex = stackWithBuriedTile.findIndex((tile) => {
+          if (!tile.floors?.includes(pe.floor)) return false;
+          for (let rot = 0; rot < 4; rot += 1) {
+            const rotatedDoors = tile.doors.map((door) => {
+              const doorIndex = allDirs.indexOf(door);
+              return allDirs[(doorIndex + rot) % 4];
+            });
+            if (rotatedDoors.includes(neededDoor)) return true;
+          }
+          return false;
+        });
+
+        if (replacementIndex === -1) {
+          return {
+            ...g,
+            message: "Holy Symbol found no valid replacement tile.",
+          };
+        }
+
+        const replacementTile = stackWithBuriedTile[replacementIndex];
+        const validRotations = [];
+        for (let rot = 0; rot < 4; rot += 1) {
+          const rotatedDoors = replacementTile.doors.map((door) => {
+            const doorIndex = allDirs.indexOf(door);
+            return allDirs[(doorIndex + rot) % 4];
+          });
+          if (rotatedDoors.includes(neededDoor)) {
+            validRotations.push(rotatedDoors);
+          }
+        }
+
+        if (validRotations.length === 0) {
+          return {
+            ...g,
+            message: "Holy Symbol found no valid replacement rotation.",
+          };
+        }
+
+        const owner = g.players[g.currentPlayerIndex];
+        return {
+          ...g,
+          tileStack: stackWithBuriedTile,
+          pendingExplore: {
+            ...pe,
+            tile: replacementTile,
+            tileIndex: replacementIndex,
+            validRotations,
+            rotationIndex: 0,
+            holySymbolReplacement: true,
+          },
+          movePath: [{ x: owner.x, y: owner.y, floor: owner.floor, cost: 0 }],
+          message: `${owner.name} buries ${pe.tile.name} with Holy Symbol and discovers ${replacementTile.name}.`,
+        };
+      });
+      setViewedCard(null);
+      return;
+    }
 
     if (viewedCard.activeAbilityRule?.action === "dog-remote-trade") {
       const targets = getDogTradeTargets(game, viewedCard.ownerIndex, 4);
