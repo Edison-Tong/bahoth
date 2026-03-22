@@ -123,6 +123,53 @@ export function describeEventEffects(effects) {
     .join(" ");
 }
 
+function getDoorwayAdjacentTiles(board, player, DIR, getTileAtPosition) {
+  const currentTile = getTileAtPosition(board, player.x, player.y, player.floor);
+  if (!currentTile) return [];
+
+  const entries = [];
+  const seen = new Set();
+  const pushEntry = (tile, floor) => {
+    if (!tile) return;
+    const key = `${floor}:${tile.x}:${tile.y}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    entries.push({ tile, floor });
+  };
+
+  // Door-connected neighbors on the same floor.
+  for (const dir of currentTile.doors || []) {
+    const offset = DIR?.[dir];
+    if (!offset) continue;
+    const neighbor = getTileAtPosition(board, player.x + offset.dx, player.y + offset.dy, player.floor);
+    if (!neighbor) continue;
+    const opposite = { N: "S", S: "N", E: "W", W: "E" }[dir];
+    if (!(neighbor.doors || []).includes(opposite)) continue;
+    pushEntry(neighbor, player.floor);
+  }
+
+  // Stair / special connectors.
+  if (currentTile.connectsTo) {
+    for (const [floor, tiles] of Object.entries(board || {})) {
+      const connected = (tiles || []).find((tile) => tile.id === currentTile.connectsTo);
+      if (connected) {
+        pushEntry(connected, floor);
+        break;
+      }
+    }
+  }
+
+  for (const [floor, tiles] of Object.entries(board || {})) {
+    for (const tile of tiles || []) {
+      if (tile.connectsTo === currentTile.id) {
+        pushEntry(tile, floor);
+      }
+    }
+  }
+
+  return entries;
+}
+
 export function getDiscoveredTileOptions(board, player, destination, tokenType = null, DIR, getTileAtPosition) {
   const currentTile = getTileAtPosition(board, player.x, player.y, player.floor);
   const allTiles = Object.entries(board).flatMap(([floor, tiles]) =>
@@ -139,10 +186,7 @@ export function getDiscoveredTileOptions(board, player, destination, tokenType =
     case "current-tile":
       return currentTile ? [{ tile: currentTile, floor: player.floor }] : [];
     case "adjacent-tile":
-      return Object.entries(DIR)
-        .map(([, dir]) => getTileAtPosition(board, player.x + dir.dx, player.y + dir.dy, player.floor))
-        .filter(Boolean)
-        .map((tile) => ({ tile, floor: player.floor }));
+      return getDoorwayAdjacentTiles(board, player, DIR, getTileAtPosition);
     case "entrance-hall":
     case "basement-landing":
     case "upper-landing":

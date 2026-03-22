@@ -56,33 +56,34 @@ export const OMEN_CARDS = [
   //   activeAbility:
   //     "Whenever you discover a tile, you may choose to bury it and discover the next tile instead. If you do this, do not resolve any effects for the first tile.",
   // },
-  {
-    id: "idol",
-    name: "Idol",
-    passiveEffects: [
-      {
-        type: "trait-roll-bonus",
-        stat: "might",
-        amount: 1,
-      },
-    ],
-    passiveAbility: "Add 1 to the result of your Might rolls",
-    activeAbility: "When you discover a tile with an Event symbol, you may choose to not draw an Event card.",
-  },
   // {
-  //   id: "mask",
-  //   name: "Mask",
+  //   id: "idol",
+  //   name: "Idol",
   //   passiveEffects: [
   //     {
   //       type: "trait-roll-bonus",
-  //       stat: "speed",
+  //       stat: "might",
   //       amount: 1,
   //     },
   //   ],
-  //   passiveAbility: "Add 1 to the result of your speed rolls",
-  //   activeAbility:
-  //     "Once during your turn, you may use the Mask to move everyone else on your tile (explorers and monsters) to any adjacent tiles. This effect may not be used to discover new tiles",
+  //   passiveAbility: "Add 1 to the result of your Might rolls",
+  //   activeAbility: "When you discover a tile with an Event symbol, you may choose to not draw an Event card.", //NOTE: THE OMEN WORKS DIFFERENTLY BY ACTUALLY POPPING UP BEFORE DRAWING AN EVENT CARD INSTEAD OF BEING A USE NOW BUTTON IN THE PLAYERS INVENTORY. THIS WAS DONE JUST BECAUSE THERE IS NOT A CONVINIENT SPOT THAT ALLOWS THE PALYER TO ACTIVATE THE ABILITY ON THEIR OWN
   // },
+  {
+    id: "mask",
+    name: "Mask",
+    passiveEffects: [
+      {
+        type: "trait-roll-bonus",
+        stat: "speed",
+        amount: 1,
+      },
+    ],
+    passiveAbility: "Add 1 to the result of your speed rolls",
+    activeAbilityRule: { trigger: "on-your-turn", action: "mask-push-adjacent-players" },
+    activeAbility:
+      "Once during your turn, you may use the Mask to move everyone else on your tile to an adjacent tile (including linked stair tiles). This effect may not be used to discover new tiles.",
+  },
   // {
   //   id: "ring",
   //   name: "Ring",
@@ -686,7 +687,7 @@ export const EVENT_CARDS = [
   //   id: "bat-out-of-hell",
   //   name: "Bat Out of Hell",
   //   todo: "Make a Speed roll",
-  //   result: "4+: Place your explorer on an adjacent tile. 0-3: Take 1 Physical damage.",
+  //   result: "4+: Place your explorer on an adjacent tile. 0-3: Take 1 Physical damage.", // NOTE: ADJACENT MEANS IT SHARES A DOORWAY
   //   steps: [
   //     createEventStep("trait-roll", {
   //       stat: "speed",
@@ -1264,7 +1265,7 @@ export const EVENT_CARDS = [
   //       outcomes: [
   //         createEventOutcome({ roll: { min: 4 } }, [
   //           createEventEffect("stat-choice", { mode: "gain", options: ["sanity", "speed"], amount: 1 }),
-  //           createEventEffect("move", { destination: "adjacent-tile" }),
+  //           createEventEffect("move", { destination: "adjacent-tile" }), NOTE: ADJACENT MEANS IT SHARES A DOORWAY
   //         ]),
   //         createEventOutcome({ roll: { min: 2, max: 3 } }, [
   //           createEventEffect("stat-change", { mode: "gain", stat: "speed", amount: 1 }),

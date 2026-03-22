@@ -236,6 +236,35 @@ function isDogTradeAvailableThisTurn(game, viewedCard) {
   return ownerHasItems || anyTargetHasItems;
 }
 
+function isMaskPushAvailableThisTurn(game, viewedCard) {
+  if (!viewedCard || viewedCard.ownerCollection !== "omens") return false;
+  const owner = game.players?.[viewedCard.ownerIndex];
+  const omenCard = owner?.omens?.[viewedCard.ownerCardIndex];
+  if (!owner || !omenCard || omenCard.id !== "mask") return false;
+  if (omenCard.lastActiveAbilityTurnUsed === game.turnNumber) return false;
+
+  const hasOtherExplorerOnTile = (game.players || []).some(
+    (player, index) =>
+      index !== viewedCard.ownerIndex &&
+      player.isAlive &&
+      player.floor === owner.floor &&
+      player.x === owner.x &&
+      player.y === owner.y
+  );
+  if (!hasOtherExplorerOnTile) return false;
+
+  const adjacent = getMovementNeighbors(
+    game.board,
+    {
+      floor: owner.floor,
+      x: owner.x,
+      y: owner.y,
+    },
+    { ignoreObstacles: true }
+  );
+  return adjacent.length > 0;
+}
+
 function hasSkeletonKeyWallMoveAvailable(game, viewedCard) {
   const inventoryCard = getInventoryCard(game, viewedCard);
   if (!inventoryCard || inventoryCard.id !== "skeleton-key") return false;
@@ -675,6 +704,47 @@ export function eventTileChoiceState(g, option, deps) {
   const awaiting = g.eventState?.awaiting;
   if (awaiting?.type !== "tile-choice") return { game: g, cameraFloor: null };
 
+  if (awaiting.effect?.type === "mask-push-players" && awaiting.source === "item-active-ability") {
+    const tile = getTileAtPosition(g.board, option.x, option.y, option.floor);
+    if (!tile) return { game: g, cameraFloor: null };
+
+    const targetPlayerIndexes = Array.isArray(awaiting.effect.targetPlayerIndexes)
+      ? awaiting.effect.targetPlayerIndexes
+      : [];
+    const activeTargetOffset = Number(awaiting.effect.activeTargetOffset) || 0;
+    const targetPlayerIndex = targetPlayerIndexes[activeTargetOffset];
+    if (!Number.isInteger(targetPlayerIndex)) {
+      return { game: g, cameraFloor: null };
+    }
+
+    const targetName = g.players[targetPlayerIndex]?.name || "Explorer";
+
+    return {
+      game: {
+        ...g,
+        players: g.players.map((player, index) =>
+          index === targetPlayerIndex
+            ? {
+                ...player,
+                x: tile.x,
+                y: tile.y,
+                floor: option.floor,
+              }
+            : player
+        ),
+        eventState: {
+          ...g.eventState,
+          awaiting: {
+            ...awaiting,
+            selectedOptionId: option.id,
+          },
+        },
+        message: `Now moving ${targetName}`,
+      },
+      cameraFloor: option.floor,
+    };
+  }
+
   if (awaiting.effect?.type === "move") {
     const tile = getTileAtPosition(g.board, option.x, option.y, option.floor);
     if (!tile) return { game: g, cameraFloor: null };
@@ -754,6 +824,75 @@ export function confirmEventTileChoiceState(g, deps) {
       },
     });
     return { game: resumed.game, cameraFloor: selectedOption.floor };
+  }
+
+  if (awaiting.effect.type === "mask-push-players" && awaiting.source === "item-active-ability") {
+    const targetPlayerIndexes = Array.isArray(awaiting.effect.targetPlayerIndexes)
+      ? awaiting.effect.targetPlayerIndexes
+      : [];
+    const activeTargetOffset = Number(awaiting.effect.activeTargetOffset) || 0;
+    const targetPlayerIndex = targetPlayerIndexes[activeTargetOffset];
+    if (!Number.isInteger(targetPlayerIndex)) {
+      return {
+        game: {
+          ...g,
+          eventState: null,
+          message: `${g.players[g.currentPlayerIndex].name} finishes using ${awaiting.sourceName || "Mask"}.`,
+        },
+        cameraFloor: null,
+      };
+    }
+
+    const nextPlayers = g.players.map((player, index) =>
+      index === targetPlayerIndex
+        ? {
+            ...player,
+            x: tile.x,
+            y: tile.y,
+            floor: selectedOption.floor,
+          }
+        : player
+    );
+
+    const nextOffset = activeTargetOffset + 1;
+    const hasMoreTargets = nextOffset < targetPlayerIndexes.length;
+    const targetName = g.players[targetPlayerIndex]?.name || "Explorer";
+
+    if (!hasMoreTargets) {
+      return {
+        game: {
+          ...g,
+          players: nextPlayers,
+          eventState: null,
+          message: `${g.players[g.currentPlayerIndex].name} pushes ${targetName} to ${selectedOption.label} with ${awaiting.sourceName || "Mask"}.`,
+        },
+        cameraFloor: selectedOption.floor,
+      };
+    }
+
+    const nextTargetIndex = targetPlayerIndexes[nextOffset];
+    const nextTargetName = g.players[nextTargetIndex]?.name || "explorer";
+
+    return {
+      game: {
+        ...g,
+        players: nextPlayers,
+        eventState: {
+          ...g.eventState,
+          awaiting: {
+            ...awaiting,
+            effect: {
+              ...awaiting.effect,
+              activeTargetOffset: nextOffset,
+            },
+            selectedOptionId: null,
+            prompt: `Choose a doorway-connected adjacent tile for ${nextTargetName}.`,
+          },
+        },
+        message: `Now moving ${nextTargetName}`,
+      },
+      cameraFloor: selectedOption.floor,
+    };
   }
 
   if (awaiting.effect.type === "place-token") {
@@ -1030,6 +1169,7 @@ export function getCardActiveAbilityState({
     rule.action === "reroll-blank-trait-dice" ||
     rule.action === "reroll-one-die" ||
     rule.action === "holy-symbol-bury-discovered-tile" ||
+    rule.action === "mask-push-adjacent-players" ||
     rule.action === "dog-remote-trade" ||
     rule.action === "move-through-walls" ||
     rule.action === "substitute-sanity-for-knowledge" ||
@@ -1085,17 +1225,19 @@ export function getCardActiveAbilityState({
             ? isRabbitsFootAvailableThisTurn(game, viewedCard)
             : rule.action === "holy-symbol-bury-discovered-tile"
               ? game.turnPhase === "rotate" && !!game.pendingExplore && !game.pendingExplore.holySymbolReplacement
-              : rule.action === "dog-remote-trade"
-                ? isDogTradeAvailableThisTurn(game, viewedCard)
-                : rule.action === "move-through-walls"
-                  ? canUseNormalMovementNow(game, viewedCard) && hasSkeletonKeyWallMoveAvailable(game, viewedCard)
-                  : rule.action === "substitute-sanity-for-knowledge"
-                    ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
-                        .canUseMagicCameraNow
-                    : rule.action === "substitute-knowledge-for-trait"
-                      ? getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride })
-                          .canUseBookNow
-                      : true;
+              : rule.action === "mask-push-adjacent-players"
+                ? isMaskPushAvailableThisTurn(game, viewedCard)
+                : rule.action === "dog-remote-trade"
+                  ? isDogTradeAvailableThisTurn(game, viewedCard)
+                  : rule.action === "move-through-walls"
+                    ? canUseNormalMovementNow(game, viewedCard) && hasSkeletonKeyWallMoveAvailable(game, viewedCard)
+                    : rule.action === "substitute-sanity-for-knowledge"
+                      ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
+                          .canUseMagicCameraNow
+                      : rule.action === "substitute-knowledge-for-trait"
+                        ? getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride })
+                            .canUseBookNow
+                        : true;
 
   return {
     canUseNow: triggerSatisfied && hasSupportedAction && actionSatisfied,
@@ -1243,6 +1385,120 @@ export function applyMapNowState(g, viewedCard) {
         },
       },
       message: `${owner.name} uses ${inventoryCard.name}. Choose a destination tile.`,
+    },
+    closeViewedCard: true,
+    diceAnimation: null,
+  };
+}
+
+export function applyMaskNowState(g, viewedCard) {
+  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (viewedCard.activeAbilityRule?.action !== "mask-push-adjacent-players") {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+  if (viewedCard.ownerCollection !== "omens") return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (viewedCard.ownerIndex !== g.currentPlayerIndex) return { game: g, closeViewedCard: false, diceAnimation: null };
+  if (!isMaskPushAvailableThisTurn(g, viewedCard)) return { game: g, closeViewedCard: false, diceAnimation: null };
+
+  const owner = g.players[viewedCard.ownerIndex];
+  const omenCard = owner?.omens?.[viewedCard.ownerCardIndex];
+  if (!owner || !omenCard || omenCard.id !== "mask") {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  const options = getDogMoveOptions(
+    g,
+    {
+      floor: owner.floor,
+      x: owner.x,
+      y: owner.y,
+    },
+    1
+  ).map((option) => {
+    const tile = getTileByPosition(g.board, option.floor, option.x, option.y);
+    return {
+      id: `${option.floor}:${option.x}:${option.y}`,
+      label: tile?.name || `${option.floor} (${option.x}, ${option.y})`,
+      x: option.x,
+      y: option.y,
+      floor: option.floor,
+    };
+  });
+
+  if (options.length === 0) {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  const targetPlayerIndexes = (g.players || [])
+    .map((player, index) => ({ player, index }))
+    .filter(
+      ({ player, index }) =>
+        index !== viewedCard.ownerIndex &&
+        player.isAlive &&
+        player.floor === owner.floor &&
+        player.x === owner.x &&
+        player.y === owner.y
+    )
+    .map(({ index }) => index);
+
+  if (targetPlayerIndexes.length === 0) {
+    return { game: g, closeViewedCard: false, diceAnimation: null };
+  }
+
+  const firstTargetIndex = targetPlayerIndexes[0];
+  const firstTargetName = g.players[firstTargetIndex]?.name || "explorer";
+
+  const nextPlayers = g.players.map((player, index) =>
+    index === viewedCard.ownerIndex
+      ? {
+          ...player,
+          omens: player.omens.map((card, cardIndex) =>
+            cardIndex === viewedCard.ownerCardIndex
+              ? {
+                  ...card,
+                  lastActiveAbilityTurnUsed: g.turnNumber,
+                }
+              : card
+          ),
+        }
+      : player
+  );
+
+  return {
+    game: {
+      ...g,
+      players: nextPlayers,
+      eventState: {
+        card: {
+          id: "omen-mask-push",
+          name: omenCard.name,
+        },
+        stepIndex: 0,
+        context: {
+          choices: {},
+          selectedStats: {},
+        },
+        pendingEffects: [],
+        summary: null,
+        lastRoll: null,
+        awaiting: {
+          type: "tile-choice",
+          source: "item-active-ability",
+          sourceName: omenCard.name,
+          effect: {
+            type: "mask-push-players",
+            fromFloor: owner.floor,
+            fromX: owner.x,
+            fromY: owner.y,
+            targetPlayerIndexes,
+            activeTargetOffset: 0,
+          },
+          options,
+          selectedOptionId: null,
+          prompt: `Choose a doorway-connected adjacent tile for ${firstTargetName}.`,
+        },
+      },
+      message: `Now moving ${firstTargetName}`,
     },
     closeViewedCard: true,
     diceAnimation: null,
@@ -2002,6 +2258,9 @@ export function chooseCardActiveAbilityNowState(g, viewedCard, deps = {}) {
   }
   if (action === "teleport-any-tile") {
     return applyMapNowState(g, viewedCard);
+  }
+  if (action === "mask-push-adjacent-players") {
+    return applyMaskNowState(g, viewedCard);
   }
   if (action === "extra-turn-after-current") {
     return applyMysticalStopwatchNowState(g, viewedCard);

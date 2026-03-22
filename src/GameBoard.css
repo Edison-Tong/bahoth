@@ -77,15 +77,47 @@
   color: #fff;
 }
 
-/* Message bar */
-.game-message {
-  text-align: center;
-  padding: 8px 16px;
-  background: #2d2215;
+/* Floating message bubble */
+.game-message-bubble {
+  position: fixed;
+  top: 64px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100vw - 32px));
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(15, 12, 9, 0.96);
+  border: 1px solid rgba(216, 188, 127, 0.44);
   color: var(--text-bright);
-  font-size: 0.95rem;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  text-align: center;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  z-index: 1200;
+  pointer-events: none;
+  animation: message-bubble-in 0.18s ease-out;
+}
+
+.game-message-bubble::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: rgba(15, 12, 9, 0.96) transparent transparent transparent;
+}
+
+@keyframes message-bubble-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
 }
 
 /* Board container */

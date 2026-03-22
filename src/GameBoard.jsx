@@ -224,6 +224,26 @@ function createDrawnEventCard(card) {
   };
 }
 
+function shouldShowMessageBubble(message) {
+  if (!message || !String(message).trim()) return false;
+
+  // Suppress routine movement/status chatter so the bubble only appears for notable moments.
+  const routinePatterns = [
+    /\bmove(?:d|s)?\b/i,
+    /\bmoves left\b/i,
+    /\bno moves left\b/i,
+    /rotate the tile, then place it/i,
+    /turn\s*[-\u2014]/i,
+  ];
+
+  return !routinePatterns.some((pattern) => pattern.test(message));
+}
+
+function isStickyMessageBubble(message) {
+  if (!message || !String(message).trim()) return false;
+  return /^Now moving\b/i.test(String(message).trim());
+}
+
 export default function GameBoard({ players, onQuit }) {
   const [game, setGame] = useState(() => initGameState(players));
   const [cameraFloor, setCameraFloor] = useState("ground");
@@ -232,12 +252,43 @@ export default function GameBoard({ players, onQuit }) {
   const [viewedCard, setViewedCard] = useState(null);
   const [dogTradeState, setDogTradeState] = useState(null);
   const [queuedTraitRollOverride, setQueuedTraitRollOverride] = useState(null);
+  const [messageBubble, setMessageBubble] = useState("");
   const queuedTraitRollOverrideRef = useRef(null);
+  const messageBubbleTimeoutRef = useRef(null);
   const boardRef = useRef(null);
 
   useEffect(() => {
     queuedTraitRollOverrideRef.current = queuedTraitRollOverride;
   }, [queuedTraitRollOverride]);
+
+  useEffect(() => {
+    if (messageBubbleTimeoutRef.current) {
+      clearTimeout(messageBubbleTimeoutRef.current);
+      messageBubbleTimeoutRef.current = null;
+    }
+
+    if (!shouldShowMessageBubble(game.message)) {
+      setMessageBubble("");
+      return;
+    }
+
+    setMessageBubble(game.message);
+    if (isStickyMessageBubble(game.message)) {
+      return;
+    }
+
+    messageBubbleTimeoutRef.current = setTimeout(() => {
+      setMessageBubble("");
+      messageBubbleTimeoutRef.current = null;
+    }, 3600);
+
+    return () => {
+      if (messageBubbleTimeoutRef.current) {
+        clearTimeout(messageBubbleTimeoutRef.current);
+        messageBubbleTimeoutRef.current = null;
+      }
+    };
+  }, [game.message]);
 
   // Dice rolling animation
   useEffect(() => {
@@ -513,6 +564,12 @@ export default function GameBoard({ players, onQuit }) {
   useEffect(() => {
     function handleKeyDown(e) {
       if (dogTradeState) return;
+      if (
+        game.eventState?.awaiting?.type === "tile-choice" &&
+        game.eventState.awaiting?.source === "item-active-ability"
+      ) {
+        return;
+      }
 
       // Rotate phase: R/E to rotate, Enter to place
       if (game.turnPhase === "rotate") {
@@ -675,6 +732,12 @@ export default function GameBoard({ players, onQuit }) {
   // Get valid move directions from current tile
   function getValidMoves() {
     if (game.turnPhase !== "move") return [];
+    if (
+      game.eventState?.awaiting?.type === "tile-choice" &&
+      game.eventState.awaiting?.source === "item-active-ability"
+    ) {
+      return [];
+    }
 
     // If on a pending explore placeholder, only allow backtrack
     if (game.pendingExplore) {
@@ -2483,6 +2546,8 @@ export default function GameBoard({ players, onQuit }) {
   );
   const damageChoice = game.damageChoice;
   const eventState = game.eventState;
+  const isItemAbilityTileChoiceActive =
+    eventState?.awaiting?.type === "tile-choice" && eventState.awaiting?.source === "item-active-ability";
   const { drawnEventPrimaryAction, eventTileChoiceOptions, selectedEventTileChoiceId, showEventResolutionModal } =
     getEventUiState(game, eventEngineDeps, queuedTraitRollOverride);
   const viewedCardActiveAbilityState = viewedCard
@@ -2516,13 +2581,18 @@ export default function GameBoard({ players, onQuit }) {
     !game.pendingExplore &&
     !game.pendingSpecialPlacement &&
     !game.tileEffect &&
+    !isItemAbilityTileChoiceActive &&
     !game.drawnCard &&
     !diceAnimation &&
     currentTileObj?.id === "mystic-elevator" &&
     game.mysticElevatorReady &&
     !game.mysticElevatorUsed;
   const secretPassageTargets =
-    game.turnPhase === "move" && !game.pendingExplore && !game.pendingSpecialPlacement && !game.tileEffect
+    game.turnPhase === "move" &&
+    !game.pendingExplore &&
+    !game.pendingSpecialPlacement &&
+    !game.tileEffect &&
+    !isItemAbilityTileChoiceActive
       ? Object.entries(game.board)
           .flatMap(([floor, tiles]) =>
             tiles
@@ -2556,7 +2626,7 @@ export default function GameBoard({ players, onQuit }) {
   })();
   let stairTarget = null;
   let stairIsBacktrack = false;
-  if (game.turnPhase === "move" && !game.pendingExplore) {
+  if (game.turnPhase === "move" && !game.pendingExplore && !isItemAbilityTileChoiceActive) {
     const connectedMove = getConnectedMoveTarget(game.board, currentTileObj, game.movePath);
     if (connectedMove) {
       stairIsBacktrack = connectedMove.isBacktrack;
@@ -2613,8 +2683,7 @@ export default function GameBoard({ players, onQuit }) {
         <div className="game-header-right"></div>
       </div>
 
-      {/* Message bar */}
-      {game.message && <div className="game-message">{game.message}</div>}
+      {messageBubble && <div className="game-message-bubble">{messageBubble}</div>}
 
       {/* Board */}
       <div className="board-container" ref={boardRef}>
