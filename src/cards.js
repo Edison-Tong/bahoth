@@ -41,34 +41,34 @@ export const OMEN_CARDS = [
   //   activeAbility:
   //     "Once during your turn, you may use the Dog to trade any number of Items with another explorer up to 4 tiles away, using normal trading rules.",
   // },
-  {
-    id: "holy-symbol",
-    name: "Holy Symbol",
-    passiveEffects: [
-      {
-        type: "trait-roll-bonus",
-        stat: "sanity",
-        amount: 1,
-      },
-    ],
-    passiveAbility: "Add 1 to the result of your Sanity rolls.",
-    activeAbilityRule: { trigger: "on-your-turn", action: "holy-symbol-bury-discovered-tile" },
-    activeAbility:
-      "Whenever you discover a tile, you may choose to bury it and discover the next tile instead. If you do this, do not resolve any effects for the first tile.",
-  },
   // {
-  //   id: "idol",
-  //   name: "Idol",
+  //   id: "holy-symbol",
+  //   name: "Holy Symbol",
   //   passiveEffects: [
   //     {
   //       type: "trait-roll-bonus",
-  //       stat: "might",
+  //       stat: "sanity",
   //       amount: 1,
   //     },
   //   ],
-  //   passiveAbility: "Add 1 to the result of your Might rolls",
-  //   activeAbility: "When you discover a tile with an Event symbol, you may choose to not draw an Event card.",
+  //   passiveAbility: "Add 1 to the result of your Sanity rolls.",
+  //   activeAbilityRule: { trigger: "on-your-turn", action: "holy-symbol-bury-discovered-tile" },
+  //   activeAbility:
+  //     "Whenever you discover a tile, you may choose to bury it and discover the next tile instead. If you do this, do not resolve any effects for the first tile.",
   // },
+  {
+    id: "idol",
+    name: "Idol",
+    passiveEffects: [
+      {
+        type: "trait-roll-bonus",
+        stat: "might",
+        amount: 1,
+      },
+    ],
+    passiveAbility: "Add 1 to the result of your Might rolls",
+    activeAbility: "When you discover a tile with an Event symbol, you may choose to not draw an Event card.",
+  },
   // {
   //   id: "mask",
   //   name: "Mask",

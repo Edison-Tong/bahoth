@@ -1174,6 +1174,22 @@ export default function GameBoard({ players, onQuit }) {
           message = gainMessage;
         }
 
+        const idolOwner = nextPlayers[g.currentPlayerIndex];
+        const hasIdol = (idolOwner?.omens || []).some((card) => card.id === "idol");
+        if (hasIdol && !tileEffect && drawnCard?.type === "event") {
+          tileEffect = {
+            type: "idol-event-choice",
+            tileName: placedTile.name,
+            queuedCard: drawnCard,
+            nextTurnPhase: "move",
+            nextMessage: `${p.name} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
+            message: "Use Idol to skip drawing this Event card?",
+          };
+          drawnCard = null;
+          turnPhase = "card";
+          message = `${p.name} discovered an Event symbol.`;
+        }
+
         return {
           board: nextBoard,
           tileStack: nextStack,
@@ -1705,6 +1721,28 @@ export default function GameBoard({ players, onQuit }) {
           };
         }
 
+        const currentPlayer = g.players[g.currentPlayerIndex];
+        const hasIdol = (currentPlayer?.omens || []).some((card) => card.id === "idol");
+        const queuedEventCard = effect.pendingSpecialPlacement ? null : effect.queuedCard || null;
+        const shouldPromptIdol = hasIdol && queuedEventCard?.type === "event";
+        if (shouldPromptIdol) {
+          return {
+            ...g,
+            tileEffect: {
+              type: "idol-event-choice",
+              tileName: effect.tileName,
+              queuedCard: queuedEventCard,
+              nextTurnPhase: effect.nextTurnPhase === "card" ? "move" : effect.nextTurnPhase,
+              nextMessage: effect.nextMessage,
+              message: "Use Idol to skip drawing this Event card?",
+            },
+            drawnCard: null,
+            pendingSpecialPlacement: effect.pendingSpecialPlacement || null,
+            turnPhase: "card",
+            message: `${currentPlayer.name} discovered an Event symbol.`,
+          };
+        }
+
         return {
           ...g,
           tileEffect: null,
@@ -1753,6 +1791,45 @@ export default function GameBoard({ players, onQuit }) {
       };
     });
     setDiceAnimation(null);
+  }
+
+  function handleDrawIdolEventCard() {
+    setGame((g) => {
+      const effect = g.tileEffect;
+      if (!effect || effect.type !== "idol-event-choice") return g;
+      const eventCard = effect.queuedCard;
+      if (!eventCard || eventCard.type !== "event") {
+        return {
+          ...g,
+          tileEffect: null,
+          turnPhase: effect.nextTurnPhase || "move",
+          message: effect.nextMessage || g.message,
+        };
+      }
+
+      return {
+        ...g,
+        tileEffect: null,
+        drawnCard: eventCard,
+        turnPhase: "card",
+        message: `${g.players[g.currentPlayerIndex].name} draws an Event card.`,
+      };
+    });
+  }
+
+  function handleSkipIdolEventCard() {
+    setGame((g) => {
+      const effect = g.tileEffect;
+      if (!effect || effect.type !== "idol-event-choice") return g;
+
+      return {
+        ...g,
+        tileEffect: null,
+        drawnCard: null,
+        turnPhase: effect.nextTurnPhase || "move",
+        message: effect.nextMessage || `${g.players[g.currentPlayerIndex].name} skips drawing the Event card.`,
+      };
+    });
   }
 
   function handleSkipNecklaceOfTeethGain() {
@@ -1826,6 +1903,9 @@ export default function GameBoard({ players, onQuit }) {
     setGame((g) => {
       const pendingPlacement = g.pendingSpecialPlacement;
       if (!pendingPlacement) return g;
+      const currentPlayer = g.players[g.currentPlayerIndex];
+      const hasIdol = (currentPlayer?.omens || []).some((card) => card.id === "idol");
+      const isQueuedEventCard = pendingPlacement.queuedCard?.type === "event";
 
       const chosenDoors = placement.validRotations[0];
       const placedTile = {
@@ -1850,6 +1930,27 @@ export default function GameBoard({ players, onQuit }) {
 
         setCameraFloor(placement.floor);
 
+        if (hasIdol && isQueuedEventCard) {
+          return {
+            ...g,
+            board: updatedBoard,
+            players: updatedPlayers,
+            movePath: [{ x: placement.x, y: placement.y, floor: placement.floor, cost: 0 }],
+            pendingSpecialPlacement: null,
+            drawnCard: null,
+            tileEffect: {
+              type: "idol-event-choice",
+              tileName: placedTile.name,
+              queuedCard: pendingPlacement.queuedCard,
+              nextTurnPhase: pendingPlacement.nextTurnPhase === "card" ? "move" : pendingPlacement.nextTurnPhase,
+              nextMessage: pendingPlacement.nextMessage,
+              message: "Use Idol to skip drawing this Event card?",
+            },
+            turnPhase: "card",
+            message: `${currentPlayer.name} discovered an Event symbol.`,
+          };
+        }
+
         return {
           ...g,
           board: updatedBoard,
@@ -1859,6 +1960,28 @@ export default function GameBoard({ players, onQuit }) {
           drawnCard: pendingPlacement.queuedCard || null,
           turnPhase: pendingPlacement.nextTurnPhase,
           message: pendingPlacement.nextMessage,
+        };
+      }
+
+      if (hasIdol && isQueuedEventCard) {
+        return {
+          ...g,
+          board: {
+            ...g.board,
+            [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
+          },
+          pendingSpecialPlacement: null,
+          drawnCard: null,
+          tileEffect: {
+            type: "idol-event-choice",
+            tileName: placedTile.name,
+            queuedCard: pendingPlacement.queuedCard,
+            nextTurnPhase: pendingPlacement.nextTurnPhase === "card" ? "move" : pendingPlacement.nextTurnPhase,
+            nextMessage: pendingPlacement.nextMessage,
+            message: "Use Idol to skip drawing this Event card?",
+          },
+          turnPhase: "card",
+          message: `${currentPlayer.name} discovered an Event symbol.`,
         };
       }
 
@@ -3191,6 +3314,15 @@ export default function GameBoard({ players, onQuit }) {
                 </div>
                 <button className="btn btn-primary" onClick={handleSkipNecklaceOfTeethGain}>
                   Skip
+                </button>
+              </>
+            ) : game.tileEffect.type === "idol-event-choice" ? (
+              <>
+                <button className="btn btn-secondary" onClick={handleDrawIdolEventCard}>
+                  Draw Event card
+                </button>
+                <button className="btn btn-primary" onClick={handleSkipIdolEventCard}>
+                  Skip Event card
                 </button>
               </>
             ) : game.tileEffect.type === "collapsed-pending" ? (
