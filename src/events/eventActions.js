@@ -24,7 +24,8 @@ const DIR = {
 const OPPOSITE = { N: "S", S: "N", E: "W", W: "E" };
 
 function getLeaveMoveCost(tile) {
-  return tile?.obstacle ? 2 : 1;
+  const hasObstacleToken = Array.isArray(tile?.tokens) && tile.tokens.some((token) => token?.type === "obstacle");
+  return tile?.obstacle || hasObstacleToken ? 2 : 1;
 }
 
 function getTileByPosition(board, floor, x, y) {
@@ -40,13 +41,14 @@ function getTileById(board, id) {
   return null;
 }
 
-function getMovementNeighbors(board, current) {
+function getMovementNeighbors(board, current, options = {}) {
+  const { ignoreObstacles = false } = options;
   if (!current) return [];
   const neighbors = [];
   const currentTile = getTileByPosition(board, current.floor, current.x, current.y);
   if (!currentTile) return neighbors;
 
-  const stepCost = getLeaveMoveCost(currentTile);
+  const stepCost = ignoreObstacles ? 1 : getLeaveMoveCost(currentTile);
 
   for (const dir of currentTile.doors || []) {
     const offset = DIR[dir];
@@ -77,7 +79,7 @@ function getMovementNeighbors(board, current) {
   return neighbors;
 }
 
-function computeReachableDistances(board, start, maxDistance) {
+function computeReachableDistances(board, start, maxDistance, options = {}) {
   const distances = new Map();
   const queue = [{ ...start, distance: 0 }];
   const keyOf = (node) => `${node.floor}:${node.x}:${node.y}`;
@@ -90,7 +92,7 @@ function computeReachableDistances(board, start, maxDistance) {
     if (known !== undefined && known <= current.distance) continue;
     distances.set(currentKey, current.distance);
 
-    for (const neighbor of getMovementNeighbors(board, current)) {
+    for (const neighbor of getMovementNeighbors(board, current, options)) {
       const nextDistance = current.distance + neighbor.cost;
       if (nextDistance > maxDistance) continue;
       const nextKey = keyOf(neighbor);
@@ -108,7 +110,7 @@ export function getDogTradeTargets(game, ownerIndex, maxDistance = 4) {
   if (!owner || !owner.isAlive) return [];
 
   const start = { floor: owner.floor, x: owner.x, y: owner.y };
-  const distances = computeReachableDistances(game.board, start, maxDistance);
+  const distances = computeReachableDistances(game.board, start, maxDistance, { ignoreObstacles: true });
 
   return (game.players || [])
     .map((player, playerIndex) => ({ player, playerIndex }))
@@ -134,7 +136,7 @@ export function getDogMoveOptions(game, position, movesLeft) {
   if (!game || !position || !Number.isFinite(movesLeft) || movesLeft <= 0) return [];
 
   const nextByKey = new Map();
-  const neighbors = getMovementNeighbors(game.board, position);
+  const neighbors = getMovementNeighbors(game.board, position, { ignoreObstacles: true });
 
   for (const neighbor of neighbors) {
     const cost = Number(neighbor.cost) || 0;
@@ -1008,6 +1010,12 @@ export function getCardActiveAbilityState({
   }
 
   if (viewedCard.ownerIndex !== game.currentPlayerIndex) {
+    return { canUseNow: false, requiresValueSelection: false, valueOptions: [] };
+  }
+
+  const isTrackingUnconfirmedMovePath =
+    game.turnPhase === "move" && Array.isArray(game.movePath) && game.movePath.length > 1;
+  if (isTrackingUnconfirmedMovePath) {
     return { canUseNow: false, requiresValueSelection: false, valueOptions: [] };
   }
 

@@ -805,7 +805,7 @@ export default function GameBoard({ players, onQuit }) {
         movePath: newPath,
         mysticElevatorReady:
           destinationTile?.enterEffect === "mystic-elevator" && !g.mysticElevatorUsed ? true : g.mysticElevatorReady,
-        skeletonKeyArmed: g.skeletonKeyArmed,
+        skeletonKeyArmed: useSkeletonKey ? false : g.skeletonKeyArmed,
         message: skeletonKeyMessage ? `${baseMessage}. ${skeletonKeyMessage}` : baseMessage,
       };
     });
@@ -1668,7 +1668,7 @@ export default function GameBoard({ players, onQuit }) {
           return {
             ...g,
             players: nextPlayers,
-            skeletonKeyArmed: keyLost ? false : g.skeletonKeyArmed,
+            skeletonKeyArmed: false,
             rabbitFootPendingReroll: null,
             tileEffect: null,
             drawnCard: effect.pendingSpecialPlacement ? null : effect.queuedCard || null,
@@ -2255,6 +2255,9 @@ export default function GameBoard({ players, onQuit }) {
         queuedTraitRollOverride,
       })
     : null;
+  const isUnconfirmedMovePath = game.turnPhase === "move" && Array.isArray(game.movePath) && game.movePath.length > 1;
+  const showMoveConfirmUseNowDisabled =
+    !!viewedCard?.activeAbilityRule && viewedCard.ownerIndex === game.currentPlayerIndex && isUnconfirmedMovePath;
   const damageAllocated = damageChoice
     ? Object.values(damageChoice.allocation).reduce((sum, value) => sum + value, 0)
     : 0;
@@ -2819,10 +2822,16 @@ export default function GameBoard({ players, onQuit }) {
             <h2 className="card-name">{viewedCard.name}</h2>
             <div className="card-owner-label">Held by {viewedCard.ownerName}</div>
             <CardAbilityContent card={viewedCard} />
-            {viewedCardActiveAbilityState?.canUseNow && (
-              <button className="btn btn-primary" onClick={handleUseViewedCardActiveAbilityNow}>
-                Use now
-              </button>
+            {(viewedCardActiveAbilityState?.canUseNow || showMoveConfirmUseNowDisabled) && (
+              <span title={showMoveConfirmUseNowDisabled ? "Confirm your move to use" : ""}>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleUseViewedCardActiveAbilityNow}
+                  disabled={!viewedCardActiveAbilityState?.canUseNow}
+                >
+                  Use now
+                </button>
+              </span>
             )}
             {viewedCard.showUseNowPicker && viewedCardActiveAbilityState?.requiresValueSelection && (
               <div className="event-option-list" style={{ marginTop: "0.75rem" }}>
