@@ -45,16 +45,7 @@ import {
   applySkipIdolEventCardState,
 } from "./omens/idolAbility";
 import { resolveSpecialOmenNowAbilityState } from "./omens/activeOmenNowAbility";
-import {
-  applyDogTradeMoveState,
-  createDogTradeBackToMoveState,
-  createDogTradeSelectionState,
-  getDogTradeUiState,
-  isItemTradeLockedThisTurn,
-  resolveConfirmDogTradeState,
-  toggleDogTradeOwnerGiveState,
-  toggleDogTradeTargetGiveState,
-} from "./omens/dogAbility";
+import { getDogTradeUiState, isItemTradeLockedThisTurn } from "./omens/dogAbility";
 import {
   isEndTurnItemChoiceEffect,
   resolveEndTurnItemPassiveChoiceState,
@@ -78,30 +69,45 @@ import {
 } from "./tiles/tileSelectors";
 import { getRollMysticElevatorState, resolveMysticElevatorResultState } from "./tiles/mysticElevatorTileAbility";
 import { getConnectedMoveTarget, resolveSecretPassageMoveState } from "./tiles/tileTraversal";
-import {
-  backtrackPlayerState,
-  changeFloorState,
-  confirmMoveState,
-  exploreState,
-  getValidMovesState,
-  movePlayerState,
-  placePendingSpecialTileState,
-} from "./movement/playerMovementState";
+import { confirmMoveState, getValidMovesState, placePendingSpecialTileState } from "./movement/playerMovementState";
 import { resolveKeyboardMoveAction } from "./movement/movementInputState";
 import { getPlacementOptionsState } from "./movement/placementOptions";
+import {
+  resolveBacktrackActionState,
+  resolveBoardMoveActionState,
+  resolveChangeFloorActionState,
+  resolveExploreActionState,
+  resolveMovePlayerActionState,
+} from "./movement/movementControllerState";
+import { getLeaveMoveCostState, hasUnconfirmedMovePathState } from "./movement/movementSelectors";
 import {
   adjustDamageAllocationChoiceState,
   applyDamageAllocationState,
   applyPostDamagePassiveEffectsState,
   applyStatChangeState,
-  confirmDamageChoiceState,
   getDamagePreviewState,
   getStatTrackCellClassState,
-  passTurnCoreState,
-  passTurnWithEndTurnItemsState,
   toggleDamageConversionChoiceState,
 } from "./players/playerState";
 import { getDamageChoiceSummary, getEndTurnPreviewPlayerName, getPlayersOnFloor } from "./players/playerSelectors";
+import { resolveConfirmDamageChoiceActionState } from "./players/damageChoiceControllerState";
+import {
+  createLocalPlayerTradeState,
+  getPlayerTradeTargetsOnTile,
+  resolveBackToTradeMoveState,
+  resolveConfirmTradeActionState,
+  resolveMoveTradeTokenState,
+  resolveStartTradeSelectionState,
+  resolveToggleTradeOwnerGiveState,
+  resolveToggleTradeOwnerGiveOmenState,
+  resolveToggleTradeTargetGiveState,
+  resolveToggleTradeTargetGiveOmenState,
+} from "./players/tradeControllerState";
+import {
+  resolveEndTurnActionState,
+  resolvePassTurnActionState,
+  resolvePassTurnCoreActionState,
+} from "./players/turnControllerState";
 import "./GameBoard.css";
 
 // Direction offsets
@@ -281,7 +287,7 @@ export default function GameBoard({ players, onQuit }) {
   const [diceAnimation, setDiceAnimation] = useState(null);
   const [expandedSidebarPlayers, setExpandedSidebarPlayers] = useState(() => new Set());
   const [viewedCard, setViewedCard] = useState(null);
-  const [dogTradeState, setDogTradeState] = useState(null);
+  const [tradeState, setTradeState] = useState(null);
   const [queuedTraitRollOverride, setQueuedTraitRollOverride] = useState(null);
   const [messageBubble, setMessageBubble] = useState("");
   const queuedTraitRollOverrideRef = useRef(null);
@@ -436,7 +442,7 @@ export default function GameBoard({ players, onQuit }) {
         getTileAt,
         getLeaveMoveCost,
         isItemAbilityTileChoiceAwaiting,
-        dogTradeState,
+        dogTradeState: tradeState,
       });
 
       if (!action) return;
@@ -465,9 +471,7 @@ export default function GameBoard({ players, onQuit }) {
     return game.board[floor]?.find((t) => t.x === x && t.y === y);
   }
 
-  function getLeaveMoveCost(tile) {
-    return tile?.obstacle ? 2 : 1;
-  }
+  const getLeaveMoveCost = getLeaveMoveCostState;
 
   function getPlacementOptions(board, tile) {
     return getPlacementOptionsState(board, tile, DIR, OPPOSITE);
@@ -489,66 +493,77 @@ export default function GameBoard({ players, onQuit }) {
 
   // Move player to an existing tile and extend the current path.
   function handleMove(nx, ny, cost, options = {}) {
-    const { useSkeletonKey = false } = options;
-    const skeletonKeyRoll = useSkeletonKey ? rollDice(1)[0] : null;
-    setGame((g) =>
-      movePlayerState(g, {
+    let nextDiceAnimation = null;
+    setGame((g) => {
+      const resolved = resolveMovePlayerActionState(g, {
         nx,
         ny,
         cost,
-        useSkeletonKey,
-        skeletonKeyRoll,
+        useSkeletonKey: options.useSkeletonKey,
+        rollDice,
         getLeaveMoveCost,
         canUseArmedSkeletonKeyMovement,
-      })
-    );
-
-    if (useSkeletonKey && skeletonKeyRoll !== null) {
-      setDiceAnimation({
-        purpose: "skeleton-key",
-        final: [skeletonKeyRoll],
-        display: [Math.floor(Math.random() * 3)],
-        settled: false,
-        tileName: "Skeleton Key",
       });
+      nextDiceAnimation = resolved.diceAnimation;
+      return resolved.game;
+    });
+
+    if (nextDiceAnimation) {
+      setDiceAnimation(nextDiceAnimation);
     }
   }
 
   // Backtrack to previous tile in path and refund the cost of the undone step.
   function handleBacktrack() {
-    setGame((g) => backtrackPlayerState(g));
-    // Auto-switch camera if backtracking across floors
+    let nextCameraFloor = null;
     setGame((g) => {
-      const p = g.players[g.currentPlayerIndex];
-      setCameraFloor(p.floor);
-      return g;
+      const resolved = resolveBacktrackActionState(g);
+      nextCameraFloor = resolved.cameraFloor;
+      return resolved.game;
     });
+
+    if (nextCameraFloor) {
+      setCameraFloor(nextCameraFloor);
+    }
   }
 
   // Explore — move player onto placeholder, don't reveal tile yet.
   function handleExplore(dir, nx, ny, cost) {
-    setGame((g) =>
-      exploreState(g, {
+    setGame((g) => {
+      const resolved = resolveExploreActionState(g, {
         dir,
         nx,
         ny,
         cost,
         OPPOSITE,
         getLeaveMoveCost,
-      })
-    );
+      });
+      return resolved.game;
+    });
   }
 
   // Handle clicking a move/explore/backtrack target
   function handleAction(move) {
-    if (move.type === "backtrack") {
-      handleBacktrack();
-    } else if (move.type === "wall-move") {
-      handleMove(move.x, move.y, move.cost, { useSkeletonKey: true });
-    } else if (move.type === "move") {
-      handleMove(move.x, move.y, move.cost);
-    } else {
-      handleExplore(move.dir, move.x, move.y, move.cost);
+    let nextCameraFloor = null;
+    let nextDiceAnimation = null;
+
+    setGame((g) => {
+      const resolved = resolveBoardMoveActionState(g, move, {
+        rollDice,
+        OPPOSITE,
+        getLeaveMoveCost,
+        canUseArmedSkeletonKeyMovement,
+      });
+      nextCameraFloor = resolved.cameraFloor;
+      nextDiceAnimation = resolved.diceAnimation;
+      return resolved.game;
+    });
+
+    if (nextCameraFloor) {
+      setCameraFloor(nextCameraFloor);
+    }
+    if (nextDiceAnimation) {
+      setDiceAnimation(nextDiceAnimation);
     }
   }
 
@@ -720,7 +735,7 @@ export default function GameBoard({ players, onQuit }) {
   function handleChangeFloor() {
     let nextCameraFloor = null;
     setGame((g) => {
-      const resolved = changeFloorState(g, {
+      const resolved = resolveChangeFloorActionState(g, {
         getConnectedMoveTarget,
         getLeaveMoveCost,
       });
@@ -739,33 +754,31 @@ export default function GameBoard({ players, onQuit }) {
 
   // End turn
   function handleEndTurn() {
+    let nextCameraFloor = null;
+    let nextDiceAnimation = null;
+
     setGame((g) => {
-      if (isItemAbilityTileChoiceAwaiting(g.eventState)) {
-        return g;
-      }
-
-      const p = g.players[g.currentPlayerIndex];
-      const tile = g.board[p.floor]?.find((t) => t.x === p.x && t.y === p.y);
-
-      const endTurnTileState = getEndTurnTileAbilityState({
-        game: g,
-        player: p,
-        tile,
-        currentPlayerIndex: g.currentPlayerIndex,
+      const resolved = resolveEndTurnActionState(g, {
+        isItemAbilityTileChoiceAwaiting,
+        getEndTurnTileAbilityState,
         rollDice,
         resolveTraitRoll,
         getDamageReduction,
         createDiceModifier,
+        resolveEndTurnItemPassiveState,
+        statLabels: STAT_LABELS,
       });
-      if (endTurnTileState) {
-        if (endTurnTileState.diceAnimation) {
-          setDiceAnimation(endTurnTileState.diceAnimation);
-        }
-        return endTurnTileState.game;
-      }
-
-      return passTurn(g);
+      nextCameraFloor = resolved.cameraFloor;
+      nextDiceAnimation = resolved.diceAnimation;
+      return resolved.game;
     });
+
+    if (nextDiceAnimation) {
+      setDiceAnimation(nextDiceAnimation);
+    }
+    if (nextCameraFloor) {
+      setCameraFloor(nextCameraFloor);
+    }
   }
 
   function applyStatChange(players, playerIndex, stat, amount) {
@@ -867,17 +880,25 @@ export default function GameBoard({ players, onQuit }) {
   function handleConfirmDamageChoice() {
     let nextCameraFloor = null;
     let shouldClearDiceAnimation = false;
+    let passTurnCameraFloor = null;
 
     setGame((g) => {
-      const resolved = confirmDamageChoiceState(g, {
+      const resolved = resolveConfirmDamageChoiceActionState(g, {
         applyDamageAllocation,
         applyPostDamagePassiveEffects,
         applyTileEffectConsequences,
         resolveEventDamageChoiceState,
         runAdvanceEventResolution,
-        passTurn,
+        passTurn: (state) => {
+          const passTurnResult = resolvePassTurnActionState(state, {
+            resolveEndTurnItemPassiveState,
+            statLabels: STAT_LABELS,
+          });
+          passTurnCameraFloor = passTurnResult.cameraFloor;
+          return passTurnResult.game;
+        },
       });
-      nextCameraFloor = resolved.cameraFloor;
+      nextCameraFloor = resolved.cameraFloor || passTurnCameraFloor;
       shouldClearDiceAnimation = resolved.clearDiceAnimation;
       return resolved.game;
     });
@@ -901,11 +922,19 @@ export default function GameBoard({ players, onQuit }) {
   function handleDismissTileEffect() {
     let nextCameraFloor = null;
     let shouldClearDiceAnimation = false;
+    let passTurnCameraFloor = null;
 
     setGame((g) => {
       const resolved = resolveDismissTileEffectState(g, {
         cameraFloor,
-        passTurn,
+        passTurn: (state) => {
+          const passTurnResult = resolvePassTurnActionState(state, {
+            resolveEndTurnItemPassiveState,
+            statLabels: STAT_LABELS,
+          });
+          passTurnCameraFloor = passTurnResult.cameraFloor;
+          return passTurnResult.game;
+        },
         isQueuedTileEffectType,
         isSkeletonKeyResultEffect,
         resolveSkeletonKeyResultAfterDismiss,
@@ -914,7 +943,7 @@ export default function GameBoard({ players, onQuit }) {
         createDamageChoice,
         applyTileEffectConsequences,
       });
-      nextCameraFloor = resolved.cameraFloor;
+      nextCameraFloor = resolved.cameraFloor || passTurnCameraFloor;
       shouldClearDiceAnimation = resolved.clearDiceAnimation;
       return resolved.game;
     });
@@ -928,16 +957,20 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleChooseNecklaceOfTeethStat(stat) {
+    let nextCameraFloor = null;
+
     setGame((g) => {
       const resolution = resolveEndTurnItemPassiveChoiceState(g, { stat });
       if (!resolution) return g;
 
       const current = g.players[g.currentPlayerIndex];
-      const nextState = passTurnCore({
+      const passTurnCoreResult = resolvePassTurnCoreActionState({
         ...g,
         players: resolution.players,
         tileEffect: null,
       });
+      nextCameraFloor = passTurnCoreResult.cameraFloor;
+      const nextState = passTurnCoreResult.game;
 
       return {
         ...nextState,
@@ -947,6 +980,9 @@ export default function GameBoard({ players, onQuit }) {
       };
     });
     setDiceAnimation(null);
+    if (nextCameraFloor) {
+      setCameraFloor(nextCameraFloor);
+    }
   }
 
   function handleDrawIdolEventCard() {
@@ -958,14 +994,18 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleSkipNecklaceOfTeethGain() {
+    let nextCameraFloor = null;
+
     setGame((g) => {
       if (!isEndTurnItemChoiceEffect(g.tileEffect)) return g;
 
       const current = g.players[g.currentPlayerIndex];
-      const nextState = passTurnCore({
+      const passTurnCoreResult = resolvePassTurnCoreActionState({
         ...g,
         tileEffect: null,
       });
+      nextCameraFloor = passTurnCoreResult.cameraFloor;
+      const nextState = passTurnCoreResult.game;
 
       return {
         ...nextState,
@@ -973,6 +1013,9 @@ export default function GameBoard({ players, onQuit }) {
       };
     });
     setDiceAnimation(null);
+    if (nextCameraFloor) {
+      setCameraFloor(nextCameraFloor);
+    }
   }
 
   function handleRollMysticElevator() {
@@ -1065,7 +1108,7 @@ export default function GameBoard({ players, onQuit }) {
       setGame(resolved.game);
     }
     if (resolved.dogTradeState) {
-      setDogTradeState(resolved.dogTradeState);
+      setTradeState(resolved.dogTradeState);
     }
     if (resolved.diceAnimation) {
       setDiceAnimation(resolved.diceAnimation);
@@ -1117,35 +1160,54 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleStartDogTrade(targetPlayerIndex) {
-    setDogTradeState((prev) => createDogTradeSelectionState(prev, targetPlayerIndex));
+    setTradeState((prev) => resolveStartTradeSelectionState(prev, targetPlayerIndex));
+  }
+
+  function handleStartPlayerTrade(targetPlayerIndex) {
+    setTradeState((prev) => {
+      if (prev) return prev;
+      return createLocalPlayerTradeState(game, game.currentPlayerIndex, targetPlayerIndex);
+    });
   }
 
   function handleMoveDogToken(move) {
-    if (!move) return;
-    setCameraFloor(move.floor);
-    setDogTradeState((prev) => applyDogTradeMoveState(prev, move));
+    setTradeState((prev) => {
+      const resolved = resolveMoveTradeTokenState(prev, move);
+      if (resolved.cameraFloor) {
+        setCameraFloor(resolved.cameraFloor);
+      }
+      return resolved.tradeState;
+    });
   }
 
   function handleBackToDogMove() {
-    setDogTradeState((prev) => createDogTradeBackToMoveState(prev));
+    setTradeState((prev) => resolveBackToTradeMoveState(prev));
   }
 
   function handleToggleDogOwnerGive(index) {
-    setDogTradeState((prev) => toggleDogTradeOwnerGiveState(prev, game, index, game.turnNumber));
+    setTradeState((prev) => resolveToggleTradeOwnerGiveState(prev, game, index));
   }
 
   function handleToggleDogTargetGive(index) {
-    setDogTradeState((prev) => toggleDogTradeTargetGiveState(prev, game, index, game.turnNumber));
+    setTradeState((prev) => resolveToggleTradeTargetGiveState(prev, game, index));
+  }
+
+  function handleToggleDogOwnerGiveOmen(index) {
+    setTradeState((prev) => resolveToggleTradeOwnerGiveOmenState(prev, game, index));
+  }
+
+  function handleToggleDogTargetGiveOmen(index) {
+    setTradeState((prev) => resolveToggleTradeTargetGiveOmenState(prev, game, index));
   }
 
   function handleCancelDogTrade() {
-    setDogTradeState(null);
+    setTradeState(null);
   }
 
   function handleConfirmDogTrade() {
-    const result = resolveConfirmDogTradeState(game, dogTradeState, game.turnNumber);
+    const result = resolveConfirmTradeActionState(game, tradeState);
     setGame(result.nextGame);
-    setDogTradeState(result.nextDogTradeState);
+    setTradeState(result.nextTradeState);
   }
 
   function handleSelectRabbitFootDie(dieIndex) {
@@ -1160,27 +1222,20 @@ export default function GameBoard({ players, onQuit }) {
     }
   }
 
-  function passTurnCore(g) {
-    const result = passTurnCoreState(g);
-    setCameraFloor(result.nextPlayerFloor);
-    return result.game;
-  }
-
-  function passTurn(g) {
-    return passTurnWithEndTurnItemsState(g, {
-      resolveEndTurnItemPassiveState,
-      passTurnCore,
-      statLabels: STAT_LABELS,
-    });
-  }
-
   const validMoves = cameraFloor === currentPlayer.floor ? getValidMoves() : [];
   const { dogMoveOptionsOnFloor, dogStairMoveOption, dogStairDestination, dogTradeTargetsOnTile } = getDogTradeUiState(
     game,
-    dogTradeState,
+    tradeState,
     cameraFloor,
     getDogMoveOptions,
     getTileAtPosition
+  );
+  const playerTradeTargetsOnTile = getPlayerTradeTargetsOnTile(
+    game,
+    game.currentPlayerIndex,
+    currentPlayer.floor,
+    currentPlayer.x,
+    currentPlayer.y
   );
   const pendingSpecialPlacementTargets = (game.pendingSpecialPlacement?.placements || []).filter(
     (placement) => placement.floor === cameraFloor
@@ -1198,7 +1253,7 @@ export default function GameBoard({ players, onQuit }) {
         queuedTraitRollOverride,
       })
     : null;
-  const isUnconfirmedMovePath = game.turnPhase === "move" && Array.isArray(game.movePath) && game.movePath.length > 1;
+  const isUnconfirmedMovePath = hasUnconfirmedMovePathState(game);
   const showMoveConfirmUseNowDisabled =
     !!viewedCard?.activeAbilityRule && viewedCard.ownerIndex === game.currentPlayerIndex && isUnconfirmedMovePath;
   const { damageAllocated, damageRemaining, canConfirmDamageChoice } = getDamageChoiceSummary(damageChoice);
@@ -1347,10 +1402,10 @@ export default function GameBoard({ players, onQuit }) {
                       ))}
                     </div>
                   )}
-                  {dogTradeState &&
-                    dogTradeState.floor === cameraFloor &&
-                    dogTradeState.x === tile.x &&
-                    dogTradeState.y === tile.y && (
+                  {tradeState?.mode === "dog-remote" &&
+                    tradeState.floor === cameraFloor &&
+                    tradeState.x === tile.x &&
+                    tradeState.y === tile.y && (
                       <div className="player-token" title="Dog">
                         🐕
                       </div>
@@ -1407,7 +1462,7 @@ export default function GameBoard({ players, onQuit }) {
               })()}
 
             {/* Explore/move targets */}
-            {!dogTradeState &&
+            {!tradeState &&
               !game.pendingExplore &&
               validMoves.map((m) => {
                 // Don't show target if there's already a tile there (move targets are on existing tiles)
@@ -1452,7 +1507,7 @@ export default function GameBoard({ players, onQuit }) {
             />
 
             {/* Clickable overlay on existing tiles for movement/backtrack */}
-            {!dogTradeState &&
+            {!tradeState &&
               validMoves
                 .filter((m) => m.type === "move" || m.type === "backtrack" || m.type === "wall-move")
                 .map((m) => {
@@ -1468,7 +1523,7 @@ export default function GameBoard({ players, onQuit }) {
                   );
                 })}
 
-            {dogTradeState?.phase === "move" &&
+            {tradeState?.phase === "move" &&
               dogMoveOptionsOnFloor.map((move) => {
                 const left = (move.x - minX) * (TILE_SIZE + GAP);
                 const top = (move.y - minY) * (TILE_SIZE + GAP);
@@ -1497,22 +1552,22 @@ export default function GameBoard({ players, onQuit }) {
             Confirm Placement
           </button>
         )}
-        {!dogTradeState && game.turnPhase === "move" && game.movePath.length > 1 && (
+        {!tradeState && game.turnPhase === "move" && game.movePath.length > 1 && (
           <button className="btn btn-confirm" onClick={handleConfirmMove}>
             Move Here
           </button>
         )}
-        {!dogTradeState && stairTarget && (
+        {!tradeState && stairTarget && (
           <button className="btn btn-stairs" onClick={handleChangeFloor}>
             {stairIsBacktrack ? `Go back to ${stairTarget.name}` : `Move to ${stairTarget.name}`}
           </button>
         )}
-        {!dogTradeState && canUseMysticElevator && (
+        {!tradeState && canUseMysticElevator && (
           <button className="btn btn-stairs" onClick={handleRollMysticElevator}>
             Use Elevator
           </button>
         )}
-        {!dogTradeState &&
+        {!tradeState &&
           canUseSecretPassage &&
           secretPassageTargets.map((target) => (
             <button
@@ -1539,17 +1594,32 @@ export default function GameBoard({ players, onQuit }) {
         )}
         {(game.turnPhase === "endTurn" || game.turnPhase === "move") &&
           !game.pendingExplore &&
-          !dogTradeState &&
+          !tradeState &&
           !isItemAbilityTileChoiceAwaiting(eventState) && (
             <button className="btn btn-primary" onClick={handleEndTurn}>
               End Turn — Pass to {endTurnPreviewPlayerName}
             </button>
           )}
 
-        {dogTradeState?.phase === "move" && (
+        {!tradeState &&
+          game.turnPhase === "move" &&
+          !game.pendingExplore &&
+          !isItemAbilityTileChoiceAwaiting(eventState) &&
+          playerTradeTargetsOnTile.length > 0 &&
+          playerTradeTargetsOnTile.map(({ player, playerIndex }) => (
+            <button
+              key={`player-trade-start-${playerIndex}`}
+              className="btn btn-primary"
+              onClick={() => handleStartPlayerTrade(playerIndex)}
+            >
+              Trade with {player.name}
+            </button>
+          ))}
+
+        {tradeState?.phase === "move" && (
           <>
             <button className="btn btn-secondary" disabled>
-              Dog moves left: {dogTradeState.movesLeft}
+              Dog moves left: {tradeState.movesLeft}
             </button>
             {dogStairMoveOption && (
               <button className="btn btn-stairs" onClick={() => handleMoveDogToken(dogStairMoveOption)}>
@@ -1757,22 +1827,26 @@ export default function GameBoard({ players, onQuit }) {
         </div>
       )}
 
-      {dogTradeState?.phase === "trade" && (
-        <div className="sidebar-card-viewer" role="dialog" aria-label="Dog trade">
+      {tradeState?.phase === "trade" && (
+        <div className="sidebar-card-viewer" role="dialog" aria-label="Trade">
           <div className="card-modal card-viewer">
-            <div className="card-type-label">OMEN</div>
-            <h2 className="card-name">Dog Trade</h2>
+            <div className="card-type-label">TRADE</div>
+            <h2 className="card-name">{tradeState.mode === "dog-remote" ? "Dog Trade" : "Player Trade"}</h2>
             {(() => {
-              const owner = game.players[dogTradeState.ownerIndex];
-              const selectedTarget = game.players[dogTradeState.targetPlayerIndex];
-              const selectedTargetIndex = dogTradeState.targetPlayerIndex;
+              const owner = game.players[tradeState.ownerIndex];
+              const selectedTarget = game.players[tradeState.targetPlayerIndex];
+              const selectedTargetIndex = tradeState.targetPlayerIndex;
 
               return (
                 <>
-                  <p>
-                    Dog is on {dogTradeState.floor}. Pick items Dog carries from {owner?.name} and items the target
-                    willingly sends back.
-                  </p>
+                  {tradeState.mode === "dog-remote" ? (
+                    <p>
+                      Dog is on {tradeState.floor}. Pick any cards Dog carries from {owner?.name} and cards the target
+                      willingly sends back.
+                    </p>
+                  ) : (
+                    <p>Choose any number of cards each player gives. Trade completes only when both agree.</p>
+                  )}
 
                   <div style={{ marginBottom: "0.75rem" }}>
                     Trading with <strong>{selectedTarget?.name || "Unknown"}</strong>
@@ -1780,59 +1854,95 @@ export default function GameBoard({ players, onQuit }) {
 
                   <h3 style={{ marginTop: 0 }}>Send From {owner?.name}</h3>
                   <div className="event-option-list" style={{ marginBottom: "0.75rem" }}>
-                    {(owner?.inventory || []).length === 0 && (
-                      <div className="sidebar-card-empty">No items to send</div>
+                    {[
+                      ...(owner?.inventory || []).map((card, index) => ({
+                        kind: "item",
+                        index,
+                        card,
+                        selected: (tradeState.ownerGiveIndexes || []).includes(index),
+                        locked: isItemTradeLockedThisTurn(card, game.turnNumber),
+                      })),
+                      ...(owner?.omens || []).map((card, index) => {
+                        const isActiveDogOmen = tradeState.mode === "dog-remote" && index === tradeState.dogOmenIndex;
+                        return {
+                          kind: "omen",
+                          index,
+                          card,
+                          selected: (tradeState.ownerGiveOmenIndexes || []).includes(index),
+                          locked: isActiveDogOmen || isItemTradeLockedThisTurn(card, game.turnNumber),
+                          lockReason: isActiveDogOmen ? " (currently in use)" : "",
+                        };
+                      }),
+                    ].map((entry) => (
+                      <button
+                        key={`trade-owner-give-${entry.kind}-${entry.index}`}
+                        className={`${entry.selected ? "btn btn-primary" : "btn btn-secondary"} trade-option-btn trade-option-${entry.kind}`}
+                        onClick={() =>
+                          entry.kind === "item"
+                            ? handleToggleDogOwnerGive(entry.index)
+                            : handleToggleDogOwnerGiveOmen(entry.index)
+                        }
+                        disabled={entry.locked}
+                      >
+                        {entry.selected ? "[Send] " : ""}
+                        {entry.card.name}
+                        {entry.locked ? entry.lockReason || " (used this turn)" : ""}
+                      </button>
+                    ))}
+                    {(owner?.inventory || []).length + (owner?.omens || []).length === 0 && (
+                      <div className="sidebar-card-empty">No cards to send</div>
                     )}
-                    {(owner?.inventory || []).map((card, index) => {
-                      const selected = dogTradeState.ownerGiveIndexes.includes(index);
-                      const locked = isItemTradeLockedThisTurn(card, game.turnNumber);
-                      return (
-                        <button
-                          key={`dog-owner-give-${index}`}
-                          className={selected ? "btn btn-primary" : "btn btn-secondary"}
-                          onClick={() => handleToggleDogOwnerGive(index)}
-                          disabled={locked}
-                        >
-                          {selected ? "[Send] " : ""}
-                          {card.name}
-                          {locked ? " (used this turn)" : ""}
-                        </button>
-                      );
-                    })}
                   </div>
 
                   <h3 style={{ marginTop: 0 }}>Receive From {selectedTarget?.name || "Target"}</h3>
                   <div className="event-option-list" style={{ marginBottom: "0.75rem" }}>
-                    {(selectedTarget?.inventory || []).length === 0 && (
-                      <div className="sidebar-card-empty">No items offered</div>
+                    {[
+                      ...(selectedTarget?.inventory || []).map((card, index) => ({
+                        kind: "item",
+                        index,
+                        card,
+                        selected: (tradeState.targetGiveIndexes || []).includes(index),
+                        locked: isItemTradeLockedThisTurn(card, game.turnNumber),
+                      })),
+                      ...(selectedTarget?.omens || []).map((card, index) => ({
+                        kind: "omen",
+                        index,
+                        card,
+                        selected: (tradeState.targetGiveOmenIndexes || []).includes(index),
+                        locked: isItemTradeLockedThisTurn(card, game.turnNumber),
+                      })),
+                    ].map((entry) => (
+                      <button
+                        key={`trade-target-give-${selectedTargetIndex}-${entry.kind}-${entry.index}`}
+                        className={`${entry.selected ? "btn btn-primary" : "btn btn-secondary"} trade-option-btn trade-option-${entry.kind}`}
+                        onClick={() =>
+                          entry.kind === "item"
+                            ? handleToggleDogTargetGive(entry.index)
+                            : handleToggleDogTargetGiveOmen(entry.index)
+                        }
+                        disabled={entry.locked}
+                      >
+                        {entry.selected ? "[Offer] " : ""}
+                        {entry.card.name}
+                        {entry.locked ? " (used this turn)" : ""}
+                      </button>
+                    ))}
+                    {(selectedTarget?.inventory || []).length + (selectedTarget?.omens || []).length === 0 && (
+                      <div className="sidebar-card-empty">No cards offered</div>
                     )}
-                    {(selectedTarget?.inventory || []).map((card, index) => {
-                      const selected = dogTradeState.targetGiveIndexes.includes(index);
-                      const locked = isItemTradeLockedThisTurn(card, game.turnNumber);
-                      return (
-                        <button
-                          key={`dog-target-give-${selectedTargetIndex}-${index}`}
-                          className={selected ? "btn btn-primary" : "btn btn-secondary"}
-                          onClick={() => handleToggleDogTargetGive(index)}
-                          disabled={locked}
-                        >
-                          {selected ? "[Offer] " : ""}
-                          {card.name}
-                          {locked ? " (used this turn)" : ""}
-                        </button>
-                      );
-                    })}
                   </div>
                 </>
               );
             })()}
 
             <button className="btn btn-primary" onClick={handleConfirmDogTrade}>
-              Confirm Dog Trade
+              Confirm Trade
             </button>
-            <button className="btn btn-secondary" onClick={handleBackToDogMove}>
-              Back to Dog Movement
-            </button>
+            {tradeState.mode === "dog-remote" && (
+              <button className="btn btn-secondary" onClick={handleBackToDogMove}>
+                Back to Dog Movement
+              </button>
+            )}
             <button className="btn btn-secondary" onClick={handleCancelDogTrade}>
               Cancel
             </button>

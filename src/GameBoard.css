@@ -1412,6 +1412,31 @@
   cursor: not-allowed;
 }
 
+.trade-option-btn {
+  border-width: 1px;
+  border-style: solid;
+}
+
+.trade-option-item {
+  border-color: rgba(39, 174, 96, 0.55);
+  background: rgba(39, 174, 96, 0.14);
+  color: #d9f7e7;
+}
+
+.trade-option-item:hover:not(:disabled) {
+  background: rgba(39, 174, 96, 0.22);
+}
+
+.trade-option-omen {
+  border-color: rgba(142, 68, 173, 0.58);
+  background: rgba(142, 68, 173, 0.18);
+  color: #ead9f6;
+}
+
+.trade-option-omen:hover:not(:disabled) {
+  background: rgba(142, 68, 173, 0.26);
+}
+
 .dev-roll-tools { /* FOR DEV ONLY. DELETE EVENTUALLY! */
   margin-top: 0.5rem; /* FOR DEV ONLY. DELETE EVENTUALLY! */
   display: flex; /* FOR DEV ONLY. DELETE EVENTUALLY! */

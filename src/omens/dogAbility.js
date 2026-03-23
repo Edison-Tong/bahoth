@@ -9,8 +9,12 @@ export function isDogTradeAvailableThisTurn(game, viewedCard, getDogTradeTargets
   if (targets.length === 0) return false;
 
   const ownerHasItems = (owner.inventory || []).length > 0;
-  const anyTargetHasItems = targets.some(({ playerIndex }) => (game.players[playerIndex]?.inventory || []).length > 0);
-  return ownerHasItems || anyTargetHasItems;
+  const ownerHasTradableOmens = (owner.omens || []).some((_, index) => index !== viewedCard.ownerCardIndex);
+  const anyTargetHasTradableCards = targets.some(({ playerIndex }) => {
+    const target = game.players[playerIndex];
+    return (target?.inventory || []).length > 0 || (target?.omens || []).length > 0;
+  });
+  return ownerHasItems || ownerHasTradableOmens || anyTargetHasTradableCards;
 }
 
 export function isItemTradeLockedThisTurn(card, turnNumber) {
@@ -49,6 +53,8 @@ export function createDogTradeStartState(game, viewedCard, getDogTradeTargets) {
       targetPlayerIndex: null,
       ownerGiveIndexes: [],
       targetGiveIndexes: [],
+      ownerGiveOmenIndexes: [],
+      targetGiveOmenIndexes: [],
     },
   };
 }
@@ -59,7 +65,9 @@ export function createDogTradeSelectionState(previousDogTradeState, targetPlayer
     ...previousDogTradeState,
     phase: "trade",
     targetPlayerIndex,
+    ownerGiveOmenIndexes: [],
     targetGiveIndexes: [],
+    targetGiveOmenIndexes: [],
   };
 }
 
@@ -86,6 +94,8 @@ export function createDogTradeBackToMoveState(previousDogTradeState) {
     targetPlayerIndex: null,
     ownerGiveIndexes: [],
     targetGiveIndexes: [],
+    ownerGiveOmenIndexes: [],
+    targetGiveOmenIndexes: [],
   };
 }
 
@@ -149,7 +159,7 @@ export function resolveConfirmDogTradeState(game, dogTradeState, turnNumber) {
   }
 
   const ownerGiveSet = new Set(
-    dogTradeState.ownerGiveIndexes.filter(
+    (dogTradeState.ownerGiveIndexes || []).filter(
       (index) =>
         Number.isInteger(index) &&
         index >= 0 &&
@@ -158,7 +168,7 @@ export function resolveConfirmDogTradeState(game, dogTradeState, turnNumber) {
     )
   );
   const targetGiveSet = new Set(
-    dogTradeState.targetGiveIndexes.filter(
+    (dogTradeState.targetGiveIndexes || []).filter(
       (index) =>
         Number.isInteger(index) &&
         index >= 0 &&
@@ -166,12 +176,36 @@ export function resolveConfirmDogTradeState(game, dogTradeState, turnNumber) {
         !isItemTradeLockedThisTurn(target.inventory[index], turnNumber)
     )
   );
+  const ownerGiveOmenSet = new Set(
+    (dogTradeState.ownerGiveOmenIndexes || []).filter(
+      (index) =>
+        Number.isInteger(index) &&
+        index >= 0 &&
+        index < owner.omens.length &&
+        index !== dogTradeState.dogOmenIndex &&
+        !isItemTradeLockedThisTurn(owner.omens[index], turnNumber)
+    )
+  );
+  const targetGiveOmenSet = new Set(
+    (dogTradeState.targetGiveOmenIndexes || []).filter(
+      (index) =>
+        Number.isInteger(index) &&
+        index >= 0 &&
+        index < target.omens.length &&
+        !isItemTradeLockedThisTurn(target.omens[index], turnNumber)
+    )
+  );
 
-  if (ownerGiveSet.size === 0 && targetGiveSet.size === 0) {
+  if (
+    ownerGiveSet.size === 0 &&
+    targetGiveSet.size === 0 &&
+    ownerGiveOmenSet.size === 0 &&
+    targetGiveOmenSet.size === 0
+  ) {
     return {
       nextGame: {
         ...game,
-        message: "Select at least one item for Dog to carry.",
+        message: "Select at least one card for Dog to carry.",
       },
       nextDogTradeState: dogTradeState,
     };
@@ -179,15 +213,19 @@ export function resolveConfirmDogTradeState(game, dogTradeState, turnNumber) {
 
   const ownerGivenItems = owner.inventory.filter((_, index) => ownerGiveSet.has(index));
   const targetGivenItems = target.inventory.filter((_, index) => targetGiveSet.has(index));
+  const ownerGivenOmens = owner.omens.filter((_, index) => ownerGiveOmenSet.has(index));
+  const targetGivenOmens = target.omens.filter((_, index) => targetGiveOmenSet.has(index));
   const ownerRemainingItems = owner.inventory.filter((_, index) => !ownerGiveSet.has(index));
   const targetRemainingItems = target.inventory.filter((_, index) => !targetGiveSet.has(index));
+  const ownerRemainingOmens = owner.omens.filter((_, index) => !ownerGiveOmenSet.has(index));
+  const targetRemainingOmens = target.omens.filter((_, index) => !targetGiveOmenSet.has(index));
 
   const nextPlayers = game.players.map((player, index) => {
     if (index === dogTradeState.ownerIndex) {
       return {
         ...player,
         inventory: [...ownerRemainingItems, ...targetGivenItems],
-        omens: player.omens.map((card, cardIndex) =>
+        omens: [...ownerRemainingOmens, ...targetGivenOmens].map((card, cardIndex) =>
           cardIndex === dogTradeState.dogOmenIndex
             ? {
                 ...card,
@@ -202,6 +240,7 @@ export function resolveConfirmDogTradeState(game, dogTradeState, turnNumber) {
       return {
         ...player,
         inventory: [...targetRemainingItems, ...ownerGivenItems],
+        omens: [...targetRemainingOmens, ...ownerGivenOmens],
       };
     }
 
@@ -212,7 +251,7 @@ export function resolveConfirmDogTradeState(game, dogTradeState, turnNumber) {
     nextGame: {
       ...game,
       players: nextPlayers,
-      message: `${owner.name}'s Dog completed a trade with ${target.name} (${ownerGivenItems.length} item${ownerGivenItems.length !== 1 ? "s" : ""} sent, ${targetGivenItems.length} item${targetGivenItems.length !== 1 ? "s" : ""} returned).`,
+      message: `${owner.name}'s Dog completed a trade with ${target.name} (${ownerGivenItems.length + ownerGivenOmens.length} card${ownerGivenItems.length + ownerGivenOmens.length !== 1 ? "s" : ""} sent, ${targetGivenItems.length + targetGivenOmens.length} card${targetGivenItems.length + targetGivenOmens.length !== 1 ? "s" : ""} returned).`,
     },
     nextDogTradeState: null,
   };
