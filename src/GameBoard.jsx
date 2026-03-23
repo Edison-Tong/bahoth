@@ -33,14 +33,17 @@ import {
   resolveChooseViewedCardActiveAbilityValueState,
   resolveUseViewedCardActiveAbilityNowState,
 } from "./events/eventDomain";
-import EventResolutionModal, {
-  CardAbilityContent,
-  DrawnCardModal,
-  EventTileChoiceTargets,
-} from "./components/EventResolutionModal";
+import EventResolutionModal, { DrawnCardModal } from "./components/EventResolutionModal";
+import BoardCanvas from "./components/gameboard/BoardCanvas";
+import DamageChoiceOverlay from "./components/gameboard/overlays/DamageChoiceOverlay";
+import DiceRollOverlay from "./components/gameboard/overlays/DiceRollOverlay";
+import HauntRollOverlay from "./components/gameboard/overlays/HauntRollOverlay";
+import TileEffectOverlay from "./components/gameboard/overlays/TileEffectOverlay";
 import GameBoardActions from "./components/gameboard/GameBoardActions";
 import PlayerSidebar from "./components/gameboard/PlayerSidebar";
-import { applyDrawIdolEventCardState, getIdolChoiceStateForQueuedEvent, applySkipIdolEventCardState, resolveSpecialOmenNowAbilityState, getDogTradeUiState, isItemTradeLockedThisTurn } from "./omens/omenDomain";
+import ViewedCardViewer from "./components/gameboard/ViewedCardViewer";
+import TradeViewer from "./components/gameboard/TradeViewer";
+import { applyDrawIdolEventCardState, getIdolChoiceStateForQueuedEvent, applySkipIdolEventCardState, resolveSpecialOmenNowAbilityState, getDogTradeUiState } from "./omens/omenDomain";
 import { isEndTurnItemChoiceEffect, resolveEndTurnItemPassiveChoiceState, resolveEndTurnItemPassiveState, canUseArmedSkeletonKeyMovement, createSkeletonKeyResultTileEffect, isSkeletonKeyResultEffect, resolveSkeletonKeyResultAfterDismiss } from "./items/itemDomain";
 import { applyPlacedTileDiscoverEffects, getEndTurnTileAbilityState, resolveTileDiceAnimationState, resolveDismissTileEffectState, getCurrentPlayerTile, getCanUseMysticElevator, getCanUseSecretPassage, getSecretPassageTargets, getStairTargetState, getRollMysticElevatorState, resolveMysticElevatorResultState, getConnectedMoveTarget, resolveSecretPassageMoveState } from "./tiles/tileDomain";
 import { confirmMoveState, getValidMovesState, placePendingSpecialTileState, resolveKeyboardMoveAction, getPlacementOptionsState, resolveBacktrackActionState, resolveBoardMoveActionState, resolveChangeFloorActionState, resolveExploreActionState, resolveMovePlayerActionState, getLeaveMoveCostState, hasUnconfirmedMovePathState } from "./movement/movementDomain";
@@ -63,14 +66,6 @@ import {
   createDrawnOmenCard,
 } from "./game/gameState";
 import "./GameBoard.css";
-
-function describePostDamageEffects(effects) {
-  if (!effects || effects.length === 0) return "";
-
-  return effects
-    .map((effect) => `gain ${effect.amount} ${STAT_LABELS[effect.stat]} from ${effect.sourceName}`)
-    .join(" and ");
-}
 
 function formatStatTrackValue(value) {
   return value === 0 ? "☠" : value;
@@ -1149,213 +1144,30 @@ export default function GameBoard({ players, onQuit }) {
       {messageBubble && <div className="game-message-bubble">{messageBubble}</div>}
 
       {/* Board */}
-      <div className="board-container" ref={boardRef}>
-        <div className="board-scroll">
-          <div className="board-grid" style={{ width: gridWidth, height: gridHeight }}>
-            {/* Movement path line */}
-            {game.movePath.filter((p) => p.floor === cameraFloor).length >= 2 && (
-              <svg className="path-svg" style={{ width: gridWidth, height: gridHeight }}>
-                <polyline
-                  points={game.movePath
-                    .filter((p) => p.floor === cameraFloor)
-                    .map((p) => {
-                      const cx = (p.x - minX) * (TILE_SIZE + GAP) + TILE_SIZE / 2;
-                      const cy = (p.y - minY) * (TILE_SIZE + GAP) + TILE_SIZE / 2;
-                      return `${cx},${cy}`;
-                    })
-                    .join(" ")}
-                  className="path-line"
-                  style={{ stroke: currentPlayer.color }}
-                />
-              </svg>
-            )}
-
-            {/* Placed tiles */}
-            {floorTiles.map((tile) => {
-              const left = (tile.x - minX) * (TILE_SIZE + GAP);
-              const top = (tile.y - minY) * (TILE_SIZE + GAP);
-              const tilePlayersHere = playersOnFloor.filter((p) => p.x === tile.x && p.y === tile.y);
-              const isCurrentTile =
-                currentPlayer.x === tile.x && currentPlayer.y === tile.y && currentPlayer.floor === cameraFloor;
-
-              return (
-                <div
-                  key={tile.id + tile.x + tile.y}
-                  className={`board-tile ${isCurrentTile ? "board-tile-current" : ""} ${
-                    tile.cardType ? "board-tile-" + tile.cardType : ""
-                  }`}
-                  style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
-                >
-                  {tile.description && <div className="tile-tooltip">{tile.description}</div>}
-                  <div className="tile-name">{tile.name}</div>
-                  {tile.cardType && <div className={`tile-type tile-type-${tile.cardType}`}>{tile.cardType}</div>}
-                  {tile.obstacle && <div className="tile-obstacle">Obstacle</div>}
-                  {tile.tokens?.length > 0 && (
-                    <div className="tile-token-list">
-                      {tile.tokens.map((token, tokenIndex) => (
-                        <div
-                          key={`${tile.id}-token-${token.type}-${tokenIndex}`}
-                          className={`tile-token tile-token-${token.type}`}
-                        >
-                          {token.type.replace(/-/g, " ")}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {/* Door indicators */}
-                  <div className="tile-doors">
-                    {tile.doors.map((d) => (
-                      <div key={d} className={`door door-${d}`} />
-                    ))}
-                  </div>
-                  {/* Player tokens */}
-                  {tilePlayersHere.length > 0 && (
-                    <div className="tile-players">
-                      {tilePlayersHere.map((p) => (
-                        <div key={p.index} className="player-token" style={{ background: p.color }} title={p.name}>
-                          {p.name.charAt(0)}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {tradeState?.mode === "dog-remote" &&
-                    tradeState.floor === cameraFloor &&
-                    tradeState.x === tile.x &&
-                    tradeState.y === tile.y && (
-                      <div className="player-token" title="Dog">
-                        🐕
-                      </div>
-                    )}
-                </div>
-              );
-            })}
-
-            {/* Pending explore placeholder / rotate preview */}
-            {game.pendingExplore &&
-              game.pendingExplore.floor === cameraFloor &&
-              (() => {
-                const pe = game.pendingExplore;
-                const left = (pe.x - minX) * (TILE_SIZE + GAP);
-                const top = (pe.y - minY) * (TILE_SIZE + GAP);
-                const tilePlayersHere = playersOnFloor.filter((p) => p.x === pe.x && p.y === pe.y);
-                const isRotating = game.turnPhase === "rotate";
-                const previewDoors = isRotating ? pe.validRotations[pe.rotationIndex] : [];
-
-                return (
-                  <div
-                    key="pending-explore"
-                    className={`board-tile ${isRotating ? "board-tile-rotate" : "board-tile-pending"}`}
-                    style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
-                  >
-                    {isRotating ? (
-                      <>
-                        <div className="tile-name">{pe.tile.name}</div>
-                        {pe.tile.cardType && (
-                          <div className={`tile-type tile-type-${pe.tile.cardType}`}>{pe.tile.cardType}</div>
-                        )}
-                        <div className="tile-doors">
-                          {previewDoors.map((d) => (
-                            <div key={d} className={`door door-${d}`} />
-                          ))}
-                        </div>
-                      </>
-                    ) : (
-                      <div className="tile-name" style={{ color: "var(--accent)" }}>
-                        ?
-                      </div>
-                    )}
-                    {tilePlayersHere.length > 0 && (
-                      <div className="tile-players">
-                        {tilePlayersHere.map((p) => (
-                          <div key={p.index} className="player-token" style={{ background: p.color }} title={p.name}>
-                            {p.name.charAt(0)}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })()}
-
-            {/* Explore/move targets */}
-            {!tradeState &&
-              !game.pendingExplore &&
-              validMoves.map((m) => {
-                // Don't show target if there's already a tile there (move targets are on existing tiles)
-                if (m.type === "move") return null;
-                const left = (m.x - minX) * (TILE_SIZE + GAP);
-                const top = (m.y - minY) * (TILE_SIZE + GAP);
-                return (
-                  <button
-                    key={`target-${m.x}-${m.y}`}
-                    className="explore-target"
-                    style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
-                    onClick={() => handleAction(m)}
-                  >
-                    <span className="explore-icon">?</span>
-                  </button>
-                );
-              })}
-
-            {game.pendingSpecialPlacement &&
-              pendingSpecialPlacementTargets.map((placement) => {
-                const left = (placement.x - minX) * (TILE_SIZE + GAP);
-                const top = (placement.y - minY) * (TILE_SIZE + GAP);
-                return (
-                  <button
-                    key={`special-placement-${placement.floor}-${placement.x}-${placement.y}`}
-                    className="explore-target"
-                    style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
-                    onClick={() => handlePlacePendingSpecialTile(placement)}
-                  >
-                    <span className="explore-icon">⇵</span>
-                  </button>
-                );
-              })}
-
-            <EventTileChoiceTargets
-              eventTileChoiceOptions={eventTileChoiceOptions}
-              selectedEventTileChoiceId={selectedEventTileChoiceId}
-              cameraFloor={cameraFloor}
-              minX={minX}
-              minY={minY}
-              onSelectOption={handleEventTileChoice}
-            />
-
-            {/* Clickable overlay on existing tiles for movement/backtrack */}
-            {!tradeState &&
-              validMoves
-                .filter((m) => m.type === "move" || m.type === "backtrack" || m.type === "wall-move")
-                .map((m) => {
-                  const left = (m.x - minX) * (TILE_SIZE + GAP);
-                  const top = (m.y - minY) * (TILE_SIZE + GAP);
-                  return (
-                    <button
-                      key={`move-${m.x}-${m.y}`}
-                      className={m.type === "backtrack" ? "backtrack-overlay" : "move-overlay"}
-                      style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
-                      onClick={() => handleAction(m)}
-                    />
-                  );
-                })}
-
-            {tradeState?.phase === "move" &&
-              dogMoveOptionsOnFloor.map((move) => {
-                const left = (move.x - minX) * (TILE_SIZE + GAP);
-                const top = (move.y - minY) * (TILE_SIZE + GAP);
-                return (
-                  <button
-                    key={`dog-move-${move.floor}-${move.x}-${move.y}`}
-                    className="move-overlay"
-                    style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
-                    onClick={() => handleMoveDogToken(move)}
-                    title={`Dog move cost: ${move.cost}`}
-                  />
-                );
-              })}
-          </div>
-        </div>
-      </div>
+      <BoardCanvas
+        boardRef={boardRef}
+        cameraFloor={cameraFloor}
+        game={game}
+        currentPlayer={currentPlayer}
+        floorTiles={floorTiles}
+        playersOnFloor={playersOnFloor}
+        tradeState={tradeState}
+        validMoves={validMoves}
+        pendingSpecialPlacementTargets={pendingSpecialPlacementTargets}
+        minX={minX}
+        minY={minY}
+        gridWidth={gridWidth}
+        gridHeight={gridHeight}
+        TILE_SIZE={TILE_SIZE}
+        GAP={GAP}
+        eventTileChoiceOptions={eventTileChoiceOptions}
+        selectedEventTileChoiceId={selectedEventTileChoiceId}
+        handleEventTileChoice={handleEventTileChoice}
+        handleAction={handleAction}
+        handlePlacePendingSpecialTile={handlePlacePendingSpecialTile}
+        handleMoveDogToken={handleMoveDogToken}
+        dogMoveOptionsOnFloor={dogMoveOptionsOnFloor}
+      />
 
       <GameBoardActions
         eventState={eventState}
@@ -1407,171 +1219,28 @@ export default function GameBoard({ players, onQuit }) {
         onDismissCard={handleDismissCard}
       />
 
-      {viewedCard && (
-        <div className="sidebar-card-viewer" role="dialog" aria-label={`${viewedCard.type} details`}>
-          <div className={`card-modal card-${viewedCard.type} card-viewer`}>
-            <div className="card-type-label">{viewedCard.type.toUpperCase()}</div>
-            <h2 className="card-name">{viewedCard.name}</h2>
-            <div className="card-owner-label">Held by {viewedCard.ownerName}</div>
-            <CardAbilityContent card={viewedCard} />
-            {(viewedCardActiveAbilityState?.canUseNow || showMoveConfirmUseNowDisabled) && (
-              <span title={showMoveConfirmUseNowDisabled ? "Confirm your move to use" : ""}>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleUseViewedCardActiveAbilityNow}
-                  disabled={!viewedCardActiveAbilityState?.canUseNow}
-                >
-                  Use now
-                </button>
-              </span>
-            )}
-            {viewedCard.showUseNowPicker && viewedCardActiveAbilityState?.requiresValueSelection && (
-              <div className="event-option-list" style={{ marginTop: "0.75rem" }}>
-                {viewedCardActiveAbilityState.valueOptions.map((option) => {
-                  const optionValue = typeof option === "object" && option !== null ? option.value : option;
-                  const optionLabel = typeof option === "object" && option !== null ? option.label : option;
-                  return (
-                    <button
-                      key={`active-ability-value-${String(optionValue)}`}
-                      className="btn btn-secondary"
-                      onClick={() => handleChooseActiveAbilityValue(optionValue)}
-                    >
-                      {optionLabel}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {viewedCard.flavor && <p className="card-flavor">{viewedCard.flavor}</p>}
-            <button className="btn btn-primary" onClick={handleCloseViewedCard}>
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+      <ViewedCardViewer
+        viewedCard={viewedCard}
+        viewedCardActiveAbilityState={viewedCardActiveAbilityState}
+        showMoveConfirmUseNowDisabled={showMoveConfirmUseNowDisabled}
+        handleUseViewedCardActiveAbilityNow={handleUseViewedCardActiveAbilityNow}
+        handleChooseActiveAbilityValue={handleChooseActiveAbilityValue}
+        handleCloseViewedCard={handleCloseViewedCard}
+      />
 
-      {tradeState?.phase === "trade" && (
-        <div className="sidebar-card-viewer" role="dialog" aria-label="Trade">
-          <div className="card-modal card-viewer">
-            <div className="card-type-label">TRADE</div>
-            <h2 className="card-name">{tradeState.mode === "dog-remote" ? "Dog Trade" : "Player Trade"}</h2>
-            {(() => {
-              const owner = game.players[tradeState.ownerIndex];
-              const selectedTarget = game.players[tradeState.targetPlayerIndex];
-              const selectedTargetIndex = tradeState.targetPlayerIndex;
-
-              return (
-                <>
-                  {tradeState.mode === "dog-remote" ? (
-                    <p>
-                      Dog is on {tradeState.floor}. Pick any cards Dog carries from {owner?.name} and cards the target
-                      willingly sends back.
-                    </p>
-                  ) : (
-                    <p>Choose any number of cards each player gives. Trade completes only when both agree.</p>
-                  )}
-
-                  <div style={{ marginBottom: "0.75rem" }}>
-                    Trading with <strong>{selectedTarget?.name || "Unknown"}</strong>
-                  </div>
-
-                  <h3 style={{ marginTop: 0 }}>Send From {owner?.name}</h3>
-                  <div className="event-option-list" style={{ marginBottom: "0.75rem" }}>
-                    {[
-                      ...(owner?.inventory || []).map((card, index) => ({
-                        kind: "item",
-                        index,
-                        card,
-                        selected: (tradeState.ownerGiveIndexes || []).includes(index),
-                        locked: isItemTradeLockedThisTurn(card, game.turnNumber),
-                      })),
-                      ...(owner?.omens || []).map((card, index) => {
-                        const isActiveDogOmen = tradeState.mode === "dog-remote" && index === tradeState.dogOmenIndex;
-                        return {
-                          kind: "omen",
-                          index,
-                          card,
-                          selected: (tradeState.ownerGiveOmenIndexes || []).includes(index),
-                          locked: isActiveDogOmen || isItemTradeLockedThisTurn(card, game.turnNumber),
-                          lockReason: isActiveDogOmen ? " (currently in use)" : "",
-                        };
-                      }),
-                    ].map((entry) => (
-                      <button
-                        key={`trade-owner-give-${entry.kind}-${entry.index}`}
-                        className={`${entry.selected ? "btn btn-primary" : "btn btn-secondary"} trade-option-btn trade-option-${entry.kind}`}
-                        onClick={() =>
-                          entry.kind === "item"
-                            ? handleToggleDogOwnerGive(entry.index)
-                            : handleToggleDogOwnerGiveOmen(entry.index)
-                        }
-                        disabled={entry.locked}
-                      >
-                        {entry.selected ? "[Send] " : ""}
-                        {entry.card.name}
-                        {entry.locked ? entry.lockReason || " (used this turn)" : ""}
-                      </button>
-                    ))}
-                    {(owner?.inventory || []).length + (owner?.omens || []).length === 0 && (
-                      <div className="sidebar-card-empty">No cards to send</div>
-                    )}
-                  </div>
-
-                  <h3 style={{ marginTop: 0 }}>Receive From {selectedTarget?.name || "Target"}</h3>
-                  <div className="event-option-list" style={{ marginBottom: "0.75rem" }}>
-                    {[
-                      ...(selectedTarget?.inventory || []).map((card, index) => ({
-                        kind: "item",
-                        index,
-                        card,
-                        selected: (tradeState.targetGiveIndexes || []).includes(index),
-                        locked: isItemTradeLockedThisTurn(card, game.turnNumber),
-                      })),
-                      ...(selectedTarget?.omens || []).map((card, index) => ({
-                        kind: "omen",
-                        index,
-                        card,
-                        selected: (tradeState.targetGiveOmenIndexes || []).includes(index),
-                        locked: isItemTradeLockedThisTurn(card, game.turnNumber),
-                      })),
-                    ].map((entry) => (
-                      <button
-                        key={`trade-target-give-${selectedTargetIndex}-${entry.kind}-${entry.index}`}
-                        className={`${entry.selected ? "btn btn-primary" : "btn btn-secondary"} trade-option-btn trade-option-${entry.kind}`}
-                        onClick={() =>
-                          entry.kind === "item"
-                            ? handleToggleDogTargetGive(entry.index)
-                            : handleToggleDogTargetGiveOmen(entry.index)
-                        }
-                        disabled={entry.locked}
-                      >
-                        {entry.selected ? "[Offer] " : ""}
-                        {entry.card.name}
-                        {entry.locked ? " (used this turn)" : ""}
-                      </button>
-                    ))}
-                    {(selectedTarget?.inventory || []).length + (selectedTarget?.omens || []).length === 0 && (
-                      <div className="sidebar-card-empty">No cards offered</div>
-                    )}
-                  </div>
-                </>
-              );
-            })()}
-
-            <button className="btn btn-primary" onClick={handleConfirmDogTrade}>
-              Confirm Trade
-            </button>
-            {tradeState.mode === "dog-remote" && (
-              <button className="btn btn-secondary" onClick={handleBackToDogMove}>
-                Back to Dog Movement
-              </button>
-            )}
-            <button className="btn btn-secondary" onClick={handleCancelDogTrade}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      <TradeViewer
+        game={game}
+        tradeState={tradeState}
+        handlers={{
+          handleToggleDogOwnerGive,
+          handleToggleDogOwnerGiveOmen,
+          handleToggleDogTargetGive,
+          handleToggleDogTargetGiveOmen,
+          handleConfirmDogTrade,
+          handleBackToDogMove,
+          handleCancelDogTrade,
+        }}
+      />
 
       {showEventResolutionModal && (
         <EventResolutionModal
@@ -1589,266 +1258,49 @@ export default function GameBoard({ players, onQuit }) {
         />
       )}
 
-      {/* Dice roll overlay — animating */}
-      {diceAnimation &&
-        !diceAnimation.settled &&
-        diceAnimation.purpose !== "event-damage-sequence" &&
-        diceAnimation.purpose !== "event-trait-sequence-roll" && (
-          <div className="card-overlay card-overlay-animation">
-            <div
-              className={`card-modal ${diceAnimation.purpose === "haunt" ? "card-haunt-rolling" : "card-tile-rolling"}`}
-            >
-              <div className="card-type-label">
-                {diceAnimation.purpose === "haunt"
-                  ? "HAUNT ROLL"
-                  : diceAnimation.purpose === "event-roll"
-                    ? "EVENT ROLL"
-                    : diceAnimation.purpose === "event-damage-roll"
-                      ? "EVENT DAMAGE ROLL"
-                      : diceAnimation.purpose === "skeleton-key"
-                        ? "SKELETON KEY"
-                        : diceAnimation.purpose === "mystic-elevator"
-                          ? "MYSTIC ELEVATOR"
-                          : diceAnimation.purpose === "collapsed"
-                            ? "COLLAPSED ROOM"
-                            : diceAnimation.purpose === "collapsed-damage"
-                              ? "COLLAPSED ROOM — DAMAGE"
-                              : "FURNACE ROOM"}
-              </div>
-              <DiceRow dice={diceAnimation.display} modifier={diceAnimation.modifier} rolling />
-              <h2 className="card-name">Rolling...</h2>
-            </div>
-          </div>
-        )}
+      <DiceRollOverlay
+        diceAnimation={diceAnimation}
+        renderDiceRow={(props) => <DiceRow {...props} />}
+      />
 
-      {/* Haunt roll overlay — settled */}
-      {game.hauntRoll && diceAnimation?.settled && diceAnimation.purpose === "haunt" && (
-        <div className="card-overlay">
-          <div className={`card-modal ${game.hauntRoll.hauntTriggered ? "card-haunt-triggered" : "card-haunt-safe"}`}>
-            <div className="card-type-label">HAUNT ROLL</div>
-            <DiceRow dice={game.hauntRoll.dice} />
-            <div className="dice-total">Total: {game.hauntRoll.total}</div>
-            <div className="dice-target">Need less than 5 to be safe</div>
-            <h2 className="card-name">{game.hauntRoll.hauntTriggered ? "THE HAUNT BEGINS!" : "Safe... for now."}</h2>
-            <p className="card-description">
-              {game.hauntRoll.hauntTriggered
-                ? `Rolled ${game.hauntRoll.total} with ${game.hauntRoll.omenCount} dice — 5 or higher! The haunt is upon you!`
-                : `Rolled ${game.hauntRoll.total} with ${game.hauntRoll.omenCount} dice — less than 5. The house spares you... for now.`}
-            </p>
-            <button className="btn btn-primary" onClick={handleDismissHauntRoll}>
-              Continue
-            </button>
-          </div>
-        </div>
-      )}
+      <HauntRollOverlay
+        game={game}
+        diceAnimation={diceAnimation}
+        onDismissHauntRoll={handleDismissHauntRoll}
+        renderDiceRow={(props) => <DiceRow {...props} />}
+      />
 
-      {/* Tile effect overlay */}
-      {game.tileEffect && (
-        <div className="card-overlay">
-          <div
-            className={`card-modal card-tile-effect ${game.tileEffect.type === "laundry-chute" ? "card-tile-neutral" : game.tileEffect.type === "collapsed-pending" ? "card-tile-danger" : game.tileEffect.damage > 0 || game.tileEffect.collapsed ? "card-tile-danger" : "card-tile-safe"}`}
-          >
-            <div className="card-type-label">{game.tileEffect.tileName}</div>
-            {game.tileEffect.dice &&
-              !(
-                isSkeletonKeyResultEffect(game.tileEffect) &&
-                game.rabbitFootPendingReroll?.sourceType === "skeleton-key-roll"
-              ) && <DiceRow dice={game.tileEffect.dice} modifier={game.tileEffect.diceModifier} />}
-            {game.tileEffect.total !== undefined && <div className="dice-total">Total: {game.tileEffect.total}</div>}
-            {game.tileEffect.collapsed && game.tileEffect.damageDice.length > 0 && (
-              <>
-                <div className="dice-total" style={{ marginTop: "0.5rem" }}>
-                  Damage roll:
-                </div>
-                <DiceRow dice={game.tileEffect.damageDice} modifier={game.tileEffect.damageDiceModifier} />
-              </>
-            )}
-            {isSkeletonKeyResultEffect(game.tileEffect) &&
-              game.rabbitFootPendingReroll?.sourceType === "skeleton-key-roll" && (
-                <div className="dice-row">
-                  <div className="dice-container">
-                    {(game.tileEffect.dice || []).map((die, index) => {
-                      const selected = game.rabbitFootPendingReroll?.selectedDieIndex === index;
-                      return (
-                        <button
-                          key={`skeleton-key-rabbit-foot-die-${index}`}
-                          type="button"
-                          className={selected ? "die die-selectable die-selected" : "die die-selectable"}
-                          onClick={() => handleSelectRabbitFootDie(index)}
-                        >
-                          {die}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-            <p className="card-description">{game.tileEffect.message}</p>
-            {isSkeletonKeyResultEffect(game.tileEffect) &&
-            game.rabbitFootPendingReroll?.sourceType === "skeleton-key-roll" ? (
-              <button
-                className="btn btn-primary"
-                onClick={handleConfirmRabbitFootReroll}
-                disabled={!Number.isInteger(game.rabbitFootPendingReroll?.selectedDieIndex)}
-              >
-                Reroll
-              </button>
-            ) : game.tileEffect.type === "necklace-of-teeth-choice" ? (
-              <>
-                <div className="event-option-list" style={{ marginTop: "0.75rem" }}>
-                  {(game.tileEffect.statOptions || []).map((stat) => (
-                    <button
-                      key={`necklace-stat-${stat}`}
-                      className="btn btn-secondary"
-                      onClick={() => handleChooseNecklaceOfTeethStat(stat)}
-                    >
-                      Gain 1 {STAT_LABELS[stat]}
-                    </button>
-                  ))}
-                </div>
-                <button className="btn btn-primary" onClick={handleSkipNecklaceOfTeethGain}>
-                  Skip
-                </button>
-              </>
-            ) : game.tileEffect.type === "idol-event-choice" ? (
-              <>
-                <button className="btn btn-secondary" onClick={handleDrawIdolEventCard}>
-                  Draw Event card
-                </button>
-                <button className="btn btn-primary" onClick={handleSkipIdolEventCard}>
-                  Skip Event card
-                </button>
-              </>
-            ) : game.tileEffect.type === "collapsed-pending" ? (
-              <button className="btn btn-primary" onClick={handleStartCollapsedDamage}>
-                Roll for damage
-              </button>
-            ) : (
-              <button className="btn btn-primary" onClick={handleDismissTileEffect}>
-                {game.tileEffect.type === "mystic-elevator-result" && game.tileEffect.pendingSpecialPlacement
-                  ? "Choose doorway"
-                  : "Continue"}
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      <TileEffectOverlay
+        game={game}
+        statLabels={STAT_LABELS}
+        isSkeletonKeyResultEffect={isSkeletonKeyResultEffect}
+        renderDiceRow={(props) => <DiceRow {...props} />}
+        onSelectRabbitFootDie={handleSelectRabbitFootDie}
+        onConfirmRabbitFootReroll={handleConfirmRabbitFootReroll}
+        onChooseNecklaceOfTeethStat={handleChooseNecklaceOfTeethStat}
+        onSkipNecklaceOfTeethGain={handleSkipNecklaceOfTeethGain}
+        onDrawIdolEventCard={handleDrawIdolEventCard}
+        onSkipIdolEventCard={handleSkipIdolEventCard}
+        onStartCollapsedDamage={handleStartCollapsedDamage}
+        onDismissTileEffect={handleDismissTileEffect}
+      />
 
-      {/* Damage choice overlay */}
-      {damageChoice && (
-        <div className="card-overlay">
-          <div className="card-modal card-damage-choice">
-            <div className="card-type-label">
-              {damageChoice.adjustmentMode === "increase"
-                ? "STAT GAIN"
-                : `${damageChoice.damageType.toUpperCase()} DAMAGE`}
-            </div>
-            <h2 className="card-name">
-              {damageChoice.adjustmentMode === "increase"
-                ? "Choose where the gain goes"
-                : "Choose where the damage goes"}
-            </h2>
-            <p className="card-description">
-              {damageChoice.adjustmentMode === "increase"
-                ? `Assign ${damageChoice.amount} point${damageChoice.amount === 1 ? "" : "s"} of gain to ${damageChoice.playerName}.`
-                : damageChoice.allowPartial
-                  ? `Assign up to ${damageChoice.amount} point${damageChoice.amount === 1 ? "" : "s"} of ${damageChoice.damageType} damage to ${damageChoice.playerName}.`
-                  : `Assign ${damageChoice.amount} point${damageChoice.amount === 1 ? "" : "s"} of ${damageChoice.damageType} damage to ${damageChoice.playerName}.`}
-            </p>
-            {damageChoice.adjustmentMode !== "increase" && damageChoice.canConvertToGeneral && (
-              <div className="damage-conversion-panel">
-                <div className="damage-conversion-copy">
-                  {damageChoice.damageType === "general"
-                    ? `Taking this as General damage via ${formatSourceNames(damageChoice.conversionSourceNames)}.`
-                    : `${formatSourceNames(damageChoice.conversionSourceNames)} can convert this to General damage.`}
-                </div>
-                <button className="btn btn-secondary damage-conversion-button" onClick={handleToggleDamageConversion}>
-                  {damageChoice.damageType === "general"
-                    ? `Use ${damageChoice.originalDamageType} damage`
-                    : "Take as General Damage"}
-                </button>
-              </div>
-            )}
-            {damageChoice.adjustmentMode !== "increase" && damageChoice.postDamageEffects.length > 0 && (
-              <p className="damage-choice-hint">
-                After taking damage: {describePostDamageEffects(damageChoice.postDamageEffects)}.
-              </p>
-            )}
-            <p className="damage-choice-hint">
-              Use {damageChoice.adjustmentMode === "increase" ? "+" : "-"} to assign this change to a trait.
-            </p>
-            <div className="damage-choice-status">
-              <span>Assigned: {damageAllocated}</span>
-              <span>Remaining: {damageRemaining}</span>
-            </div>
-            <div className="damage-choice-list">
-              {damageChoice.allowedStats.map((stat) => {
-                const assigned = damageChoice.allocation[stat] || 0;
-                const currentIndex = currentPlayer.statIndex[stat];
-                const previewIndex = damagePreview[stat];
-                const maxIncrease = currentPlayer.character[stat].length - 1 - currentIndex;
-                const canAllocate =
-                  damageChoice.adjustmentMode === "increase"
-                    ? damageRemaining > 0 && assigned < maxIncrease
-                    : damageRemaining > 0 && assigned < currentIndex;
-                const canUndo = assigned > 0;
-                const minusDelta = damageChoice.adjustmentMode === "increase" ? -1 : 1;
-                const plusDelta = damageChoice.adjustmentMode === "increase" ? 1 : -1;
-                const minusEnabled = minusDelta > 0 ? canAllocate : canUndo;
-                const plusEnabled = plusDelta > 0 ? canAllocate : canUndo;
-
-                return (
-                  <div key={stat} className="damage-choice-row">
-                    <div className="damage-choice-stat">
-                      <div className="damage-choice-stat-header">
-                        <div className="damage-choice-stat-name">{STAT_LABELS[stat]}</div>
-                      </div>
-                      <div className="stat-track-numbers" aria-label={`${STAT_LABELS[stat]} track`}>
-                        {currentPlayer.character[stat].map((value, index) => (
-                          <div
-                            key={`${stat}-${index}`}
-                            className={[
-                              getStatTrackCellClass(index, currentIndex, previewIndex, damageChoice.adjustmentMode),
-                              index === CRITICAL_STAT_INDEX ? "stat-track-cell-critical" : "",
-                              value === 0 ? "stat-track-cell-zero" : "",
-                            ]
-                              .filter(Boolean)
-                              .join(" ")}
-                          >
-                            {formatStatTrackValue(value)}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="damage-choice-controls">
-                      <button
-                        className="btn btn-secondary damage-choice-button"
-                        onClick={() => handleAdjustDamageAllocation(stat, minusDelta)}
-                        disabled={!minusEnabled}
-                        aria-label={`- ${STAT_LABELS[stat]}`}
-                      >
-                        -
-                      </button>
-                      <div className="damage-choice-count">{assigned}</div>
-                      <button
-                        className="btn btn-primary damage-choice-button"
-                        onClick={() => handleAdjustDamageAllocation(stat, plusDelta)}
-                        disabled={!plusEnabled}
-                        aria-label={`+ ${STAT_LABELS[stat]}`}
-                      >
-                        +
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <button className="btn btn-primary" onClick={handleConfirmDamageChoice} disabled={!canConfirmDamageChoice}>
-              {damageChoice.adjustmentMode === "increase" ? "Apply gain" : "Apply damage"}
-            </button>
-          </div>
-        </div>
-      )}
+      <DamageChoiceOverlay
+        damageChoice={damageChoice}
+        currentPlayer={currentPlayer}
+        damageAllocated={damageAllocated}
+        damageRemaining={damageRemaining}
+        canConfirmDamageChoice={canConfirmDamageChoice}
+        damagePreview={damagePreview}
+        statLabels={STAT_LABELS}
+        criticalStatIndex={CRITICAL_STAT_INDEX}
+        formatStatTrackValue={formatStatTrackValue}
+        getStatTrackCellClass={getStatTrackCellClass}
+        formatSourceNames={formatSourceNames}
+        onToggleDamageConversion={handleToggleDamageConversion}
+        onAdjustDamageAllocation={handleAdjustDamageAllocation}
+        onConfirmDamageChoice={handleConfirmDamageChoice}
+      />
     </div>
   );
 }
