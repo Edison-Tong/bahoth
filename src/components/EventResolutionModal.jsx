@@ -163,9 +163,10 @@ export default function EventResolutionModal({
 
   return (
     <div className="card-overlay">
-      <div className="card-modal card-event-resolution">
+      <div className="card-modal card-event card-event-resolution">
         <div className="card-type-label">EVENT</div>
         <h2 className="card-name">{eventState.card.name}</h2>
+        <CardAbilityContent card={{ ...eventState.card, type: "event" }} />
         {eventState.summary && !eventState.lastRoll && <p className="card-description">{eventState.summary}</p>}
         {eventState.lastRoll && (
           <>
