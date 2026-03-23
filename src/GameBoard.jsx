@@ -1,8 +1,7 @@
 import { useState, useRef, useEffect } from "react";
-import { STARTING_TILES, createTileStack } from "./tiles";
-import { createEventDeck, createItemDeck, createOmenDeck } from "./cards";
-import { describeEventEffects, getEventRollButtonLabel } from "./events/eventUtils";
 import {
+  describeEventEffects,
+  getEventRollButtonLabel,
   applyTileEffectConsequences,
   createDiceModifier,
   createDamageChoice,
@@ -27,124 +26,43 @@ import {
   getDogTradeTargets,
   getDogMoveOptions,
   isItemAbilityTileChoiceAwaiting,
-} from "./events/eventActions";
-import { getMatchingOutcome } from "./events/eventEngine";
-import { useDrawnCardHandlers, useEventActionHandlers, useEventRuntimeEffects } from "./events/useEventHooks";
-import {
+  getMatchingOutcome,
+  useDrawnCardHandlers,
+  useEventActionHandlers,
+  useEventRuntimeEffects,
   resolveChooseViewedCardActiveAbilityValueState,
   resolveUseViewedCardActiveAbilityNowState,
-} from "./events/viewedCardAbilityController";
+} from "./events/eventDomain";
 import EventResolutionModal, {
   CardAbilityContent,
   DrawnCardModal,
   EventTileChoiceTargets,
 } from "./components/EventResolutionModal";
+import GameBoardActions from "./components/gameboard/GameBoardActions";
+import PlayerSidebar from "./components/gameboard/PlayerSidebar";
+import { applyDrawIdolEventCardState, getIdolChoiceStateForQueuedEvent, applySkipIdolEventCardState, resolveSpecialOmenNowAbilityState, getDogTradeUiState, isItemTradeLockedThisTurn } from "./omens/omenDomain";
+import { isEndTurnItemChoiceEffect, resolveEndTurnItemPassiveChoiceState, resolveEndTurnItemPassiveState, canUseArmedSkeletonKeyMovement, createSkeletonKeyResultTileEffect, isSkeletonKeyResultEffect, resolveSkeletonKeyResultAfterDismiss } from "./items/itemDomain";
+import { applyPlacedTileDiscoverEffects, getEndTurnTileAbilityState, resolveTileDiceAnimationState, resolveDismissTileEffectState, getCurrentPlayerTile, getCanUseMysticElevator, getCanUseSecretPassage, getSecretPassageTargets, getStairTargetState, getRollMysticElevatorState, resolveMysticElevatorResultState, getConnectedMoveTarget, resolveSecretPassageMoveState } from "./tiles/tileDomain";
+import { confirmMoveState, getValidMovesState, placePendingSpecialTileState, resolveKeyboardMoveAction, getPlacementOptionsState, resolveBacktrackActionState, resolveBoardMoveActionState, resolveChangeFloorActionState, resolveExploreActionState, resolveMovePlayerActionState, getLeaveMoveCostState, hasUnconfirmedMovePathState } from "./movement/movementDomain";
+import { adjustDamageAllocationChoiceState, applyDamageAllocationState, applyPostDamagePassiveEffectsState, applyStatChangeState, getDamagePreviewState, getStatTrackCellClassState, toggleDamageConversionChoiceState, getDamageChoiceSummary, getEndTurnPreviewPlayerName, getPlayersOnFloor, resolveConfirmDamageChoiceActionState, createLocalPlayerTradeState, getPlayerTradeTargetsOnTile, resolveBackToTradeMoveState, resolveConfirmTradeActionState, resolveMoveTradeTokenState, resolveStartTradeSelectionState, resolveToggleTradeOwnerGiveState, resolveToggleTradeOwnerGiveOmenState, resolveToggleTradeTargetGiveState, resolveToggleTradeTargetGiveOmenState, resolveEndTurnActionState, resolvePassTurnActionState, resolvePassTurnCoreActionState } from "./players/playerDomain";
 import {
-  applyDrawIdolEventCardState,
-  getIdolChoiceStateForQueuedEvent,
-  applySkipIdolEventCardState,
-} from "./omens/idolAbility";
-import { resolveSpecialOmenNowAbilityState } from "./omens/activeOmenNowAbility";
-import { getDogTradeUiState, isItemTradeLockedThisTurn } from "./omens/dogAbility";
-import {
-  isEndTurnItemChoiceEffect,
-  resolveEndTurnItemPassiveChoiceState,
-  resolveEndTurnItemPassiveState,
-} from "./items/turnStateItemAbility";
-import {
-  canUseArmedSkeletonKeyMovement,
-  createSkeletonKeyResultTileEffect,
-  isSkeletonKeyResultEffect,
-  resolveSkeletonKeyResultAfterDismiss,
-} from "./items/movementItemAbility";
-import { applyPlacedTileDiscoverEffects } from "./tiles/discoverTileAbility";
-import { getEndTurnTileAbilityState, resolveTileDiceAnimationState } from "./tiles/endTurnTileAbility";
-import { resolveDismissTileEffectState } from "./tiles/tileEffectFlow";
-import {
-  getCurrentPlayerTile,
-  getCanUseMysticElevator,
-  getCanUseSecretPassage,
-  getSecretPassageTargets,
-  getStairTargetState,
-} from "./tiles/tileSelectors";
-import { getRollMysticElevatorState, resolveMysticElevatorResultState } from "./tiles/mysticElevatorTileAbility";
-import { getConnectedMoveTarget, resolveSecretPassageMoveState } from "./tiles/tileTraversal";
-import { confirmMoveState, getValidMovesState, placePendingSpecialTileState } from "./movement/playerMovementState";
-import { resolveKeyboardMoveAction } from "./movement/movementInputState";
-import { getPlacementOptionsState } from "./movement/placementOptions";
-import {
-  resolveBacktrackActionState,
-  resolveBoardMoveActionState,
-  resolveChangeFloorActionState,
-  resolveExploreActionState,
-  resolveMovePlayerActionState,
-} from "./movement/movementControllerState";
-import { getLeaveMoveCostState, hasUnconfirmedMovePathState } from "./movement/movementSelectors";
-import {
-  adjustDamageAllocationChoiceState,
-  applyDamageAllocationState,
-  applyPostDamagePassiveEffectsState,
-  applyStatChangeState,
-  getDamagePreviewState,
-  getStatTrackCellClassState,
-  toggleDamageConversionChoiceState,
-} from "./players/playerState";
-import { getDamageChoiceSummary, getEndTurnPreviewPlayerName, getPlayersOnFloor } from "./players/playerSelectors";
-import { resolveConfirmDamageChoiceActionState } from "./players/damageChoiceControllerState";
-import {
-  createLocalPlayerTradeState,
-  getPlayerTradeTargetsOnTile,
-  resolveBackToTradeMoveState,
-  resolveConfirmTradeActionState,
-  resolveMoveTradeTokenState,
-  resolveStartTradeSelectionState,
-  resolveToggleTradeOwnerGiveState,
-  resolveToggleTradeOwnerGiveOmenState,
-  resolveToggleTradeTargetGiveState,
-  resolveToggleTradeTargetGiveOmenState,
-} from "./players/tradeControllerState";
-import {
-  resolveEndTurnActionState,
-  resolvePassTurnActionState,
-  resolvePassTurnCoreActionState,
-} from "./players/turnControllerState";
+  CRITICAL_STAT_INDEX,
+  DAMAGE_STATS,
+  DIR,
+  GAP,
+  initGameState,
+  isStickyMessageBubble,
+  OPPOSITE,
+  PLAYER_STAT_ORDER,
+  shouldShowMessageBubble,
+  STAT_ICONS,
+  STAT_LABELS,
+  TILE_SIZE,
+  createDrawnEventCard,
+  createDrawnItemCard,
+  createDrawnOmenCard,
+} from "./game/gameState";
 import "./GameBoard.css";
-
-// Direction offsets
-const DIR = {
-  N: { dx: 0, dy: -1 },
-  S: { dx: 0, dy: 1 },
-  E: { dx: 1, dy: 0 },
-  W: { dx: -1, dy: 0 },
-};
-
-const OPPOSITE = { N: "S", S: "N", E: "W", W: "E" };
-
-const DAMAGE_STATS = {
-  physical: ["might", "speed"],
-  mental: ["sanity", "knowledge"],
-  general: ["might", "speed", "sanity", "knowledge"],
-};
-
-const STAT_LABELS = {
-  might: "Might",
-  speed: "Speed",
-  sanity: "Sanity",
-  knowledge: "Knowledge",
-};
-
-const STAT_ICONS = {
-  might: "💪",
-  speed: "🏃",
-  sanity: "🧠",
-  knowledge: "📖",
-};
-
-const PLAYER_STAT_ORDER = ["might", "speed", "sanity", "knowledge"];
-const CRITICAL_STAT_INDEX = 1;
-
-const TILE_SIZE = 100;
-const GAP = 4;
 
 function describePostDamageEffects(effects) {
   if (!effects || effects.length === 0) return "";
@@ -178,108 +96,6 @@ function DiceRow({ dice, modifier = null, rolling = false }) {
   );
 }
 
-// Initialize game state from players
-function initGameState(players) {
-  const tileStack = createTileStack();
-  const itemDeck = createItemDeck();
-  const omenDeck = createOmenDeck();
-  const eventDeck = createEventDeck();
-
-  // Ground floor starts with 3 tiles in a vertical line:
-  // Entrance Hall (0,0) — Hallway (0,-1) — Grand Staircase (0,-2)
-  const entrance = { ...STARTING_TILES[0], x: 0, y: 0, floor: "ground" };
-  const hallway = { ...STARTING_TILES[1], x: 0, y: -1, floor: "ground" };
-  const grandStaircase = { ...STARTING_TILES[2], x: 0, y: -2, floor: "ground" };
-  const upperLanding = { ...STARTING_TILES[3], x: 0, y: 0, floor: "upper" };
-  const basementLanding = { ...STARTING_TILES[4], x: 0, y: 0, floor: "basement" };
-
-  return {
-    players: players.map((p, i) => {
-      const speed = p.character.speed[p.character.startIndex.speed];
-      return {
-        ...p,
-        index: i,
-        x: 0,
-        y: 0,
-        floor: "ground",
-        movesLeft: i === 0 ? speed : 0,
-        statIndex: { ...p.character.startIndex },
-        inventory: [],
-        omens: [],
-        isAlive: true,
-      };
-    }),
-    board: {
-      ground: [entrance, hallway, grandStaircase],
-      upper: [upperLanding],
-      basement: [basementLanding],
-    },
-    tileStack,
-    itemDeck,
-    omenDeck,
-    eventDeck,
-    currentPlayerIndex: 0,
-    turnPhase: "move",
-    movePath: [{ x: 0, y: 0, floor: "ground", cost: 0 }],
-    pendingExplore: null,
-    pendingSpecialPlacement: null,
-    mysticElevatorReady: false,
-    mysticElevatorUsed: false,
-    omenCount: 0,
-    hauntTriggered: false,
-    drawnCard: null,
-    hauntRoll: null,
-    tileEffect: null,
-    damageChoice: null,
-    rabbitFootPendingReroll: null,
-    skeletonKeyArmed: false,
-    extraTurnAfterCurrent: false,
-    eventState: null,
-    turnNumber: 1,
-    message: `${players[0].name}'s turn — ${players[0].character.speed[players[0].character.startIndex.speed]} moves`,
-  };
-}
-
-function createDrawnItemCard(card) {
-  return {
-    type: "item",
-    ...card,
-  };
-}
-
-function createDrawnOmenCard(card) {
-  return {
-    type: "omen",
-    ...card,
-  };
-}
-
-function createDrawnEventCard(card) {
-  return {
-    type: "event",
-    ...card,
-  };
-}
-
-function shouldShowMessageBubble(message) {
-  if (!message || !String(message).trim()) return false;
-
-  // Suppress routine movement/status chatter so the bubble only appears for notable moments.
-  const routinePatterns = [
-    /\bmove(?:d|s)?\b/i,
-    /\bmoves left\b/i,
-    /\bno moves left\b/i,
-    /rotate the tile, then place it/i,
-    /turn\s*[-\u2014]/i,
-  ];
-
-  return !routinePatterns.some((pattern) => pattern.test(message));
-}
-
-function isStickyMessageBubble(message) {
-  if (!message || !String(message).trim()) return false;
-  return /^Now moving\b/i.test(String(message).trim());
-}
 
 export default function GameBoard({ players, onQuit }) {
   const [game, setGame] = useState(() => initGameState(players));
@@ -1541,242 +1357,49 @@ export default function GameBoard({ players, onQuit }) {
         </div>
       </div>
 
-      {/* Action buttons */}
-      <div className="game-actions">
-        {eventState?.awaiting?.type === "tile-choice" && (
-          <button
-            className="btn btn-confirm"
-            onClick={handleConfirmEventTileChoice}
-            disabled={!selectedEventTileChoiceId}
-          >
-            Confirm Placement
-          </button>
-        )}
-        {!tradeState && game.turnPhase === "move" && game.movePath.length > 1 && (
-          <button className="btn btn-confirm" onClick={handleConfirmMove}>
-            Move Here
-          </button>
-        )}
-        {!tradeState && stairTarget && (
-          <button className="btn btn-stairs" onClick={handleChangeFloor}>
-            {stairIsBacktrack ? `Go back to ${stairTarget.name}` : `Move to ${stairTarget.name}`}
-          </button>
-        )}
-        {!tradeState && canUseMysticElevator && (
-          <button className="btn btn-stairs" onClick={handleRollMysticElevator}>
-            Use Elevator
-          </button>
-        )}
-        {!tradeState &&
-          canUseSecretPassage &&
-          secretPassageTargets.map((target) => (
-            <button
-              key={`secret-passage-${target.floor}-${target.x}-${target.y}`}
-              className="btn btn-stairs"
-              onClick={() => handleUseSecretPassage(target)}
-              disabled={currentPlayer.movesLeft < 1}
-            >
-              {`Move to ${target.name} (${target.floor})`}
-            </button>
-          ))}
-        {game.turnPhase === "rotate" && (
-          <>
-            <button className="btn btn-rotate" onClick={() => handleRotateTile(-1)}>
-              ↺ Rotate Left
-            </button>
-            <button className="btn btn-confirm" onClick={handlePlaceTile}>
-              Place Tile
-            </button>
-            <button className="btn btn-rotate" onClick={() => handleRotateTile(1)}>
-              Rotate Right ↻
-            </button>
-          </>
-        )}
-        {(game.turnPhase === "endTurn" || game.turnPhase === "move") &&
-          !game.pendingExplore &&
-          !tradeState &&
-          !isItemAbilityTileChoiceAwaiting(eventState) && (
-            <button className="btn btn-primary" onClick={handleEndTurn}>
-              End Turn — Pass to {endTurnPreviewPlayerName}
-            </button>
-          )}
+      <GameBoardActions
+        eventState={eventState}
+        selectedEventTileChoiceId={selectedEventTileChoiceId}
+        handleConfirmEventTileChoice={handleConfirmEventTileChoice}
+        tradeState={tradeState}
+        game={game}
+        handleConfirmMove={handleConfirmMove}
+        stairTarget={stairTarget}
+        stairIsBacktrack={stairIsBacktrack}
+        handleChangeFloor={handleChangeFloor}
+        canUseMysticElevator={canUseMysticElevator}
+        handleRollMysticElevator={handleRollMysticElevator}
+        canUseSecretPassage={canUseSecretPassage}
+        secretPassageTargets={secretPassageTargets}
+        handleUseSecretPassage={handleUseSecretPassage}
+        currentPlayer={currentPlayer}
+        handleRotateTile={handleRotateTile}
+        handlePlaceTile={handlePlaceTile}
+        isItemAbilityTileChoiceAwaiting={isItemAbilityTileChoiceAwaiting}
+        endTurnPreviewPlayerName={endTurnPreviewPlayerName}
+        handleEndTurn={handleEndTurn}
+        playerTradeTargetsOnTile={playerTradeTargetsOnTile}
+        handleStartPlayerTrade={handleStartPlayerTrade}
+        dogStairMoveOption={dogStairMoveOption}
+        handleMoveDogToken={handleMoveDogToken}
+        dogStairDestination={dogStairDestination}
+        dogTradeTargetsOnTile={dogTradeTargetsOnTile}
+        handleStartDogTrade={handleStartDogTrade}
+        handleCancelDogTrade={handleCancelDogTrade}
+      />
 
-        {!tradeState &&
-          game.turnPhase === "move" &&
-          !game.pendingExplore &&
-          !isItemAbilityTileChoiceAwaiting(eventState) &&
-          playerTradeTargetsOnTile.length > 0 &&
-          playerTradeTargetsOnTile.map(({ player, playerIndex }) => (
-            <button
-              key={`player-trade-start-${playerIndex}`}
-              className="btn btn-primary"
-              onClick={() => handleStartPlayerTrade(playerIndex)}
-            >
-              Trade with {player.name}
-            </button>
-          ))}
-
-        {tradeState?.phase === "move" && (
-          <>
-            <button className="btn btn-secondary" disabled>
-              Dog moves left: {tradeState.movesLeft}
-            </button>
-            {dogStairMoveOption && (
-              <button className="btn btn-stairs" onClick={() => handleMoveDogToken(dogStairMoveOption)}>
-                Move Dog to {dogStairDestination?.name || "connected tile"} ({dogStairMoveOption.floor})
-              </button>
-            )}
-            {dogTradeTargetsOnTile.map(({ player, playerIndex }) => (
-              <button
-                key={`dog-trade-start-${playerIndex}`}
-                className="btn btn-primary"
-                onClick={() => handleStartDogTrade(playerIndex)}
-              >
-                Trade with {player.name}
-              </button>
-            ))}
-            <button className="btn btn-secondary" onClick={handleCancelDogTrade}>
-              Cancel Dog Ability
-            </button>
-          </>
-        )}
-      </div>
-
-      {/* Player sidebar */}
-      <div className="player-sidebar">
-        {game.players.map((p, i) => {
-          const isCurrent = i === game.currentPlayerIndex;
-          const isExpanded = isCurrent || expandedSidebarPlayers.has(i);
-          return (
-            <div
-              key={i}
-              className={`sidebar-player ${isCurrent ? "sidebar-current" : ""} ${isExpanded ? "sidebar-expanded" : "sidebar-collapsed"} ${!p.isAlive ? "sidebar-dead" : ""}`}
-              style={{ borderColor: isCurrent ? p.color : "transparent" }}
-            >
-              <button className="sidebar-header" onClick={() => toggleSidebarPlayer(i)} type="button">
-                <div className="sidebar-name" style={{ color: p.color }}>
-                  {p.name} {isCurrent && "◄"}
-                </div>
-                <span className={`sidebar-toggle ${isExpanded ? "sidebar-toggle-expanded" : ""}`} aria-hidden="true">
-                  ▾
-                </span>
-              </button>
-              <div className="sidebar-char">{p.character.name}</div>
-              {!isExpanded && (
-                <div className="sidebar-stats-summary">
-                  {PLAYER_STAT_ORDER.map((stat) => (
-                    <span key={`${p.name}-${stat}-summary`} className="sidebar-stats-summary-item">
-                      <span>{STAT_ICONS[stat]}</span>
-                      <span>{formatStatTrackValue(p.character[stat][p.statIndex[stat]])}</span>
-                    </span>
-                  ))}
-                </div>
-              )}
-              <div className={`sidebar-stats ${isExpanded ? "sidebar-stats-expanded" : "sidebar-stats-collapsed"}`}>
-                {PLAYER_STAT_ORDER.map((stat) => (
-                  <div key={`${p.name}-${stat}`} className="sidebar-stat-row">
-                    <div className="sidebar-stat-label">
-                      <span>{STAT_ICONS[stat]}</span>
-                      <span>{STAT_LABELS[stat]}</span>
-                    </div>
-                    <div className="sidebar-stat-track" aria-label={`${p.name} ${STAT_LABELS[stat]} track`}>
-                      {p.character[stat].map((value, index) => (
-                        <div
-                          key={`${p.name}-${stat}-${index}`}
-                          className={[
-                            "sidebar-stat-cell",
-                            index === p.statIndex[stat] ? "sidebar-stat-cell-current" : "",
-                            index === p.character.startIndex[stat] ? "sidebar-stat-cell-start" : "",
-                            index === CRITICAL_STAT_INDEX ? "sidebar-stat-cell-critical" : "",
-                            value === 0 ? "sidebar-stat-cell-zero" : "",
-                          ]
-                            .filter(Boolean)
-                            .join(" ")}
-                        >
-                          {formatStatTrackValue(value)}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-                <div className="sidebar-card-groups">
-                  <div className="sidebar-card-group">
-                    <div className="sidebar-card-group-header">
-                      <span>Items</span>
-                      <span>{p.inventory.length}</span>
-                    </div>
-                    {p.inventory.length > 0 ? (
-                      <div className="sidebar-card-list">
-                        {p.inventory.map((card, cardIndex) => (
-                          <button
-                            key={`${p.name}-item-${card.id}-${cardIndex}`}
-                            type="button"
-                            className="sidebar-card-chip sidebar-card-chip-item"
-                            onClick={() =>
-                              handleViewOwnedCard(
-                                {
-                                  ...card,
-                                  ownerCollection: "inventory",
-                                  ownerCardIndex: cardIndex,
-                                },
-                                p.name,
-                                i,
-                                "inventory",
-                                cardIndex
-                              )
-                            }
-                          >
-                            {card.name}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="sidebar-card-empty">No items</div>
-                    )}
-                  </div>
-                  <div className="sidebar-card-group">
-                    <div className="sidebar-card-group-header">
-                      <span>Omens</span>
-                      <span>{p.omens.length}</span>
-                    </div>
-                    {p.omens.length > 0 ? (
-                      <div className="sidebar-card-list">
-                        {p.omens.map((card, cardIndex) => (
-                          <button
-                            key={`${p.name}-omen-${card.id}-${cardIndex}`}
-                            type="button"
-                            className="sidebar-card-chip sidebar-card-chip-omen"
-                            onClick={() =>
-                              handleViewOwnedCard(
-                                {
-                                  ...card,
-                                  ownerCollection: "omens",
-                                  ownerCardIndex: cardIndex,
-                                },
-                                p.name,
-                                i,
-                                "omens",
-                                cardIndex
-                              )
-                            }
-                          >
-                            {card.name}
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="sidebar-card-empty">No omens</div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-        <button className="btn btn-danger sidebar-quit" onClick={onQuit}>
-          Quit Game
-        </button>
-      </div>
+      <PlayerSidebar
+        game={game}
+        expandedSidebarPlayers={expandedSidebarPlayers}
+        toggleSidebarPlayer={toggleSidebarPlayer}
+        PLAYER_STAT_ORDER={PLAYER_STAT_ORDER}
+        STAT_ICONS={STAT_ICONS}
+        STAT_LABELS={STAT_LABELS}
+        CRITICAL_STAT_INDEX={CRITICAL_STAT_INDEX}
+        formatStatTrackValue={formatStatTrackValue}
+        handleViewOwnedCard={handleViewOwnedCard}
+        onQuit={onQuit}
+      />
 
       <DrawnCardModal
         drawnCard={game.drawnCard}
