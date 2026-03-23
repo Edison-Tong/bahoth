@@ -63,6 +63,16 @@ import {
   isSkeletonKeyResultEffect,
   resolveSkeletonKeyResultAfterDismiss,
 } from "./items/movementItemAbility";
+import { applyPlacedTileDiscoverEffects } from "./tiles/discoverTileAbility";
+import { getEndTurnTileAbilityState, resolveTileDiceAnimationState } from "./tiles/endTurnTileAbility";
+import {
+  getCurrentPlayerTile,
+  getCanUseMysticElevator,
+  getCanUseSecretPassage,
+  getSecretPassageTargets,
+  getStairTargetState,
+} from "./tiles/tileSelectors";
+import { getConnectedMoveTarget, resolveSecretPassageMoveState } from "./tiles/tileTraversal";
 import "./GameBoard.css";
 
 // Direction offsets
@@ -343,106 +353,17 @@ export default function GameBoard({ players, onQuit }) {
       ) {
         setGame((g) => resolveEventAnimationSettlement(g, da).game);
         setDiceAnimation(null);
-      } else if (da.purpose === "collapsed") {
-        setGame((g) => {
-          const total = da.resolvedTotal ?? baseTotal;
-          const collapsed = total < 5;
-          const diceModifier = da.modifier || null;
-
-          if (collapsed) {
-            return {
-              ...g,
-              tileEffect: {
-                type: "collapsed-pending",
-                tileName: da.tileName,
-                dice: da.final,
-                diceModifier,
-                total,
-                message: `The floor gives way! Rolled ${total} (needed 5+). Press Roll to roll for damage.`,
-              },
-            };
-          }
-
-          return {
-            ...g,
-            tileEffect: {
-              type: "collapsed",
-              tileName: da.tileName,
-              dice: da.final,
-              diceModifier,
-              total,
-              collapsed: false,
-              damageDice: [],
-              damage: 0,
-              message: `The floor holds! Rolled ${total} (needed 5+). Safe!`,
-            },
-          };
-        });
-      } else if (da.purpose === "collapsed-damage") {
-        setGame((g) => {
-          const player = g.players[da.playerIndex ?? g.currentPlayerIndex];
-          const baseDamage = da.final[0];
-          const damageReduction = getDamageReduction(player, "physical");
-          const damage = Math.max(0, baseDamage - damageReduction.amount);
-          const damageDiceModifier = createDiceModifier({
-            amount: damageReduction.amount,
-            sourceNames: damageReduction.sourceNames,
-            sign: "-",
-            labelPrefix: "blocked by",
-          });
-
-          return {
-            ...g,
-            tileEffect: {
-              type: "collapsed",
-              tileName: da.tileName,
-              dice: da.firstDice,
-              total: da.firstTotal,
-              collapsed: true,
-              damageType: "physical",
-              damageDice: da.final,
-              damageDiceModifier,
-              damage,
-              damageResolved: true,
-              message:
-                damage > 0
-                  ? `The floor gives way! Rolled ${da.firstTotal} (needed 5+). Fall to Basement Landing and take ${damage} physical damage.`
-                  : `The floor gives way! Rolled ${da.firstTotal} (needed 5+). Fall to Basement Landing, but the damage is reduced to 0.`,
-            },
-          };
-        });
-      } else if (da.purpose === "furnace") {
-        setGame((g) => {
-          const player = g.players[da.playerIndex ?? g.currentPlayerIndex];
-          const baseDamage = da.final[0];
-          const damageReduction = getDamageReduction(player, "physical");
-          const damage = Math.max(0, baseDamage - damageReduction.amount);
-          const diceModifier = createDiceModifier({
-            amount: damageReduction.amount,
-            sourceNames: damageReduction.sourceNames,
-            sign: "-",
-            labelPrefix: "blocked by",
-          });
-
-          return {
-            ...g,
-            tileEffect: {
-              type: "furnace",
-              tileName: da.tileName,
-              dice: da.final,
-              diceModifier,
-              damageType: "physical",
-              damage,
-              damageResolved: true,
-              message:
-                damage > 0
-                  ? `The furnace burns! Take ${damage} physical damage.`
-                  : baseDamage > 0 && damageReduction.amount > 0
-                    ? `The furnace burns, but the damage is reduced to 0.`
-                    : "The furnace sputters — no damage!",
-            },
-          };
-        });
+      } else if (da.purpose === "collapsed" || da.purpose === "collapsed-damage" || da.purpose === "furnace") {
+        setGame(
+          (g) =>
+            resolveTileDiceAnimationState({
+              game: g,
+              animation: da,
+              baseTotal,
+              getDamageReduction,
+              createDiceModifier,
+            }) || g
+        );
       } else if (da.purpose === "mystic-elevator") {
         setGame((g) => {
           const player = g.players[g.currentPlayerIndex];
@@ -672,38 +593,6 @@ export default function GameBoard({ players, onQuit }) {
     }
 
     return placements;
-  }
-
-  function getConnectedMoveTarget(board, currentTile, path) {
-    if (!currentTile) return null;
-
-    const prev = path.length >= 2 ? path[path.length - 2] : null;
-
-    if (currentTile.connectsTo) {
-      for (const floor of ["ground", "upper", "basement"]) {
-        const found = board[floor]?.find((tile) => tile.id === currentTile.connectsTo);
-        if (found) {
-          return {
-            targetTile: found,
-            targetFloor: floor,
-            isBacktrack: Boolean(prev && prev.x === found.x && prev.y === found.y && prev.floor === floor),
-          };
-        }
-      }
-    }
-
-    if (prev) {
-      const previousTile = board[prev.floor]?.find((tile) => tile.x === prev.x && tile.y === prev.y);
-      if (previousTile?.connectsTo === currentTile.id) {
-        return {
-          targetTile: previousTile,
-          targetFloor: prev.floor,
-          isBacktrack: true,
-        };
-      }
-    }
-
-    return null;
   }
 
   // Get valid move directions from current tile
@@ -1052,162 +941,33 @@ export default function GameBoard({ players, onQuit }) {
           message += ` ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`;
         }
 
-        if (placedTile.discoverEffect === "junk-room") {
-          nextBoard = {
-            ...nextBoard,
-            [pe.floor]: nextBoard[pe.floor].map((tile) =>
-              tile.x === placedTile.x && tile.y === placedTile.y ? { ...tile, obstacle: true } : tile
-            ),
-          };
-
-          const junkMessage = `${p.name} places an obstacle token in the Junk Room.`;
-          tileEffect = {
-            type: "junk-room",
-            tileName: placedTile.name,
-            message: junkMessage,
-            queuedCard: drawnCard,
-            nextTurnPhase: drawnCard ? "card" : "move",
-            nextMessage: drawnCard
-              ? `${junkMessage} ${drawnCard.type.toUpperCase()} card appears...`
-              : `${junkMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
-          };
-
-          drawnCard = null;
-          turnPhase = "card";
-          message = junkMessage;
-        }
-
-        if (placedTile.discoverEffect === "panic-room") {
-          const secretAlreadyPlaced = Object.values(nextBoard).some((tiles) =>
-            tiles.some((tile) => tile.id === "secret-staircase")
-          );
-          const secretIndex = nextStack.findIndex((tile) => tile.id === "secret-staircase");
-
-          let panicMessage = "";
-          if (!secretAlreadyPlaced && secretIndex !== -1) {
-            const secretTile = nextStack[secretIndex];
-            const placements = getPlacementOptions(nextBoard, secretTile);
-
-            if (placements.length > 0) {
-              nextStack = [...nextStack];
-              nextStack.splice(secretIndex, 1);
-              panicMessage = `${p.name} reveals the Secret Staircase. Choose any open doorway to place it.`;
-
-              tileEffect = {
-                type: "panic-room",
-                tileName: placedTile.name,
-                message: `${panicMessage} The tile stack is shuffled.`,
-                queuedCard: drawnCard,
-                nextTurnPhase: "special-place",
-                nextMessage: "Place the Secret Staircase on any open doorway.",
-                pendingSpecialPlacement: {
-                  tile: secretTile,
-                  placements,
-                  queuedCard: drawnCard,
-                  nextTurnPhase: drawnCard ? "card" : "move",
-                  nextMessage: drawnCard
-                    ? `${p.name} placed the Secret Staircase. An omen card appears...`
-                    : `${p.name} placed the Secret Staircase. ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
-                },
-              };
-            } else {
-              panicMessage = `${p.name} found the Secret Staircase, but there was nowhere to place it.`;
-
-              tileEffect = {
-                type: "panic-room",
-                tileName: placedTile.name,
-                message: `${panicMessage} The tile stack is shuffled.`,
-                queuedCard: drawnCard,
-                nextTurnPhase: drawnCard ? "card" : "move",
-                nextMessage: drawnCard
-                  ? `${panicMessage} An omen card appears...`
-                  : `${panicMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
-              };
-            }
-          } else {
-            panicMessage = "The Secret Staircase is already in play.";
-
-            tileEffect = {
-              type: "panic-room",
-              tileName: placedTile.name,
-              message: `${panicMessage} The tile stack is shuffled.`,
-              queuedCard: drawnCard,
-              nextTurnPhase: drawnCard ? "card" : "move",
-              nextMessage: drawnCard
-                ? `${panicMessage} An omen card appears...`
-                : `${panicMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
-            };
-          }
-
-          nextStack = [...nextStack].sort(() => Math.random() - 0.5);
-          drawnCard = null;
-          turnPhase = tileEffect?.nextTurnPhase || "card";
-          message = panicMessage;
-        }
-
-        if (placedTile.discoverEffect === "armory") {
-          const { weaponCard, remainingDeck } = drawWeaponItem(nextItemDeck);
-          nextItemDeck = remainingDeck;
-
-          const armoryMessage = weaponCard
-            ? `${p.name} searched the Armory and found ${weaponCard.name}.`
-            : `${p.name} searched the Armory but found no weapon.`;
-
-          tileEffect = {
-            type: "armory",
-            tileName: placedTile.name,
-            message: armoryMessage,
-            queuedCard: weaponCard ? createDrawnItemCard(weaponCard) : null,
-            nextTurnPhase: weaponCard ? "card" : "move",
-            nextMessage: weaponCard
-              ? `${armoryMessage} A weapon item is taken.`
-              : `${armoryMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
-          };
-
-          drawnCard = null;
-          turnPhase = weaponCard ? "card" : "move";
-          message = armoryMessage;
-        }
-
-        const enableMysticElevator = placedTile.enterEffect === "mystic-elevator" && !g.mysticElevatorUsed;
-        if (enableMysticElevator) {
-          tileEffect = null;
-          turnPhase = "move";
-          message = `${p.name} placed Mystic Elevator! Use Elevator to roll 2 dice.`;
-        }
-
-        if (placedTile.discoverGain) {
-          const { stat, amount } = placedTile.discoverGain;
-          const currentIndex = p.statIndex[stat];
-          const maxIndex = p.character[stat].length - 1;
-          const appliedAmount = Math.min(amount, maxIndex - currentIndex);
-
-          nextPlayers = applyStatChange(nextPlayers, g.currentPlayerIndex, stat, appliedAmount);
-
-          const nextValue =
-            nextPlayers[g.currentPlayerIndex].character[stat][nextPlayers[g.currentPlayerIndex].statIndex[stat]];
-          const gainMessage =
-            appliedAmount > 0
-              ? `${p.name} gains ${appliedAmount} ${STAT_LABELS[stat]} from ${placedTile.name}. ${STAT_LABELS[stat]} is now ${nextValue}.`
-              : `${p.name} cannot gain more ${STAT_LABELS[stat]} from ${placedTile.name}.`;
-
-          tileEffect = {
-            type: "discover-gain",
-            tileName: placedTile.name,
-            gainStat: stat,
-            gainAmount: appliedAmount,
-            message: gainMessage,
-            queuedCard: drawnCard,
-            nextTurnPhase: drawnCard ? "card" : "move",
-            nextMessage: drawnCard
-              ? `${gainMessage} ${drawnCard.type.toUpperCase()} card appears...`
-              : `${gainMessage} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
-          };
-
-          drawnCard = null;
-          turnPhase = "card";
-          message = gainMessage;
-        }
+        const discoverResolution = applyPlacedTileDiscoverEffects({
+          placedTile,
+          player: p,
+          currentPlayerIndex: g.currentPlayerIndex,
+          board: nextBoard,
+          tileStack: nextStack,
+          itemDeck: nextItemDeck,
+          players: nextPlayers,
+          drawnCard,
+          turnPhase,
+          message,
+          tileEffect,
+          mysticElevatorUsed: g.mysticElevatorUsed,
+          getPlacementOptions,
+          createDrawnItemCard,
+          applyStatChange,
+          statLabels: STAT_LABELS,
+        });
+        nextBoard = discoverResolution.board;
+        nextStack = discoverResolution.tileStack;
+        nextItemDeck = discoverResolution.itemDeck;
+        nextPlayers = discoverResolution.players;
+        drawnCard = discoverResolution.drawnCard;
+        turnPhase = discoverResolution.turnPhase;
+        message = discoverResolution.message;
+        tileEffect = discoverResolution.tileEffect;
+        const enableMysticElevator = discoverResolution.enableMysticElevator;
 
         const idolOfferState = getIdolChoiceStateForQueuedEvent({
           player: nextPlayers[g.currentPlayerIndex],
@@ -1317,62 +1077,7 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleUseSecretPassage(target) {
-    setGame((g) => {
-      const player = g.players[g.currentPlayerIndex];
-      if (g.turnPhase !== "move") return g;
-
-      const currentTile = g.board[player.floor]?.find((tile) => tile.x === player.x && tile.y === player.y);
-      const isOnSecretPassage = (currentTile?.tokens || []).some((token) => token.type === "secret-passage");
-      if (!isOnSecretPassage) return g;
-
-      const destinationTile = getTileAtPosition(g.board, target.x, target.y, target.floor);
-      const destinationHasPassage = (destinationTile?.tokens || []).some((token) => token.type === "secret-passage");
-      if (!destinationTile || !destinationHasPassage) return g;
-
-      const path = g.movePath || [];
-      const previousStep = path.length >= 2 ? path[path.length - 2] : null;
-      const isBacktrack =
-        previousStep &&
-        previousStep.x === target.x &&
-        previousStep.y === target.y &&
-        previousStep.floor === target.floor;
-
-      if (isBacktrack) {
-        const lastStep = path[path.length - 1];
-        const refundedMoves = player.movesLeft + (lastStep?.cost ?? 1);
-        const updatedPlayers = g.players.map((current, index) =>
-          index === g.currentPlayerIndex
-            ? { ...current, x: target.x, y: target.y, floor: target.floor, movesLeft: refundedMoves }
-            : current
-        );
-
-        return {
-          ...g,
-          players: updatedPlayers,
-          movePath: path.slice(0, -1),
-          message: `${player.name} backtracks through the Secret Passage to ${destinationTile.name} — ${refundedMoves} move${refundedMoves !== 1 ? "s" : ""} left`,
-        };
-      }
-
-      if (player.movesLeft < 1) return g;
-
-      const movesLeft = player.movesLeft - 1;
-      const updatedPlayers = g.players.map((current, index) =>
-        index === g.currentPlayerIndex
-          ? { ...current, x: target.x, y: target.y, floor: target.floor, movesLeft }
-          : current
-      );
-
-      return {
-        ...g,
-        players: updatedPlayers,
-        movePath: [...g.movePath, { x: target.x, y: target.y, floor: target.floor, cost: 1 }],
-        message:
-          movesLeft > 0
-            ? `${player.name} uses a Secret Passage to ${destinationTile.name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`
-            : `${player.name} uses a Secret Passage to ${destinationTile.name} — no moves left`,
-      };
-    });
+    setGame((g) => resolveSecretPassageMoveState({ game: g, target, getTileAtPosition }));
     setCameraFloor(target.floor);
   }
 
@@ -1386,57 +1091,21 @@ export default function GameBoard({ players, onQuit }) {
       const p = g.players[g.currentPlayerIndex];
       const tile = g.board[p.floor]?.find((t) => t.x === p.x && t.y === p.y);
 
-      // Check for end-of-turn tile effects
-      if (tile?.endOfTurn && !g.tileEffect) {
-        if (tile.endOfTurn === "furnace") {
-          const finalDice = rollDice(1);
-          const damageReduction = getDamageReduction(p, "physical");
-          setDiceAnimation({
-            purpose: "furnace",
-            final: finalDice,
-            display: Array.from({ length: 1 }, () => Math.floor(Math.random() * 3)),
-            tileName: tile.name,
-            playerIndex: g.currentPlayerIndex,
-            modifier: createDiceModifier({
-              amount: damageReduction.amount,
-              sourceNames: damageReduction.sourceNames,
-              sign: "-",
-              labelPrefix: "blocked by",
-            }),
-            settled: false,
-          });
-          return { ...g, message: `${tile.name} — rolling for damage...` };
+      const endTurnTileState = getEndTurnTileAbilityState({
+        game: g,
+        player: p,
+        tile,
+        currentPlayerIndex: g.currentPlayerIndex,
+        rollDice,
+        resolveTraitRoll,
+        getDamageReduction,
+        createDiceModifier,
+      });
+      if (endTurnTileState) {
+        if (endTurnTileState.diceAnimation) {
+          setDiceAnimation(endTurnTileState.diceAnimation);
         }
-        if (tile.endOfTurn === "collapsed") {
-          const speedVal = p.character.speed[p.statIndex.speed];
-          const roll = resolveTraitRoll(p, {
-            stat: "speed",
-            baseDiceCount: speedVal,
-            context: "end-of-turn",
-            board: g.board,
-          });
-          setDiceAnimation({
-            purpose: "collapsed",
-            final: roll.dice,
-            display: Array.from({ length: roll.dice.length }, () => Math.floor(Math.random() * 3)),
-            tileName: tile.name,
-            playerIndex: g.currentPlayerIndex,
-            modifier: roll.modifier,
-            resolvedTotal: roll.total,
-            settled: false,
-          });
-          return { ...g, message: `${tile.name} — rolling for stability...` };
-        }
-        if (tile.endOfTurn === "laundry-chute") {
-          return {
-            ...g,
-            tileEffect: {
-              type: "laundry-chute",
-              tileName: tile.name,
-              message: "You slide down the laundry chute to the Basement Landing!",
-            },
-          };
-        }
+        return endTurnTileState.game;
       }
 
       return passTurn(g);
@@ -1456,23 +1125,6 @@ export default function GameBoard({ players, onQuit }) {
 
       return { ...pl, statIndex: newStatIndex, isAlive };
     });
-  }
-
-  function drawWeaponItem(itemDeck) {
-    const weaponIndex = itemDeck.findIndex((card) => card.isWeapon);
-    if (weaponIndex === -1) {
-      return {
-        weaponCard: null,
-        remainingDeck: [...itemDeck],
-      };
-    }
-
-    const remainingDeck = [...itemDeck];
-    const [weaponCard] = remainingDeck.splice(weaponIndex, 1);
-    return {
-      weaponCard,
-      remainingDeck,
-    };
   }
 
   function applyDamageAllocation(players, playerIndex, allocation, adjustmentMode = "decrease") {
@@ -2228,43 +1880,19 @@ export default function GameBoard({ players, onQuit }) {
   const damagePreview = damageChoice ? getDamagePreview(currentPlayer, damageChoice) : null;
 
   // Check if current player is on a staircase tile
-  const currentTileObj = game.board[currentPlayer.floor]?.find(
-    (t) => t.x === currentPlayer.x && t.y === currentPlayer.y
-  );
-  const canUseMysticElevator =
-    game.turnPhase === "move" &&
-    !game.pendingExplore &&
-    !game.pendingSpecialPlacement &&
-    !game.tileEffect &&
-    !isItemAbilityTileChoiceActive &&
-    !game.drawnCard &&
-    !diceAnimation &&
-    currentTileObj?.id === "mystic-elevator" &&
-    game.mysticElevatorReady &&
-    !game.mysticElevatorUsed;
-  const secretPassageTargets =
-    game.turnPhase === "move" &&
-    !game.pendingExplore &&
-    !game.pendingSpecialPlacement &&
-    !game.tileEffect &&
-    !isItemAbilityTileChoiceActive
-      ? Object.entries(game.board)
-          .flatMap(([floor, tiles]) =>
-            tiles
-              .filter((tile) => (tile.tokens || []).some((token) => token.type === "secret-passage"))
-              .map((tile) => ({
-                floor,
-                x: tile.x,
-                y: tile.y,
-                name: tile.name,
-              }))
-          )
-          .filter(
-            (tile) => !(tile.floor === currentPlayer.floor && tile.x === currentPlayer.x && tile.y === currentPlayer.y)
-          )
-      : [];
-  const isOnSecretPassageTile = (currentTileObj?.tokens || []).some((token) => token.type === "secret-passage");
-  const canUseSecretPassage = isOnSecretPassageTile && secretPassageTargets.length > 0;
+  const currentTileObj = getCurrentPlayerTile(game.board, currentPlayer);
+  const canUseMysticElevator = getCanUseMysticElevator({
+    game,
+    currentTile: currentTileObj,
+    isItemAbilityTileChoiceActive,
+    diceAnimation,
+  });
+  const secretPassageTargets = getSecretPassageTargets({
+    game,
+    currentPlayer,
+    isItemAbilityTileChoiceActive,
+  });
+  const canUseSecretPassage = getCanUseSecretPassage(currentTileObj, secretPassageTargets);
   const endTurnPreviewPlayerName = (() => {
     if (game.extraTurnAfterCurrent && currentPlayer.isAlive) {
       return `${currentPlayer.name} (extra turn)`;
@@ -2279,18 +1907,15 @@ export default function GameBoard({ players, onQuit }) {
 
     return game.players[next]?.name || currentPlayer.name;
   })();
-  let stairTarget = null;
-  let stairIsBacktrack = false;
-  if (game.turnPhase === "move" && !game.pendingExplore && !isItemAbilityTileChoiceActive) {
-    const connectedMove = getConnectedMoveTarget(game.board, currentTileObj, game.movePath);
-    if (connectedMove) {
-      stairIsBacktrack = connectedMove.isBacktrack;
-      const moveCost = getLeaveMoveCost(currentTileObj);
-      if (currentPlayer.movesLeft >= moveCost || stairIsBacktrack) {
-        stairTarget = connectedMove.targetTile;
-      }
-    }
-  }
+  const stairTargetState = getStairTargetState({
+    game,
+    currentPlayer,
+    currentTile: currentTileObj,
+    isItemAbilityTileChoiceActive,
+    getLeaveMoveCost,
+  });
+  const stairTarget = stairTargetState.target;
+  const stairIsBacktrack = stairTargetState.isBacktrack;
 
   // Calculate board bounds for centering
   const allXs = floorTiles.map((t) => t.x);
