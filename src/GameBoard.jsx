@@ -30,6 +30,10 @@ import {
 } from "./events/eventActions";
 import { getMatchingOutcome } from "./events/eventEngine";
 import { useDrawnCardHandlers, useEventActionHandlers, useEventRuntimeEffects } from "./events/useEventHooks";
+import {
+  resolveChooseViewedCardActiveAbilityValueState,
+  resolveUseViewedCardActiveAbilityNowState,
+} from "./events/viewedCardAbilityController";
 import EventResolutionModal, {
   CardAbilityContent,
   DrawnCardModal,
@@ -64,6 +68,7 @@ import {
 } from "./items/movementItemAbility";
 import { applyPlacedTileDiscoverEffects } from "./tiles/discoverTileAbility";
 import { getEndTurnTileAbilityState, resolveTileDiceAnimationState } from "./tiles/endTurnTileAbility";
+import { resolveDismissTileEffectState } from "./tiles/tileEffectFlow";
 import {
   getCurrentPlayerTile,
   getCanUseMysticElevator,
@@ -82,6 +87,8 @@ import {
   movePlayerState,
   placePendingSpecialTileState,
 } from "./movement/playerMovementState";
+import { resolveKeyboardMoveAction } from "./movement/movementInputState";
+import { getPlacementOptionsState } from "./movement/placementOptions";
 import {
   adjustDamageAllocationChoiceState,
   applyDamageAllocationState,
@@ -94,6 +101,7 @@ import {
   passTurnWithEndTurnItemsState,
   toggleDamageConversionChoiceState,
 } from "./players/playerState";
+import { getDamageChoiceSummary, getEndTurnPreviewPlayerName, getPlayersOnFloor } from "./players/playerSelectors";
 import "./GameBoard.css";
 
 // Direction offsets
@@ -418,81 +426,33 @@ export default function GameBoard({ players, onQuit }) {
   // Keyboard controls
   useEffect(() => {
     function handleKeyDown(e) {
-      if (dogTradeState) return;
-      if (isItemAbilityTileChoiceAwaiting(game.eventState)) {
-        return;
-      }
+      const action = resolveKeyboardMoveAction({
+        game,
+        cameraFloor,
+        currentPlayer,
+        key: e.key,
+        DIR,
+        OPPOSITE,
+        getTileAt,
+        getLeaveMoveCost,
+        isItemAbilityTileChoiceAwaiting,
+        dogTradeState,
+      });
 
-      // Rotate phase: R/E to rotate, Enter to place
-      if (game.turnPhase === "rotate") {
-        if (e.key === "r" || e.key === "R" || e.key === "ArrowRight") {
-          e.preventDefault();
-          handleRotateTile(1);
-        } else if (e.key === "e" || e.key === "E" || e.key === "ArrowLeft") {
-          e.preventDefault();
-          handleRotateTile(-1);
-        } else if (e.key === "Enter") {
-          e.preventDefault();
-          handlePlaceTile();
-        }
-        return;
-      }
-
-      if (game.turnPhase !== "move") return;
-      if (cameraFloor !== currentPlayer.floor) return;
-
-      const keyToDir = {
-        ArrowUp: "N",
-        ArrowDown: "S",
-        ArrowRight: "E",
-        ArrowLeft: "W",
-      };
-      const dir = keyToDir[e.key];
-      if (!dir) return;
+      if (!action) return;
 
       e.preventDefault();
 
-      // If on a pending explore placeholder, only allow backtracking
-      if (game.pendingExplore) {
-        const path = game.movePath;
-        if (path.length >= 2) {
-          const prev = path[path.length - 2];
-          const { dx, dy } = DIR[dir];
-          const nx = currentPlayer.x + dx;
-          const ny = currentPlayer.y + dy;
-          if (prev.x === nx && prev.y === ny && prev.floor === currentPlayer.floor) {
-            handleBacktrack();
-          }
-        }
-        return;
-      }
-
-      const tile = getTileAt(currentPlayer.x, currentPlayer.y, currentPlayer.floor);
-      if (!tile || !tile.doors.includes(dir)) return;
-
-      const { dx, dy } = DIR[dir];
-      const nx = currentPlayer.x + dx;
-      const ny = currentPlayer.y + dy;
-
-      // Check if backtracking
-      const path = game.movePath;
-      if (path.length >= 2) {
-        const prev = path[path.length - 2];
-        if (prev.x === nx && prev.y === ny && prev.floor === currentPlayer.floor) {
-          handleBacktrack();
-          return;
-        }
-      }
-
-      const moveCost = getLeaveMoveCost(tile);
-      if (currentPlayer.movesLeft < moveCost) return;
-
-      const neighbor = getTileAt(nx, ny, currentPlayer.floor);
-
-      if (neighbor && neighbor.doors.includes(OPPOSITE[dir])) {
-        handleMove(nx, ny, moveCost);
-      } else if (!neighbor) {
-        handleExplore(dir, nx, ny, moveCost);
+      if (action.type === "rotate") {
+        handleRotateTile(action.direction);
+      } else if (action.type === "place-tile") {
+        handlePlaceTile();
+      } else if (action.type === "backtrack") {
+        handleBacktrack();
+      } else if (action.type === "move") {
+        handleMove(action.nx, action.ny, action.cost);
+      } else if (action.type === "explore") {
+        handleExplore(action.dir, action.nx, action.ny, action.cost);
       }
     }
 
@@ -510,43 +470,7 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function getPlacementOptions(board, tile) {
-    const allDirs = ["N", "E", "S", "W"];
-    const placements = [];
-
-    for (const floor of tile.floors || []) {
-      for (const baseTile of board[floor] || []) {
-        for (const dir of baseTile.doors) {
-          const { dx, dy } = DIR[dir];
-          const x = baseTile.x + dx;
-          const y = baseTile.y + dy;
-          const occupied = board[floor]?.some((placedTile) => placedTile.x === x && placedTile.y === y);
-          if (occupied) continue;
-
-          const neededDoor = OPPOSITE[dir];
-          const validRotations = [];
-          for (let rot = 0; rot < 4; rot++) {
-            const rotatedDoors = tile.doors.map((door) => {
-              const doorIndex = allDirs.indexOf(door);
-              return allDirs[(doorIndex + rot) % 4];
-            });
-            if (rotatedDoors.includes(neededDoor)) {
-              validRotations.push(rotatedDoors);
-            }
-          }
-
-          if (validRotations.length === 0) continue;
-
-          placements.push({
-            floor,
-            x,
-            y,
-            validRotations,
-          });
-        }
-      }
-    }
-
-    return placements;
+    return getPlacementOptionsState(board, tile, DIR, OPPOSITE);
   }
 
   // Get valid move directions from current tile
@@ -975,66 +899,32 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleDismissTileEffect() {
+    let nextCameraFloor = null;
+    let shouldClearDiceAnimation = false;
+
     setGame((g) => {
-      const effect = g.tileEffect;
-      if (!effect) return passTurn(g);
-
-      if (isQueuedTileEffectType(effect.type)) {
-        if (effect.pendingSpecialPlacement) {
-          setCameraFloor(effect.pendingSpecialPlacement.placements[0]?.floor || cameraFloor);
-        }
-
-        if (isSkeletonKeyResultEffect(effect)) {
-          return resolveSkeletonKeyResultAfterDismiss(g, effect);
-        }
-
-        const currentPlayer = g.players[g.currentPlayerIndex];
-        const queuedEventCard = effect.pendingSpecialPlacement ? null : effect.queuedCard || null;
-        const idolOfferState = getIdolChoiceStateForQueuedEvent({
-          player: currentPlayer,
-          tileName: effect.tileName,
-          queuedCard: queuedEventCard,
-          nextTurnPhase: effect.nextTurnPhase,
-          nextMessage: effect.nextMessage,
-          offerMessage: `${currentPlayer.name} discovered an Event symbol.`,
-        });
-        if (idolOfferState) {
-          return {
-            ...g,
-            tileEffect: idolOfferState.tileEffect,
-            drawnCard: idolOfferState.drawnCard,
-            pendingSpecialPlacement: effect.pendingSpecialPlacement || null,
-            turnPhase: idolOfferState.turnPhase,
-            message: idolOfferState.message,
-          };
-        }
-
-        return {
-          ...g,
-          tileEffect: null,
-          drawnCard: effect.pendingSpecialPlacement ? null : effect.queuedCard || null,
-          pendingSpecialPlacement: effect.pendingSpecialPlacement || null,
-          turnPhase: effect.nextTurnPhase,
-          message: effect.nextMessage,
-        };
-      }
-
-      const pi = g.currentPlayerIndex;
-      const currentPlayerState = g.players[pi];
-      const resolvedEffect = resolveDamageEffect(currentPlayerState, effect);
-
-      if (resolvedEffect.damage > 0 && resolvedEffect.damageType) {
-        return {
-          ...g,
-          tileEffect: null,
-          damageChoice: createDamageChoice(resolvedEffect, currentPlayerState),
-        };
-      }
-
-      const updatedPlayers = applyTileEffectConsequences(g, g.players, resolvedEffect);
-      return passTurn({ ...g, players: updatedPlayers, tileEffect: null, damageChoice: null });
+      const resolved = resolveDismissTileEffectState(g, {
+        cameraFloor,
+        passTurn,
+        isQueuedTileEffectType,
+        isSkeletonKeyResultEffect,
+        resolveSkeletonKeyResultAfterDismiss,
+        getIdolChoiceStateForQueuedEvent,
+        resolveDamageEffect,
+        createDamageChoice,
+        applyTileEffectConsequences,
+      });
+      nextCameraFloor = resolved.cameraFloor;
+      shouldClearDiceAnimation = resolved.clearDiceAnimation;
+      return resolved.game;
     });
-    setDiceAnimation(null);
+
+    if (shouldClearDiceAnimation) {
+      setDiceAnimation(null);
+    }
+    if (nextCameraFloor) {
+      setCameraFloor(nextCameraFloor);
+    }
   }
 
   function handleChooseNecklaceOfTeethStat(stat) {
@@ -1158,71 +1048,66 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleUseViewedCardActiveAbilityNow() {
-    if (!viewedCard || !viewedCardActiveAbilityState?.canUseNow) return;
-
-    const specialOmenNow = resolveSpecialOmenNowAbilityState(game, viewedCard, {
+    const resolved = resolveUseViewedCardActiveAbilityNowState({
+      game,
+      viewedCard,
+      viewedCardActiveAbilityState,
+      drawnEventPrimaryAction,
+      queuedTraitRollOverride: queuedTraitRollOverrideRef.current,
       oppositeByDirection: OPPOSITE,
       getDogTradeTargets,
+      resolveSpecialOmenNowAbilityState,
+      chooseCardActiveAbilityNowState,
     });
-    if (specialOmenNow.handled) {
-      if (specialOmenNow.game) {
-        setGame(specialOmenNow.game);
-      }
-      if (specialOmenNow.dogTradeState) {
-        setDogTradeState(specialOmenNow.dogTradeState);
-      }
-      if (specialOmenNow.closeViewedCard) {
-        setViewedCard(null);
-      }
-      return;
-    }
+    if (!resolved.handled) return;
 
-    if (!viewedCardActiveAbilityState.requiresValueSelection) {
-      const result = chooseCardActiveAbilityNowState(game, viewedCard, {
-        drawnEventPrimaryAction,
-        queuedTraitRollOverride: queuedTraitRollOverrideRef.current,
+    if (resolved.game) {
+      setGame(resolved.game);
+    }
+    if (resolved.dogTradeState) {
+      setDogTradeState(resolved.dogTradeState);
+    }
+    if (resolved.diceAnimation) {
+      setDiceAnimation(resolved.diceAnimation);
+    }
+    if (resolved.queueTraitRollOverride !== undefined) {
+      queuedTraitRollOverrideRef.current = resolved.queueTraitRollOverride;
+      setQueuedTraitRollOverride(resolved.queueTraitRollOverride);
+    }
+    if (resolved.showUseNowPicker) {
+      setViewedCard((card) => {
+        if (!card) return card;
+        return {
+          ...card,
+          showUseNowPicker: true,
+        };
       });
-      setGame(result.game);
-      if (result.diceAnimation) {
-        setDiceAnimation(result.diceAnimation);
-      }
-      if (result.queueTraitRollOverride !== undefined) {
-        queuedTraitRollOverrideRef.current = result.queueTraitRollOverride;
-        setQueuedTraitRollOverride(result.queueTraitRollOverride);
-      }
-      if (result.closeViewedCard) {
-        setViewedCard(null);
-      }
-      return;
     }
-
-    setViewedCard((card) => {
-      if (!card) return card;
-      return {
-        ...card,
-        showUseNowPicker: true,
-      };
-    });
+    if (resolved.closeViewedCard) {
+      setViewedCard(null);
+    }
   }
 
   function handleChooseActiveAbilityValue(total) {
-    if (!viewedCard) return;
-
-    const result = chooseCardActiveAbilityValueState(game, total, viewedCard, {
+    const resolved = resolveChooseViewedCardActiveAbilityValueState({
+      game,
+      total,
+      viewedCard,
       drawnEventPrimaryAction,
       queuedTraitRollOverride: queuedTraitRollOverrideRef.current,
+      chooseCardActiveAbilityValueState,
     });
+    if (!resolved.handled) return;
 
-    setGame(result.game);
-    if (result.diceAnimation) {
-      setDiceAnimation(result.diceAnimation);
+    setGame(resolved.game);
+    if (resolved.diceAnimation) {
+      setDiceAnimation(resolved.diceAnimation);
     }
-
-    if (result.queueTraitRollOverride !== undefined) {
-      queuedTraitRollOverrideRef.current = result.queueTraitRollOverride;
-      setQueuedTraitRollOverride(result.queueTraitRollOverride);
+    if (resolved.queueTraitRollOverride !== undefined) {
+      queuedTraitRollOverrideRef.current = resolved.queueTraitRollOverride;
+      setQueuedTraitRollOverride(resolved.queueTraitRollOverride);
     }
-    if (result.closeViewedCard) {
+    if (resolved.closeViewedCard) {
       setViewedCard(null);
     }
   }
@@ -1316,15 +1201,7 @@ export default function GameBoard({ players, onQuit }) {
   const isUnconfirmedMovePath = game.turnPhase === "move" && Array.isArray(game.movePath) && game.movePath.length > 1;
   const showMoveConfirmUseNowDisabled =
     !!viewedCard?.activeAbilityRule && viewedCard.ownerIndex === game.currentPlayerIndex && isUnconfirmedMovePath;
-  const damageAllocated = damageChoice
-    ? Object.values(damageChoice.allocation).reduce((sum, value) => sum + value, 0)
-    : 0;
-  const damageRemaining = damageChoice ? damageChoice.amount - damageAllocated : 0;
-  const canConfirmDamageChoice = damageChoice
-    ? damageChoice.allowPartial
-      ? damageAllocated <= damageChoice.amount
-      : damageRemaining === 0
-    : false;
+  const { damageAllocated, damageRemaining, canConfirmDamageChoice } = getDamageChoiceSummary(damageChoice);
   const damagePreview = damageChoice ? getDamagePreview(currentPlayer, damageChoice) : null;
 
   // Check if current player is on a staircase tile
@@ -1341,20 +1218,7 @@ export default function GameBoard({ players, onQuit }) {
     isItemAbilityTileChoiceActive,
   });
   const canUseSecretPassage = getCanUseSecretPassage(currentTileObj, secretPassageTargets);
-  const endTurnPreviewPlayerName = (() => {
-    if (game.extraTurnAfterCurrent && currentPlayer.isAlive) {
-      return `${currentPlayer.name} (extra turn)`;
-    }
-
-    let next = (game.currentPlayerIndex + 1) % game.players.length;
-    let attempts = 0;
-    while (!game.players[next].isAlive && attempts < game.players.length) {
-      next = (next + 1) % game.players.length;
-      attempts++;
-    }
-
-    return game.players[next]?.name || currentPlayer.name;
-  })();
+  const endTurnPreviewPlayerName = getEndTurnPreviewPlayerName(game, currentPlayer);
   const stairTargetState = getStairTargetState({
     game,
     currentPlayer,
@@ -1388,7 +1252,7 @@ export default function GameBoard({ players, onQuit }) {
   const gridHeight = (maxY - minY + 1) * (TILE_SIZE + GAP);
 
   // Players on current floor
-  const playersOnFloor = game.players.filter((p) => p.floor === cameraFloor && p.isAlive);
+  const playersOnFloor = getPlayersOnFloor(game.players, cameraFloor);
 
   return (
     <div className="game-screen">
