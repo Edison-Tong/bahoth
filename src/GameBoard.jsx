@@ -73,6 +73,20 @@ import {
 } from "./tiles/tileSelectors";
 import { getRollMysticElevatorState, resolveMysticElevatorResultState } from "./tiles/mysticElevatorTileAbility";
 import { getConnectedMoveTarget, resolveSecretPassageMoveState } from "./tiles/tileTraversal";
+import {
+  backtrackPlayerState,
+  changeFloorState,
+  confirmMoveState,
+  exploreState,
+  getValidMovesState,
+  movePlayerState,
+} from "./movement/playerMovementState";
+import {
+  applyDamageAllocationState,
+  applyStatChangeState,
+  passTurnCoreState,
+  passTurnWithEndTurnItemsState,
+} from "./players/playerState";
 import "./GameBoard.css";
 
 // Direction offsets
@@ -530,142 +544,33 @@ export default function GameBoard({ players, onQuit }) {
 
   // Get valid move directions from current tile
   function getValidMoves() {
-    if (game.turnPhase !== "move") return [];
-    if (isItemAbilityTileChoiceAwaiting(game.eventState)) {
-      return [];
-    }
-
-    // If on a pending explore placeholder, only allow backtrack
-    if (game.pendingExplore) {
-      const path = game.movePath;
-      if (path.length >= 2) {
-        const prev = path[path.length - 2];
-        // Find which direction leads back
-        const dx = prev.x - currentPlayer.x;
-        const dy = prev.y - currentPlayer.y;
-        const dir = Object.entries(DIR).find(([, v]) => v.dx === dx && v.dy === dy)?.[0];
-        if (dir) {
-          return [{ dir, x: prev.x, y: prev.y, type: "backtrack" }];
-        }
-      }
-      return [];
-    }
-
-    const tile = getTileAt(currentPlayer.x, currentPlayer.y, currentPlayer.floor);
-    if (!tile) return [];
-
-    // Find backtrack target
-    const path = game.movePath;
-    let backtrackPos = null;
-    if (path.length >= 2) {
-      backtrackPos = path[path.length - 2];
-    }
-
-    const moves = [];
-    const moveCost = getLeaveMoveCost(tile);
-    const canUseSkeletonKeyMovement = canUseArmedSkeletonKeyMovement(game, currentPlayer);
-    for (const dir of tile.doors) {
-      const { dx, dy } = DIR[dir];
-      const nx = currentPlayer.x + dx;
-      const ny = currentPlayer.y + dy;
-      const neighbor = getTileAt(nx, ny, currentPlayer.floor);
-
-      if (neighbor) {
-        if (neighbor.doors.includes(OPPOSITE[dir])) {
-          // Check if this is a backtrack
-          const isBacktrack =
-            backtrackPos &&
-            backtrackPos.x === nx &&
-            backtrackPos.y === ny &&
-            backtrackPos.floor === currentPlayer.floor;
-          if (isBacktrack) {
-            moves.push({ dir, x: nx, y: ny, type: "backtrack" });
-          } else if (currentPlayer.movesLeft >= moveCost) {
-            moves.push({ dir, x: nx, y: ny, type: "move", cost: moveCost });
-          }
-        }
-      } else if (currentPlayer.movesLeft >= moveCost) {
-        moves.push({ dir, x: nx, y: ny, type: "explore", cost: moveCost });
-      }
-    }
-
-    if (canUseSkeletonKeyMovement && currentPlayer.movesLeft >= moveCost) {
-      const dirs = ["N", "S", "E", "W"];
-      for (const dir of dirs) {
-        const { dx, dy } = DIR[dir];
-        const nx = currentPlayer.x + dx;
-        const ny = currentPlayer.y + dy;
-        const neighbor = getTileAt(nx, ny, currentPlayer.floor);
-        if (!neighbor) continue;
-
-        const isAlreadyReachable = tile.doors.includes(dir) && neighbor.doors.includes(OPPOSITE[dir]);
-        if (isAlreadyReachable) continue;
-
-        const isBacktrack =
-          backtrackPos && backtrackPos.x === nx && backtrackPos.y === ny && backtrackPos.floor === currentPlayer.floor;
-        if (isBacktrack) continue;
-
-        moves.push({ dir, x: nx, y: ny, type: "wall-move", cost: moveCost });
-      }
-    }
-
-    return moves;
+    return getValidMovesState({
+      game,
+      currentPlayer,
+      DIR,
+      OPPOSITE,
+      getTileAt,
+      getLeaveMoveCost,
+      canUseArmedSkeletonKeyMovement,
+      isItemAbilityTileChoiceAwaiting,
+    });
   }
 
   // Move player to an existing tile and extend the current path.
   function handleMove(nx, ny, cost, options = {}) {
     const { useSkeletonKey = false } = options;
     const skeletonKeyRoll = useSkeletonKey ? rollDice(1)[0] : null;
-    setGame((g) => {
-      const player = g.players[g.currentPlayerIndex];
-      const currentTile = g.board[player.floor]?.find((t) => t.x === player.x && t.y === player.y);
-      const resolvedCost = cost ?? getLeaveMoveCost(currentTile);
-      if (player.movesLeft < resolvedCost) return g;
-
-      if (useSkeletonKey && !canUseArmedSkeletonKeyMovement(g, player)) return g;
-
-      const movesLeft = player.movesLeft - resolvedCost;
-      const newPath = [...g.movePath, { x: nx, y: ny, floor: player.floor, cost: resolvedCost }];
-      const destinationTile = g.board[player.floor]?.find((tile) => tile.x === nx && tile.y === ny);
-
-      let keyRoll = null;
-      if (useSkeletonKey) {
-        keyRoll = skeletonKeyRoll;
-      }
-
-      const updatedPlayers = g.players.map((p, i) => {
-        if (i !== g.currentPlayerIndex) return p;
-
-        return {
-          ...p,
-          x: nx,
-          y: ny,
-          movesLeft,
-        };
-      });
-
-      const baseMessage =
-        destinationTile?.enterEffect === "mystic-elevator" && !g.mysticElevatorUsed
-          ? `${g.players[g.currentPlayerIndex].name} entered the Mystic Elevator. Use Elevator to roll 2 dice.`
-          : movesLeft > 0
-            ? `${g.players[g.currentPlayerIndex].name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`
-            : `${g.players[g.currentPlayerIndex].name} — no moves left`;
-
-      const skeletonKeyMessage =
-        useSkeletonKey && keyRoll !== null
-          ? `Skeleton Key roll: ${keyRoll}. Resolve the result after you continue.`
-          : "";
-
-      return {
-        ...g,
-        players: updatedPlayers,
-        movePath: newPath,
-        mysticElevatorReady:
-          destinationTile?.enterEffect === "mystic-elevator" && !g.mysticElevatorUsed ? true : g.mysticElevatorReady,
-        skeletonKeyArmed: useSkeletonKey ? false : g.skeletonKeyArmed,
-        message: skeletonKeyMessage ? `${baseMessage}. ${skeletonKeyMessage}` : baseMessage,
-      };
-    });
+    setGame((g) =>
+      movePlayerState(g, {
+        nx,
+        ny,
+        cost,
+        useSkeletonKey,
+        skeletonKeyRoll,
+        getLeaveMoveCost,
+        canUseArmedSkeletonKeyMovement,
+      })
+    );
 
     if (useSkeletonKey && skeletonKeyRoll !== null) {
       setDiceAnimation({
@@ -680,24 +585,7 @@ export default function GameBoard({ players, onQuit }) {
 
   // Backtrack to previous tile in path and refund the cost of the undone step.
   function handleBacktrack() {
-    setGame((g) => {
-      const path = g.movePath;
-      if (path.length < 2) return g;
-      const prev = path[path.length - 2];
-      const lastStep = path[path.length - 1];
-      const newPath = path.slice(0, -1);
-      const movesLeft = g.players[g.currentPlayerIndex].movesLeft + (lastStep.cost ?? 1);
-      const updatedPlayers = g.players.map((p, i) =>
-        i === g.currentPlayerIndex ? { ...p, x: prev.x, y: prev.y, floor: prev.floor || p.floor, movesLeft } : p
-      );
-      return {
-        ...g,
-        players: updatedPlayers,
-        movePath: newPath,
-        pendingExplore: null,
-        message: `${g.players[g.currentPlayerIndex].name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`,
-      };
-    });
+    setGame((g) => backtrackPlayerState(g));
     // Auto-switch camera if backtracking across floors
     setGame((g) => {
       const p = g.players[g.currentPlayerIndex];
@@ -708,58 +596,16 @@ export default function GameBoard({ players, onQuit }) {
 
   // Explore — move player onto placeholder, don't reveal tile yet.
   function handleExplore(dir, nx, ny, cost) {
-    setGame((g) => {
-      const player = g.players[g.currentPlayerIndex];
-      const floor = player.floor;
-      const currentTile = g.board[floor]?.find((t) => t.x === player.x && t.y === player.y);
-      const resolvedCost = cost ?? getLeaveMoveCost(currentTile);
-      if (player.movesLeft < resolvedCost) return g;
-
-      // Find a tile that fits this floor
-      const tileIndex = g.tileStack.findIndex((t) => t.floors.includes(floor));
-      if (tileIndex === -1) {
-        return { ...g, message: "No tiles left for this floor!" };
-      }
-
-      const tile = g.tileStack[tileIndex];
-
-      // Compute all valid rotations (must include the door connecting back)
-      const neededDoor = OPPOSITE[dir];
-      const allDirs = ["N", "E", "S", "W"];
-      const validRotations = [];
-      for (let rot = 0; rot < 4; rot++) {
-        const rotated = tile.doors.map((d) => {
-          const idx = allDirs.indexOf(d);
-          return allDirs[(idx + rot) % 4];
-        });
-        if (rotated.includes(neededDoor)) {
-          validRotations.push(rotated);
-        }
-      }
-
-      const movesLeft = player.movesLeft - resolvedCost;
-      const newPath = [...g.movePath, { x: nx, y: ny, floor, cost: resolvedCost }];
-      const updatedPlayers = g.players.map((p, i) =>
-        i === g.currentPlayerIndex ? { ...p, x: nx, y: ny, movesLeft } : p
-      );
-
-      return {
-        ...g,
-        players: updatedPlayers,
-        movePath: newPath,
-        pendingExplore: {
-          tile,
-          tileIndex,
-          x: nx,
-          y: ny,
-          floor,
-          dir,
-          validRotations,
-          rotationIndex: 0,
-        },
-        message: `${g.players[g.currentPlayerIndex].name} entered an unknown room... Move Here to reveal it, or back out.`,
-      };
-    });
+    setGame((g) =>
+      exploreState(g, {
+        dir,
+        nx,
+        ny,
+        cost,
+        OPPOSITE,
+        getLeaveMoveCost,
+      })
+    );
   }
 
   // Handle clicking a move/explore/backtrack target
@@ -778,23 +624,7 @@ export default function GameBoard({ players, onQuit }) {
   // Confirm move — commit current position, reset path
   // If on a pending explore, enter rotate phase to choose orientation
   function handleConfirmMove() {
-    setGame((g) => {
-      const p = g.players[g.currentPlayerIndex];
-
-      if (g.pendingExplore) {
-        return {
-          ...g,
-          turnPhase: "rotate",
-          message: `${p.name} discovered ${g.pendingExplore.tile.name}! Rotate the tile, then place it.`,
-        };
-      }
-
-      return {
-        ...g,
-        movePath: [{ x: p.x, y: p.y, floor: p.floor, cost: 0 }],
-        message: `${p.name} moved — ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left`,
-      };
-    });
+    setGame((g) => confirmMoveState(g));
   }
 
   // Rotate the pending tile to the next valid orientation
@@ -957,56 +787,18 @@ export default function GameBoard({ players, onQuit }) {
 
   // Change floor via staircase
   function handleChangeFloor() {
+    let nextCameraFloor = null;
     setGame((g) => {
-      const p = g.players[g.currentPlayerIndex];
-
-      // Find current tile
-      const currentTile = g.board[p.floor]?.find((t) => t.x === p.x && t.y === p.y);
-      const path = g.movePath;
-      const connectedMove = getConnectedMoveTarget(g.board, currentTile, path);
-      if (!connectedMove) return g;
-
-      const { targetTile, targetFloor, isBacktrack } = connectedMove;
-
-      if (isBacktrack) {
-        const lastStep = path[path.length - 1];
-        const movesLeft = p.movesLeft + (lastStep.cost ?? 1);
-        const updatedPlayers = g.players.map((pl, i) =>
-          i === g.currentPlayerIndex ? { ...pl, x: targetTile.x, y: targetTile.y, floor: targetFloor, movesLeft } : pl
-        );
-        return {
-          ...g,
-          players: updatedPlayers,
-          movePath: path.slice(0, -1),
-          pendingExplore: null,
-          message: `${p.name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`,
-        };
-      }
-
-      const moveCost = getLeaveMoveCost(currentTile);
-      if (p.movesLeft < moveCost) return g;
-      const movesLeft = p.movesLeft - moveCost;
-      const updatedPlayers = g.players.map((pl, i) =>
-        i === g.currentPlayerIndex ? { ...pl, x: targetTile.x, y: targetTile.y, floor: targetFloor, movesLeft } : pl
-      );
-
-      return {
-        ...g,
-        players: updatedPlayers,
-        movePath: [...g.movePath, { x: targetTile.x, y: targetTile.y, floor: targetFloor, cost: moveCost }],
-        message:
-          movesLeft > 0
-            ? `${p.name} moved to ${targetTile.name} — ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`
-            : `${p.name} moved to ${targetTile.name} — no moves left`,
-      };
+      const resolved = changeFloorState(g, {
+        getConnectedMoveTarget,
+        getLeaveMoveCost,
+      });
+      nextCameraFloor = resolved.cameraFloor;
+      return resolved.game;
     });
-    // Auto-switch camera to the player's new floor
-    setCameraFloor((prev) => {
-      const p = game.players[game.currentPlayerIndex];
-      const currentTile = game.board[p.floor]?.find((t) => t.x === p.x && t.y === p.y);
-      const connectedMove = getConnectedMoveTarget(game.board, currentTile, game.movePath);
-      return connectedMove?.targetFloor || prev;
-    });
+    if (nextCameraFloor) {
+      setCameraFloor(nextCameraFloor);
+    }
   }
 
   function handleUseSecretPassage(target) {
@@ -1046,36 +838,11 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function applyStatChange(players, playerIndex, stat, amount) {
-    if (!amount) return players;
-
-    return players.map((pl, i) => {
-      if (i !== playerIndex) return pl;
-
-      const maxIndex = pl.character[stat].length - 1;
-      const nextIndex = Math.max(0, Math.min(maxIndex, pl.statIndex[stat] + amount));
-      const newStatIndex = { ...pl.statIndex, [stat]: nextIndex };
-      const isAlive = Object.values(newStatIndex).every((value) => value > 0);
-
-      return { ...pl, statIndex: newStatIndex, isAlive };
-    });
+    return applyStatChangeState(players, playerIndex, stat, amount);
   }
 
   function applyDamageAllocation(players, playerIndex, allocation, adjustmentMode = "decrease") {
-    return players.map((pl, i) => {
-      if (i !== playerIndex) return pl;
-      const newStatIndex = { ...pl.statIndex };
-      for (const [stat, amount] of Object.entries(allocation)) {
-        if (!amount) continue;
-        const maxIndex = pl.character[stat].length - 1;
-        newStatIndex[stat] =
-          adjustmentMode === "increase"
-            ? Math.min(maxIndex, newStatIndex[stat] + amount)
-            : Math.max(0, newStatIndex[stat] - amount);
-      }
-
-      const isAlive = Object.values(newStatIndex).every((value) => value > 0);
-      return { ...pl, statIndex: newStatIndex, isAlive };
-    });
+    return applyDamageAllocationState(players, playerIndex, allocation, adjustmentMode);
   }
 
   const eventEngineDeps = {
@@ -1690,73 +1457,17 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function passTurnCore(g) {
-    const shouldTakeExtraTurn = !!g.extraTurnAfterCurrent && !!g.players[g.currentPlayerIndex]?.isAlive;
-    let next = shouldTakeExtraTurn ? g.currentPlayerIndex : (g.currentPlayerIndex + 1) % g.players.length;
-
-    if (!shouldTakeExtraTurn) {
-      // Skip dead players
-      let attempts = 0;
-      while (!g.players[next].isAlive && attempts < g.players.length) {
-        next = (next + 1) % g.players.length;
-        attempts++;
-      }
-    }
-
-    const nextPlayer = g.players[next];
-    const speed = nextPlayer.character.speed[nextPlayer.statIndex.speed];
-    const updatedPlayers = g.players.map((pl, i) => (i === next ? { ...pl, movesLeft: speed } : pl));
-
-    setCameraFloor(nextPlayer.floor);
-
-    return {
-      ...g,
-      players: updatedPlayers,
-      currentPlayerIndex: next,
-      turnPhase: "move",
-      movePath: [{ x: nextPlayer.x, y: nextPlayer.y, floor: nextPlayer.floor, cost: 0 }],
-      pendingExplore: null,
-      pendingSpecialPlacement: null,
-      mysticElevatorReady: false,
-      mysticElevatorUsed: false,
-      tileEffect: null,
-      damageChoice: null,
-      rabbitFootPendingReroll: null,
-      skeletonKeyArmed: false,
-      eventState: null,
-      extraTurnAfterCurrent: false,
-      turnNumber: shouldTakeExtraTurn ? g.turnNumber : g.turnNumber + (next === 0 ? 1 : 0),
-      message: shouldTakeExtraTurn
-        ? `${nextPlayer.name} takes an extra turn — ${speed} moves`
-        : `${nextPlayer.name}'s turn — ${speed} moves`,
-    };
+    const result = passTurnCoreState(g);
+    setCameraFloor(result.nextPlayerFloor);
+    return result.game;
   }
 
   function passTurn(g) {
-    const currentPlayer = g.players[g.currentPlayerIndex];
-    const endTurnItemResolution = resolveEndTurnItemPassiveState(g);
-
-    if (endTurnItemResolution.type === "choice") {
-      return {
-        ...g,
-        tileEffect: endTurnItemResolution.tileEffect,
-      };
-    }
-
-    if (endTurnItemResolution.type === "auto-apply") {
-      const nextState = passTurnCore({
-        ...g,
-        players: endTurnItemResolution.players,
-      });
-
-      return {
-        ...nextState,
-        message: `${currentPlayer.name} gains 1 ${STAT_LABELS[endTurnItemResolution.gainedStat]} with ${
-          endTurnItemResolution.sourceName || "Necklace of Teeth"
-        }. ${nextState.message}`,
-      };
-    }
-
-    return passTurnCore(g);
+    return passTurnWithEndTurnItemsState(g, {
+      resolveEndTurnItemPassiveState,
+      passTurnCore,
+      statLabels: STAT_LABELS,
+    });
   }
 
   const validMoves = cameraFloor === currentPlayer.floor ? getValidMoves() : [];

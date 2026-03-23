@@ -288,7 +288,7 @@ export const ITEM_CARDS = [
     id: "rabbits-foot",
     name: "Rabbit's Foot",
     isWeapon: false,
-    activeAbilityRule: { trigger: "die-just-rolled", action: "reroll-one-die" },
+    activeAbilityRule: { trigger: "die-just-rolled", action: "reroll-one-die" }, // NOTE: WAS NOT ABLE TO REROLL ANYTHING FOR HANGED MAN EVENT
     activeAbility: "Once during your turn, you may reroll 1 die that you just rolled.",
   },
   {
