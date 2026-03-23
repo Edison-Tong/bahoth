@@ -1,29 +1,53 @@
 import { GAME_PHASES, HAUNT_TEAMS } from "./hauntPhases";
 
 function createInitialHauntState(game, hauntDefinition) {
+  const traitorPlayerIndex = game.currentPlayerIndex;
+  const heroPlayerIndexes = game.players.map((_, index) => index).filter((index) => index !== traitorPlayerIndex);
+  const firstPlayerAfterSetup = (traitorPlayerIndex + 1) % game.players.length;
+
   return {
     id: hauntDefinition.id,
     status: "setup",
     startedAtTurn: game.turnNumber,
+    traitorPlayerIndex,
+    firstPlayerAfterSetup,
+    setup: {
+      currentStepIndex: 0,
+      completed: false,
+      heroSteps: hauntDefinition.setup?.heroes || [],
+      traitorSteps: hauntDefinition.setup?.traitor || [],
+    },
     teams: {
       [HAUNT_TEAMS.HEROES]: {
-        playerIndexes: game.players.map((_, index) => index),
+        playerIndexes: heroPlayerIndexes,
       },
       [HAUNT_TEAMS.TRAITOR]: {
-        playerIndexes: [],
+        playerIndexes: [traitorPlayerIndex],
       },
       [HAUNT_TEAMS.MONSTERS]: {
         actors: [],
       },
     },
-    tokens: [],
+    tokens: (hauntDefinition.tokens?.required || []).map((tokenId) => ({
+      id: tokenId,
+      placed: false,
+      placement: null,
+    })),
     objectives: {
       heroes: hauntDefinition.objectives?.heroes || "",
       traitor: hauntDefinition.objectives?.traitor || "",
     },
+    heroActions: hauntDefinition.heroActions || [],
+    traitorActions: hauntDefinition.traitorActions || [],
+    monsters: hauntDefinition.monsters || [],
     oncePerTurnUsage: {},
     oncePerGameUsage: {},
-    scenarioState: {},
+    scenarioState: {
+      traitorCorpsePosition: null,
+      jacksSpiritActorId: "jacks-spirit",
+      revealedKnowledgeOfJackHolders: [],
+      exorcismTokenPlacements: [],
+    },
   };
 }
 

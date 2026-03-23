@@ -113,7 +113,13 @@ export function createDrawnEventCard(card) {
 export function shouldShowMessageBubble(message) {
   if (!message || !String(message).trim()) return false;
 
-  const routinePatterns = [/\bmove(?:d|s)?\b/i, /\bmoves left\b/i, /\bno moves left\b/i, /rotate the tile, then place it/i, /turn\s*[-\u2014]/i];
+  const routinePatterns = [
+    /\bmove(?:d|s)?\b/i,
+    /\bmoves left\b/i,
+    /\bno moves left\b/i,
+    /rotate the tile, then place it/i,
+    /turn\s*[-\u2014]/i,
+  ];
   return !routinePatterns.some((pattern) => pattern.test(message));
 }
 
