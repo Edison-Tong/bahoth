@@ -265,3 +265,111 @@ export function changeFloorState(g, { getConnectedMoveTarget, getLeaveMoveCost }
     cameraFloor: targetFloor,
   };
 }
+
+export function placePendingSpecialTileState(g, placement, { getIdolChoiceStateForQueuedEvent }) {
+  const pendingPlacement = g.pendingSpecialPlacement;
+  if (!pendingPlacement) return { game: g, cameraFloor: null };
+
+  const currentPlayer = g.players[g.currentPlayerIndex];
+  const chosenDoors = placement.validRotations[0];
+  const placedTile = {
+    ...pendingPlacement.tile,
+    x: placement.x,
+    y: placement.y,
+    floor: placement.floor,
+    doors: chosenDoors,
+  };
+
+  if (pendingPlacement.mode === "move-existing") {
+    const currentPlayerIndex = g.currentPlayerIndex;
+    const oldFloor = pendingPlacement.tile.floor;
+    const updatedBoard = {
+      ...g.board,
+      [oldFloor]: (g.board[oldFloor] || []).filter((tile) => tile !== pendingPlacement.tile),
+      [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
+    };
+    const updatedPlayers = g.players.map((player, index) =>
+      index === currentPlayerIndex ? { ...player, x: placement.x, y: placement.y, floor: placement.floor } : player
+    );
+
+    const idolOfferState = getIdolChoiceStateForQueuedEvent({
+      player: currentPlayer,
+      tileName: placedTile.name,
+      queuedCard: pendingPlacement.queuedCard,
+      nextTurnPhase: pendingPlacement.nextTurnPhase,
+      nextMessage: pendingPlacement.nextMessage,
+      offerMessage: `${currentPlayer.name} discovered an Event symbol.`,
+    });
+    if (idolOfferState) {
+      return {
+        game: {
+          ...g,
+          board: updatedBoard,
+          players: updatedPlayers,
+          movePath: [{ x: placement.x, y: placement.y, floor: placement.floor, cost: 0 }],
+          pendingSpecialPlacement: null,
+          drawnCard: idolOfferState.drawnCard,
+          tileEffect: idolOfferState.tileEffect,
+          turnPhase: idolOfferState.turnPhase,
+          message: idolOfferState.message,
+        },
+        cameraFloor: placement.floor,
+      };
+    }
+
+    return {
+      game: {
+        ...g,
+        board: updatedBoard,
+        players: updatedPlayers,
+        movePath: [{ x: placement.x, y: placement.y, floor: placement.floor, cost: 0 }],
+        pendingSpecialPlacement: null,
+        drawnCard: pendingPlacement.queuedCard || null,
+        turnPhase: pendingPlacement.nextTurnPhase,
+        message: pendingPlacement.nextMessage,
+      },
+      cameraFloor: placement.floor,
+    };
+  }
+
+  const idolOfferState = getIdolChoiceStateForQueuedEvent({
+    player: currentPlayer,
+    tileName: placedTile.name,
+    queuedCard: pendingPlacement.queuedCard,
+    nextTurnPhase: pendingPlacement.nextTurnPhase,
+    nextMessage: pendingPlacement.nextMessage,
+    offerMessage: `${currentPlayer.name} discovered an Event symbol.`,
+  });
+  if (idolOfferState) {
+    return {
+      game: {
+        ...g,
+        board: {
+          ...g.board,
+          [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
+        },
+        pendingSpecialPlacement: null,
+        drawnCard: idolOfferState.drawnCard,
+        tileEffect: idolOfferState.tileEffect,
+        turnPhase: idolOfferState.turnPhase,
+        message: idolOfferState.message,
+      },
+      cameraFloor: null,
+    };
+  }
+
+  return {
+    game: {
+      ...g,
+      board: {
+        ...g.board,
+        [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
+      },
+      pendingSpecialPlacement: null,
+      drawnCard: pendingPlacement.queuedCard || null,
+      turnPhase: pendingPlacement.nextTurnPhase,
+      message: pendingPlacement.nextMessage,
+    },
+    cameraFloor: null,
+  };
+}

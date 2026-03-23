@@ -80,12 +80,19 @@ import {
   exploreState,
   getValidMovesState,
   movePlayerState,
+  placePendingSpecialTileState,
 } from "./movement/playerMovementState";
 import {
+  adjustDamageAllocationChoiceState,
   applyDamageAllocationState,
+  applyPostDamagePassiveEffectsState,
   applyStatChangeState,
+  confirmDamageChoiceState,
+  getDamagePreviewState,
+  getStatTrackCellClassState,
   passTurnCoreState,
   passTurnWithEndTurnItemsState,
+  toggleDamageConversionChoiceState,
 } from "./players/playerState";
 import "./GameBoard.css";
 
@@ -911,164 +918,60 @@ export default function GameBoard({ players, onQuit }) {
   }, [queuedTraitRollOverride, game.drawnCard, handleDismissCard]);
 
   function handleAdjustDamageAllocation(stat, delta) {
-    setGame((g) => {
-      const choice = g.damageChoice;
-      if (!choice || !choice.allowedStats.includes(stat)) return g;
-
-      const currentPlayerState = g.players[g.currentPlayerIndex];
-      const currentAmount = choice.allocation[stat] || 0;
-      const selectedTotal = Object.values(choice.allocation).reduce((sum, value) => sum + value, 0);
-      const maxForStat =
-        choice.adjustmentMode === "increase"
-          ? currentPlayerState.character[stat].length - 1 - currentPlayerState.statIndex[stat]
-          : currentPlayerState.statIndex[stat];
-
-      if (delta > 0) {
-        if (selectedTotal >= choice.amount) return g;
-        if (currentAmount >= maxForStat) return g;
-      }
-
-      if (delta < 0 && currentAmount <= 0) return g;
-
-      return {
-        ...g,
-        damageChoice: {
-          ...(() => {
-            const nextChoice = {
-              ...choice,
-              allocation: {
-                ...choice.allocation,
-                [stat]: Math.max(0, currentAmount + delta),
-              },
-            };
-
-            return {
-              ...nextChoice,
-              postDamageEffects: getPostDamageEffectsForChoice(currentPlayerState, nextChoice),
-            };
-          })(),
-        },
-      };
-    });
+    setGame((g) =>
+      adjustDamageAllocationChoiceState(g, stat, delta, {
+        getPostDamageEffectsForChoice,
+      })
+    );
   }
 
   function handleToggleDamageConversion() {
-    setGame((g) => {
-      const choice = g.damageChoice;
-      if (!choice?.canConvertToGeneral) return g;
-
-      const nextDamageType = choice.damageType === "general" ? choice.originalDamageType : "general";
-      return {
-        ...g,
-        damageChoice: updateDamageChoiceType(choice, g.players[g.currentPlayerIndex], nextDamageType),
-      };
-    });
+    setGame((g) =>
+      toggleDamageConversionChoiceState(g, {
+        updateDamageChoiceType,
+      })
+    );
   }
 
   function applyPostDamagePassiveEffects(players, playerIndex, choice) {
-    if (!choice || choice.amount <= 0 || !choice.postDamageEffects?.length) {
-      return { players, message: "" };
-    }
-
-    let updatedPlayers = players;
-    const playerName = players[playerIndex]?.name || "Player";
-    const messages = [];
-
-    for (const effect of choice.postDamageEffects) {
-      const beforeIndex = updatedPlayers[playerIndex].statIndex[effect.stat];
-      updatedPlayers = applyStatChange(updatedPlayers, playerIndex, effect.stat, effect.amount);
-      const afterIndex = updatedPlayers[playerIndex].statIndex[effect.stat];
-      const appliedAmount = afterIndex - beforeIndex;
-
-      if (appliedAmount > 0) {
-        messages.push(`${playerName} gains ${appliedAmount} ${STAT_LABELS[effect.stat]} from ${effect.sourceName}.`);
-      }
-    }
-
-    return {
-      players: updatedPlayers,
-      message: messages.join(" "),
-    };
+    return applyPostDamagePassiveEffectsState(players, playerIndex, choice, {
+      applyStatChange,
+      statLabels: STAT_LABELS,
+    });
   }
 
   function handleConfirmDamageChoice() {
     let nextCameraFloor = null;
+    let shouldClearDiceAnimation = false;
+
     setGame((g) => {
-      const choice = g.damageChoice;
-      if (!choice) return g;
-
-      const selectedTotal = Object.values(choice.allocation).reduce((sum, value) => sum + value, 0);
-      if (choice.allowPartial) {
-        if (selectedTotal > choice.amount) return g;
-      } else if (selectedTotal !== choice.amount) {
-        return g;
-      }
-
-      const damagedPlayers = applyDamageAllocation(
-        g.players,
-        g.currentPlayerIndex,
-        choice.allocation,
-        choice.adjustmentMode
-      );
-      const postDamageResult = applyPostDamagePassiveEffects(damagedPlayers, g.currentPlayerIndex, choice);
-      const resolvedPlayers = applyTileEffectConsequences(g, postDamageResult.players, choice.effect);
-      const baseState = {
-        ...g,
-        players: resolvedPlayers,
-        tileEffect: null,
-        damageChoice: null,
-      };
-
-      const eventDamageResult = resolveEventDamageChoiceState(g, choice, baseState, postDamageResult.message, {
+      const resolved = confirmDamageChoiceState(g, {
+        applyDamageAllocation,
+        applyPostDamagePassiveEffects,
+        applyTileEffectConsequences,
+        resolveEventDamageChoiceState,
         runAdvanceEventResolution,
+        passTurn,
       });
-      if (eventDamageResult) {
-        nextCameraFloor = eventDamageResult.cameraFloor;
-        return eventDamageResult.game;
-      }
-
-      const nextState = passTurn(baseState);
-
-      return postDamageResult.message
-        ? {
-            ...nextState,
-            message: `${postDamageResult.message} ${nextState.message}`,
-          }
-        : nextState;
+      nextCameraFloor = resolved.cameraFloor;
+      shouldClearDiceAnimation = resolved.clearDiceAnimation;
+      return resolved.game;
     });
-    setDiceAnimation(null);
+
+    if (shouldClearDiceAnimation) {
+      setDiceAnimation(null);
+    }
     if (nextCameraFloor) {
       setCameraFloor(nextCameraFloor);
     }
   }
 
   function getDamagePreview(player, choice) {
-    const preview = { ...player.statIndex };
-    if (!choice) return preview;
-
-    for (const [stat, amount] of Object.entries(choice.allocation)) {
-      if (choice.adjustmentMode === "increase") {
-        const maxIndex = player.character[stat].length - 1;
-        preview[stat] = Math.min(maxIndex, preview[stat] + amount);
-      } else {
-        preview[stat] = Math.max(0, preview[stat] - amount);
-      }
-    }
-    return preview;
+    return getDamagePreviewState(player, choice);
   }
 
   function getStatTrackCellClass(index, currentIndex, previewIndex, adjustmentMode = "decrease") {
-    if (index === currentIndex && index === previewIndex) {
-      return "stat-track-cell stat-track-cell-current";
-    }
-    if (index === currentIndex) return "stat-track-cell stat-track-cell-current";
-    if (index === previewIndex) {
-      return `stat-track-cell ${
-        adjustmentMode === "increase" ? "stat-track-cell-preview-gain" : "stat-track-cell-preview-loss"
-      }`;
-    }
-    if (index < previewIndex) return "stat-track-cell stat-track-cell-spent";
-    return "stat-track-cell";
+    return getStatTrackCellClassState(index, currentIndex, previewIndex, adjustmentMode);
   }
 
   function handleDismissTileEffect() {
@@ -1216,103 +1119,19 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handlePlacePendingSpecialTile(placement) {
+    let nextCameraFloor = null;
+
     setGame((g) => {
-      const pendingPlacement = g.pendingSpecialPlacement;
-      if (!pendingPlacement) return g;
-      const currentPlayer = g.players[g.currentPlayerIndex];
-
-      const chosenDoors = placement.validRotations[0];
-      const placedTile = {
-        ...pendingPlacement.tile,
-        x: placement.x,
-        y: placement.y,
-        floor: placement.floor,
-        doors: chosenDoors,
-      };
-
-      if (pendingPlacement.mode === "move-existing") {
-        const currentPlayerIndex = g.currentPlayerIndex;
-        const oldFloor = pendingPlacement.tile.floor;
-        const updatedBoard = {
-          ...g.board,
-          [oldFloor]: (g.board[oldFloor] || []).filter((tile) => tile !== pendingPlacement.tile),
-          [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
-        };
-        const updatedPlayers = g.players.map((player, index) =>
-          index === currentPlayerIndex ? { ...player, x: placement.x, y: placement.y, floor: placement.floor } : player
-        );
-
-        setCameraFloor(placement.floor);
-
-        const idolOfferState = getIdolChoiceStateForQueuedEvent({
-          player: currentPlayer,
-          tileName: placedTile.name,
-          queuedCard: pendingPlacement.queuedCard,
-          nextTurnPhase: pendingPlacement.nextTurnPhase,
-          nextMessage: pendingPlacement.nextMessage,
-          offerMessage: `${currentPlayer.name} discovered an Event symbol.`,
-        });
-        if (idolOfferState) {
-          return {
-            ...g,
-            board: updatedBoard,
-            players: updatedPlayers,
-            movePath: [{ x: placement.x, y: placement.y, floor: placement.floor, cost: 0 }],
-            pendingSpecialPlacement: null,
-            drawnCard: idolOfferState.drawnCard,
-            tileEffect: idolOfferState.tileEffect,
-            turnPhase: idolOfferState.turnPhase,
-            message: idolOfferState.message,
-          };
-        }
-
-        return {
-          ...g,
-          board: updatedBoard,
-          players: updatedPlayers,
-          movePath: [{ x: placement.x, y: placement.y, floor: placement.floor, cost: 0 }],
-          pendingSpecialPlacement: null,
-          drawnCard: pendingPlacement.queuedCard || null,
-          turnPhase: pendingPlacement.nextTurnPhase,
-          message: pendingPlacement.nextMessage,
-        };
-      }
-
-      const idolOfferState = getIdolChoiceStateForQueuedEvent({
-        player: currentPlayer,
-        tileName: placedTile.name,
-        queuedCard: pendingPlacement.queuedCard,
-        nextTurnPhase: pendingPlacement.nextTurnPhase,
-        nextMessage: pendingPlacement.nextMessage,
-        offerMessage: `${currentPlayer.name} discovered an Event symbol.`,
+      const resolved = placePendingSpecialTileState(g, placement, {
+        getIdolChoiceStateForQueuedEvent,
       });
-      if (idolOfferState) {
-        return {
-          ...g,
-          board: {
-            ...g.board,
-            [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
-          },
-          pendingSpecialPlacement: null,
-          drawnCard: idolOfferState.drawnCard,
-          tileEffect: idolOfferState.tileEffect,
-          turnPhase: idolOfferState.turnPhase,
-          message: idolOfferState.message,
-        };
-      }
-
-      return {
-        ...g,
-        board: {
-          ...g.board,
-          [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
-        },
-        pendingSpecialPlacement: null,
-        drawnCard: pendingPlacement.queuedCard || null,
-        turnPhase: pendingPlacement.nextTurnPhase,
-        message: pendingPlacement.nextMessage,
-      };
+      nextCameraFloor = resolved.cameraFloor;
+      return resolved.game;
     });
+
+    if (nextCameraFloor) {
+      setCameraFloor(nextCameraFloor);
+    }
   }
 
   function toggleSidebarPlayer(index) {

@@ -101,3 +101,165 @@ export function passTurnWithEndTurnItemsState(g, { resolveEndTurnItemPassiveStat
 
   return passTurnCore(g);
 }
+
+export function adjustDamageAllocationChoiceState(g, stat, delta, { getPostDamageEffectsForChoice }) {
+  const choice = g.damageChoice;
+  if (!choice || !choice.allowedStats.includes(stat)) return g;
+
+  const currentPlayerState = g.players[g.currentPlayerIndex];
+  const currentAmount = choice.allocation[stat] || 0;
+  const selectedTotal = Object.values(choice.allocation).reduce((sum, value) => sum + value, 0);
+  const maxForStat =
+    choice.adjustmentMode === "increase"
+      ? currentPlayerState.character[stat].length - 1 - currentPlayerState.statIndex[stat]
+      : currentPlayerState.statIndex[stat];
+
+  if (delta > 0) {
+    if (selectedTotal >= choice.amount) return g;
+    if (currentAmount >= maxForStat) return g;
+  }
+
+  if (delta < 0 && currentAmount <= 0) return g;
+
+  const nextChoice = {
+    ...choice,
+    allocation: {
+      ...choice.allocation,
+      [stat]: Math.max(0, currentAmount + delta),
+    },
+  };
+
+  return {
+    ...g,
+    damageChoice: {
+      ...nextChoice,
+      postDamageEffects: getPostDamageEffectsForChoice(currentPlayerState, nextChoice),
+    },
+  };
+}
+
+export function toggleDamageConversionChoiceState(g, { updateDamageChoiceType }) {
+  const choice = g.damageChoice;
+  if (!choice?.canConvertToGeneral) return g;
+
+  const nextDamageType = choice.damageType === "general" ? choice.originalDamageType : "general";
+  return {
+    ...g,
+    damageChoice: updateDamageChoiceType(choice, g.players[g.currentPlayerIndex], nextDamageType),
+  };
+}
+
+export function applyPostDamagePassiveEffectsState(players, playerIndex, choice, { applyStatChange, statLabels }) {
+  if (!choice || choice.amount <= 0 || !choice.postDamageEffects?.length) {
+    return { players, message: "" };
+  }
+
+  let updatedPlayers = players;
+  const playerName = players[playerIndex]?.name || "Player";
+  const messages = [];
+
+  for (const effect of choice.postDamageEffects) {
+    const beforeIndex = updatedPlayers[playerIndex].statIndex[effect.stat];
+    updatedPlayers = applyStatChange(updatedPlayers, playerIndex, effect.stat, effect.amount);
+    const afterIndex = updatedPlayers[playerIndex].statIndex[effect.stat];
+    const appliedAmount = afterIndex - beforeIndex;
+
+    if (appliedAmount > 0) {
+      messages.push(`${playerName} gains ${appliedAmount} ${statLabels[effect.stat]} from ${effect.sourceName}.`);
+    }
+  }
+
+  return {
+    players: updatedPlayers,
+    message: messages.join(" "),
+  };
+}
+
+export function confirmDamageChoiceState(
+  g,
+  {
+    applyDamageAllocation,
+    applyPostDamagePassiveEffects,
+    applyTileEffectConsequences,
+    resolveEventDamageChoiceState,
+    runAdvanceEventResolution,
+    passTurn,
+  }
+) {
+  const choice = g.damageChoice;
+  if (!choice) return { game: g, cameraFloor: null, clearDiceAnimation: false };
+
+  const selectedTotal = Object.values(choice.allocation).reduce((sum, value) => sum + value, 0);
+  if (choice.allowPartial) {
+    if (selectedTotal > choice.amount) return { game: g, cameraFloor: null, clearDiceAnimation: false };
+  } else if (selectedTotal !== choice.amount) {
+    return { game: g, cameraFloor: null, clearDiceAnimation: false };
+  }
+
+  const damagedPlayers = applyDamageAllocation(
+    g.players,
+    g.currentPlayerIndex,
+    choice.allocation,
+    choice.adjustmentMode
+  );
+  const postDamageResult = applyPostDamagePassiveEffects(damagedPlayers, g.currentPlayerIndex, choice);
+  const resolvedPlayers = applyTileEffectConsequences(g, postDamageResult.players, choice.effect);
+  const baseState = {
+    ...g,
+    players: resolvedPlayers,
+    tileEffect: null,
+    damageChoice: null,
+  };
+
+  const eventDamageResult = resolveEventDamageChoiceState(g, choice, baseState, postDamageResult.message, {
+    runAdvanceEventResolution,
+  });
+  if (eventDamageResult) {
+    return {
+      game: eventDamageResult.game,
+      cameraFloor: eventDamageResult.cameraFloor,
+      clearDiceAnimation: true,
+    };
+  }
+
+  const nextState = passTurn(baseState);
+  return {
+    game: postDamageResult.message
+      ? {
+          ...nextState,
+          message: `${postDamageResult.message} ${nextState.message}`,
+        }
+      : nextState,
+    cameraFloor: null,
+    clearDiceAnimation: true,
+  };
+}
+
+export function getDamagePreviewState(player, choice) {
+  const preview = { ...player.statIndex };
+  if (!choice) return preview;
+
+  for (const [stat, amount] of Object.entries(choice.allocation)) {
+    if (choice.adjustmentMode === "increase") {
+      const maxIndex = player.character[stat].length - 1;
+      preview[stat] = Math.min(maxIndex, preview[stat] + amount);
+    } else {
+      preview[stat] = Math.max(0, preview[stat] - amount);
+    }
+  }
+  return preview;
+}
+
+export function getStatTrackCellClassState(index, currentIndex, previewIndex, adjustmentMode = "decrease") {
+  if (index === currentIndex && index === previewIndex) {
+    return "stat-track-cell stat-track-cell-current";
+  }
+  if (index === currentIndex) return "stat-track-cell stat-track-cell-current";
+  if (index === previewIndex) {
+    return `stat-track-cell ${
+      adjustmentMode === "increase" ? "stat-track-cell-preview-gain" : "stat-track-cell-preview-loss"
+    }`;
+  }
+  if (index < previewIndex) return "stat-track-cell stat-track-cell-spent";
+  return "stat-track-cell";
+}
