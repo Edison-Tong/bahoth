@@ -27,6 +27,7 @@ import {
   resolveEventDamageChoiceState,
   getDogTradeTargets,
   getDogMoveOptions,
+  isItemAbilityTileChoiceAwaiting,
 } from "./events/eventActions";
 import { getMatchingOutcome } from "./events/eventEngine";
 import { useDrawnCardHandlers, useEventActionHandlers, useEventRuntimeEffects } from "./events/useEventHooks";
@@ -37,12 +38,20 @@ import EventResolutionModal, {
 } from "./components/EventResolutionModal";
 import {
   applyDrawIdolEventCardState,
+  getIdolChoiceStateForQueuedEvent,
   applySkipIdolEventCardState,
-  buildIdolChoiceTileEffect,
-  hasIdol,
-  shouldOfferIdolChoice,
 } from "./omens/idolAbility";
 import { resolveSpecialOmenNowAbilityState } from "./omens/activeOmenNowAbility";
+import {
+  applyDogTradeMoveState,
+  createDogTradeBackToMoveState,
+  createDogTradeSelectionState,
+  getDogTradeUiState,
+  isItemTradeLockedThisTurn,
+  resolveConfirmDogTradeState,
+  toggleDogTradeOwnerGiveState,
+  toggleDogTradeTargetGiveState,
+} from "./omens/dogAbility";
 import {
   isEndTurnItemChoiceEffect,
   resolveEndTurnItemPassiveChoiceState,
@@ -102,15 +111,6 @@ function describePostDamageEffects(effects) {
 
 function formatStatTrackValue(value) {
   return value === 0 ? "☠" : value;
-}
-
-function isItemTradeLockedThisTurn(card, turnNumber) {
-  if (!card) return false;
-  return (
-    card.lastActiveAbilityTurnUsed === turnNumber ||
-    card.lastAttackTurnUsed === turnNumber ||
-    card.lastUsedTurn === turnNumber
-  );
 }
 
 function DiceRow({ dice, modifier = null, rolling = false }) {
@@ -544,10 +544,7 @@ export default function GameBoard({ players, onQuit }) {
   useEffect(() => {
     function handleKeyDown(e) {
       if (dogTradeState) return;
-      if (
-        game.eventState?.awaiting?.type === "tile-choice" &&
-        game.eventState.awaiting?.source === "item-active-ability"
-      ) {
+      if (isItemAbilityTileChoiceAwaiting(game.eventState)) {
         return;
       }
 
@@ -712,10 +709,7 @@ export default function GameBoard({ players, onQuit }) {
   // Get valid move directions from current tile
   function getValidMoves() {
     if (game.turnPhase !== "move") return [];
-    if (
-      game.eventState?.awaiting?.type === "tile-choice" &&
-      game.eventState.awaiting?.source === "item-active-ability"
-    ) {
+    if (isItemAbilityTileChoiceAwaiting(game.eventState)) {
       return [];
     }
 
@@ -1215,23 +1209,20 @@ export default function GameBoard({ players, onQuit }) {
           message = gainMessage;
         }
 
-        const idolOwner = nextPlayers[g.currentPlayerIndex];
-        if (
-          shouldOfferIdolChoice({
-            player: idolOwner,
-            queuedCard: drawnCard,
-            blockedByTileEffect: !!tileEffect,
-          })
-        ) {
-          tileEffect = buildIdolChoiceTileEffect({
-            tileName: placedTile.name,
-            queuedCard: drawnCard,
-            nextTurnPhase: "move",
-            nextMessage: `${p.name} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
-          });
-          drawnCard = null;
-          turnPhase = "card";
-          message = `${p.name} discovered an Event symbol.`;
+        const idolOfferState = getIdolChoiceStateForQueuedEvent({
+          player: nextPlayers[g.currentPlayerIndex],
+          tileName: placedTile.name,
+          queuedCard: drawnCard,
+          nextTurnPhase: "move",
+          nextMessage: `${p.name} ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`,
+          blockedByTileEffect: !!tileEffect,
+          offerMessage: `${p.name} discovered an Event symbol.`,
+        });
+        if (idolOfferState) {
+          tileEffect = idolOfferState.tileEffect;
+          drawnCard = idolOfferState.drawnCard;
+          turnPhase = idolOfferState.turnPhase;
+          message = idolOfferState.message;
         }
 
         return {
@@ -1388,7 +1379,7 @@ export default function GameBoard({ players, onQuit }) {
   // End turn
   function handleEndTurn() {
     setGame((g) => {
-      if (g.eventState?.awaiting?.type === "tile-choice" && g.eventState.awaiting?.source === "item-active-ability") {
+      if (isItemAbilityTileChoiceAwaiting(g.eventState)) {
         return g;
       }
 
@@ -1744,19 +1735,22 @@ export default function GameBoard({ players, onQuit }) {
 
         const currentPlayer = g.players[g.currentPlayerIndex];
         const queuedEventCard = effect.pendingSpecialPlacement ? null : effect.queuedCard || null;
-        if (shouldOfferIdolChoice({ player: currentPlayer, queuedCard: queuedEventCard })) {
+        const idolOfferState = getIdolChoiceStateForQueuedEvent({
+          player: currentPlayer,
+          tileName: effect.tileName,
+          queuedCard: queuedEventCard,
+          nextTurnPhase: effect.nextTurnPhase,
+          nextMessage: effect.nextMessage,
+          offerMessage: `${currentPlayer.name} discovered an Event symbol.`,
+        });
+        if (idolOfferState) {
           return {
             ...g,
-            tileEffect: buildIdolChoiceTileEffect({
-              tileName: effect.tileName,
-              queuedCard: queuedEventCard,
-              nextTurnPhase: effect.nextTurnPhase,
-              nextMessage: effect.nextMessage,
-            }),
-            drawnCard: null,
+            tileEffect: idolOfferState.tileEffect,
+            drawnCard: idolOfferState.drawnCard,
             pendingSpecialPlacement: effect.pendingSpecialPlacement || null,
-            turnPhase: "card",
-            message: `${currentPlayer.name} discovered an Event symbol.`,
+            turnPhase: idolOfferState.turnPhase,
+            message: idolOfferState.message,
           };
         }
 
@@ -1889,8 +1883,6 @@ export default function GameBoard({ players, onQuit }) {
       const pendingPlacement = g.pendingSpecialPlacement;
       if (!pendingPlacement) return g;
       const currentPlayer = g.players[g.currentPlayerIndex];
-      const currentPlayerHasIdol = hasIdol(currentPlayer);
-      const isQueuedEventCard = pendingPlacement.queuedCard?.type === "event";
 
       const chosenDoors = placement.validRotations[0];
       const placedTile = {
@@ -1915,22 +1907,25 @@ export default function GameBoard({ players, onQuit }) {
 
         setCameraFloor(placement.floor);
 
-        if (currentPlayerHasIdol && isQueuedEventCard) {
+        const idolOfferState = getIdolChoiceStateForQueuedEvent({
+          player: currentPlayer,
+          tileName: placedTile.name,
+          queuedCard: pendingPlacement.queuedCard,
+          nextTurnPhase: pendingPlacement.nextTurnPhase,
+          nextMessage: pendingPlacement.nextMessage,
+          offerMessage: `${currentPlayer.name} discovered an Event symbol.`,
+        });
+        if (idolOfferState) {
           return {
             ...g,
             board: updatedBoard,
             players: updatedPlayers,
             movePath: [{ x: placement.x, y: placement.y, floor: placement.floor, cost: 0 }],
             pendingSpecialPlacement: null,
-            drawnCard: null,
-            tileEffect: buildIdolChoiceTileEffect({
-              tileName: placedTile.name,
-              queuedCard: pendingPlacement.queuedCard,
-              nextTurnPhase: pendingPlacement.nextTurnPhase,
-              nextMessage: pendingPlacement.nextMessage,
-            }),
-            turnPhase: "card",
-            message: `${currentPlayer.name} discovered an Event symbol.`,
+            drawnCard: idolOfferState.drawnCard,
+            tileEffect: idolOfferState.tileEffect,
+            turnPhase: idolOfferState.turnPhase,
+            message: idolOfferState.message,
           };
         }
 
@@ -1946,7 +1941,15 @@ export default function GameBoard({ players, onQuit }) {
         };
       }
 
-      if (currentPlayerHasIdol && isQueuedEventCard) {
+      const idolOfferState = getIdolChoiceStateForQueuedEvent({
+        player: currentPlayer,
+        tileName: placedTile.name,
+        queuedCard: pendingPlacement.queuedCard,
+        nextTurnPhase: pendingPlacement.nextTurnPhase,
+        nextMessage: pendingPlacement.nextMessage,
+        offerMessage: `${currentPlayer.name} discovered an Event symbol.`,
+      });
+      if (idolOfferState) {
         return {
           ...g,
           board: {
@@ -1954,15 +1957,10 @@ export default function GameBoard({ players, onQuit }) {
             [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
           },
           pendingSpecialPlacement: null,
-          drawnCard: null,
-          tileEffect: buildIdolChoiceTileEffect({
-            tileName: placedTile.name,
-            queuedCard: pendingPlacement.queuedCard,
-            nextTurnPhase: pendingPlacement.nextTurnPhase,
-            nextMessage: pendingPlacement.nextMessage,
-          }),
-          turnPhase: "card",
-          message: `${currentPlayer.name} discovered an Event symbol.`,
+          drawnCard: idolOfferState.drawnCard,
+          tileEffect: idolOfferState.tileEffect,
+          turnPhase: idolOfferState.turnPhase,
+          message: idolOfferState.message,
         };
       }
 
@@ -2078,78 +2076,25 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleStartDogTrade(targetPlayerIndex) {
-    setDogTradeState((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        phase: "trade",
-        targetPlayerIndex,
-        targetGiveIndexes: [],
-      };
-    });
+    setDogTradeState((prev) => createDogTradeSelectionState(prev, targetPlayerIndex));
   }
 
   function handleMoveDogToken(move) {
     if (!move) return;
     setCameraFloor(move.floor);
-    setDogTradeState((prev) => {
-      if (!prev || prev.phase !== "move") return prev;
-      const cost = Number(move?.cost) || 0;
-      if (cost <= 0 || cost > prev.movesLeft) return prev;
-
-      return {
-        ...prev,
-        floor: move.floor,
-        x: move.x,
-        y: move.y,
-        movesLeft: prev.movesLeft - cost,
-      };
-    });
+    setDogTradeState((prev) => applyDogTradeMoveState(prev, move));
   }
 
   function handleBackToDogMove() {
-    setDogTradeState((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        phase: "move",
-        targetPlayerIndex: null,
-        ownerGiveIndexes: [],
-        targetGiveIndexes: [],
-      };
-    });
+    setDogTradeState((prev) => createDogTradeBackToMoveState(prev));
   }
 
   function handleToggleDogOwnerGive(index) {
-    setDogTradeState((prev) => {
-      if (!prev) return prev;
-      const owner = game.players[prev.ownerIndex];
-      const card = owner?.inventory?.[index];
-      if (!card || isItemTradeLockedThisTurn(card, game.turnNumber)) return prev;
-      const exists = prev.ownerGiveIndexes.includes(index);
-      return {
-        ...prev,
-        ownerGiveIndexes: exists
-          ? prev.ownerGiveIndexes.filter((value) => value !== index)
-          : [...prev.ownerGiveIndexes, index],
-      };
-    });
+    setDogTradeState((prev) => toggleDogTradeOwnerGiveState(prev, game, index, game.turnNumber));
   }
 
   function handleToggleDogTargetGive(index) {
-    setDogTradeState((prev) => {
-      if (!prev) return prev;
-      const target = game.players[prev.targetPlayerIndex];
-      const card = target?.inventory?.[index];
-      if (!card || isItemTradeLockedThisTurn(card, game.turnNumber)) return prev;
-      const exists = prev.targetGiveIndexes.includes(index);
-      return {
-        ...prev,
-        targetGiveIndexes: exists
-          ? prev.targetGiveIndexes.filter((value) => value !== index)
-          : [...prev.targetGiveIndexes, index],
-      };
-    });
+    setDogTradeState((prev) => toggleDogTradeTargetGiveState(prev, game, index, game.turnNumber));
   }
 
   function handleCancelDogTrade() {
@@ -2157,89 +2102,9 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleConfirmDogTrade() {
-    if (!dogTradeState) return;
-
-    const owner = game.players[dogTradeState.ownerIndex];
-    const target = game.players[dogTradeState.targetPlayerIndex];
-    if (!owner || !target) {
-      setDogTradeState(null);
-      return;
-    }
-
-    const targetOnDogTile =
-      target.floor === dogTradeState.floor && target.x === dogTradeState.x && target.y === dogTradeState.y;
-    if (!targetOnDogTile) {
-      setGame((g) => ({
-        ...g,
-        message: "Dog must be on the same tile as the explorer to trade.",
-      }));
-      return;
-    }
-
-    const ownerGiveSet = new Set(
-      dogTradeState.ownerGiveIndexes.filter(
-        (index) =>
-          Number.isInteger(index) &&
-          index >= 0 &&
-          index < owner.inventory.length &&
-          !isItemTradeLockedThisTurn(owner.inventory[index], game.turnNumber)
-      )
-    );
-    const targetGiveSet = new Set(
-      dogTradeState.targetGiveIndexes.filter(
-        (index) =>
-          Number.isInteger(index) &&
-          index >= 0 &&
-          index < target.inventory.length &&
-          !isItemTradeLockedThisTurn(target.inventory[index], game.turnNumber)
-      )
-    );
-
-    if (ownerGiveSet.size === 0 && targetGiveSet.size === 0) {
-      setGame((g) => ({
-        ...g,
-        message: "Select at least one item for Dog to carry.",
-      }));
-      return;
-    }
-
-    const ownerGivenItems = owner.inventory.filter((_, index) => ownerGiveSet.has(index));
-    const targetGivenItems = target.inventory.filter((_, index) => targetGiveSet.has(index));
-    const ownerRemainingItems = owner.inventory.filter((_, index) => !ownerGiveSet.has(index));
-    const targetRemainingItems = target.inventory.filter((_, index) => !targetGiveSet.has(index));
-
-    const nextPlayers = game.players.map((player, index) => {
-      if (index === dogTradeState.ownerIndex) {
-        return {
-          ...player,
-          inventory: [...ownerRemainingItems, ...targetGivenItems],
-          omens: player.omens.map((card, cardIndex) =>
-            cardIndex === dogTradeState.dogOmenIndex
-              ? {
-                  ...card,
-                  lastActiveAbilityTurnUsed: game.turnNumber,
-                }
-              : card
-          ),
-        };
-      }
-
-      if (index === dogTradeState.targetPlayerIndex) {
-        return {
-          ...player,
-          inventory: [...targetRemainingItems, ...ownerGivenItems],
-        };
-      }
-
-      return player;
-    });
-
-    setGame({
-      ...game,
-      players: nextPlayers,
-      message: `${owner.name}'s Dog completed a trade with ${target.name} (${ownerGivenItems.length} item${ownerGivenItems.length !== 1 ? "s" : ""} sent, ${targetGivenItems.length} item${targetGivenItems.length !== 1 ? "s" : ""} returned).`,
-    });
-    setDogTradeState(null);
+    const result = resolveConfirmDogTradeState(game, dogTradeState, game.turnNumber);
+    setGame(result.nextGame);
+    setDogTradeState(result.nextDogTradeState);
   }
 
   function handleSelectRabbitFootDie(dieIndex) {
@@ -2325,44 +2190,19 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   const validMoves = cameraFloor === currentPlayer.floor ? getValidMoves() : [];
-  const dogMoveOptions =
-    dogTradeState?.phase === "move"
-      ? getDogMoveOptions(
-          game,
-          {
-            floor: dogTradeState.floor,
-            x: dogTradeState.x,
-            y: dogTradeState.y,
-          },
-          dogTradeState.movesLeft
-        )
-      : [];
-  const dogMoveOptionsOnFloor = dogMoveOptions.filter((move) => move.floor === cameraFloor);
-  const dogStairMoveOption =
-    dogTradeState?.phase === "move" ? dogMoveOptions.find((move) => move.floor !== dogTradeState.floor) || null : null;
-  const dogStairDestination = dogStairMoveOption
-    ? getTileAtPosition(game.board, dogStairMoveOption.x, dogStairMoveOption.y, dogStairMoveOption.floor)
-    : null;
-  const dogTradeTargetsOnTile =
-    dogTradeState?.phase === "move"
-      ? game.players
-          .map((player, playerIndex) => ({ player, playerIndex }))
-          .filter(
-            ({ player, playerIndex }) =>
-              playerIndex !== dogTradeState.ownerIndex &&
-              player.isAlive &&
-              player.floor === dogTradeState.floor &&
-              player.x === dogTradeState.x &&
-              player.y === dogTradeState.y
-          )
-      : [];
+  const { dogMoveOptionsOnFloor, dogStairMoveOption, dogStairDestination, dogTradeTargetsOnTile } = getDogTradeUiState(
+    game,
+    dogTradeState,
+    cameraFloor,
+    getDogMoveOptions,
+    getTileAtPosition
+  );
   const pendingSpecialPlacementTargets = (game.pendingSpecialPlacement?.placements || []).filter(
     (placement) => placement.floor === cameraFloor
   );
   const damageChoice = game.damageChoice;
   const eventState = game.eventState;
-  const isItemAbilityTileChoiceActive =
-    eventState?.awaiting?.type === "tile-choice" && eventState.awaiting?.source === "item-active-ability";
+  const isItemAbilityTileChoiceActive = isItemAbilityTileChoiceAwaiting(eventState);
   const { drawnEventPrimaryAction, eventTileChoiceOptions, selectedEventTileChoiceId, showEventResolutionModal } =
     getEventUiState(game, eventEngineDeps, queuedTraitRollOverride);
   const viewedCardActiveAbilityState = viewedCard
@@ -2763,7 +2603,7 @@ export default function GameBoard({ players, onQuit }) {
         {(game.turnPhase === "endTurn" || game.turnPhase === "move") &&
           !game.pendingExplore &&
           !dogTradeState &&
-          !(eventState?.awaiting?.type === "tile-choice" && eventState.awaiting?.source === "item-active-ability") && (
+          !isItemAbilityTileChoiceAwaiting(eventState) && (
             <button className="btn btn-primary" onClick={handleEndTurn}>
               End Turn — Pass to {endTurnPreviewPlayerName}
             </button>

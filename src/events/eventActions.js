@@ -11,6 +11,7 @@ import {
   getBookUsageState as getBookUsageStateFromAbility,
 } from "../omens/bookAbility";
 import { isDogTradeAvailableThisTurn as isDogTradeAvailableThisTurnFromAbility } from "../omens/dogAbility";
+import { isSupportedOmenAction } from "../omens/omenActionSupport";
 import {
   applyFirstAidKitNowState as applyFirstAidKitNowStateFromTurnStateAbility,
   applyMysticalStopwatchNowState as applyMysticalStopwatchNowStateFromTurnStateAbility,
@@ -225,6 +226,10 @@ function isTraitRollJustMadeContext(game) {
   }
 
   return false;
+}
+
+export function isItemAbilityTileChoiceAwaiting(eventState) {
+  return eventState?.awaiting?.type === "tile-choice" && eventState.awaiting?.source === "item-active-ability";
 }
 
 function isLuckyCoinAvailableThisTurn(game, viewedCard) {
@@ -871,23 +876,20 @@ export function getCardActiveAbilityState({
     ? triggerHandler({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride })
     : false;
 
-  const hasSupportedAction =
+  const hasSupportedItemAction =
     rule.action === "set-trait-roll-total" ||
     rule.action === "reroll-all-trait-dice" ||
     rule.action === "reroll-blank-trait-dice" ||
     rule.action === "reroll-one-die" ||
-    rule.action === "holy-symbol-bury-discovered-tile" ||
-    rule.action === "mask-push-adjacent-players" ||
-    rule.action === "dog-remote-trade" ||
     rule.action === "move-through-walls" ||
     rule.action === "substitute-sanity-for-knowledge" ||
-    rule.action === "substitute-knowledge-for-trait" ||
     rule.action === "teleport-any-tile" ||
     rule.action === "extra-turn-after-current" ||
     rule.action === "heal-critical-traits" ||
     rule.action === "heal-stats" ||
     rule.action === "heal-knowledge-sanity" ||
     rule.action === "heal-might-speed";
+  const hasSupportedAction = hasSupportedItemAction || isSupportedOmenAction(rule.action);
   const isSupportedInventoryAction =
     viewedCard.ownerCollection !== "inventory" || !isUnsupportedItemAction(rule.action);
   const itemAbilitySelectionState = getItemAbilitySelectionState({

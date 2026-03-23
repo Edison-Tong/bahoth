@@ -21,6 +21,38 @@ export function buildIdolChoiceTileEffect({ tileName, queuedCard, nextTurnPhase,
   };
 }
 
+export function getIdolChoiceStateForQueuedEvent({
+  player,
+  tileName,
+  queuedCard,
+  nextTurnPhase,
+  nextMessage,
+  blockedByTileEffect = false,
+  offerMessage,
+}) {
+  if (
+    !shouldOfferIdolChoice({
+      player,
+      queuedCard,
+      blockedByTileEffect,
+    })
+  ) {
+    return null;
+  }
+
+  return {
+    tileEffect: buildIdolChoiceTileEffect({
+      tileName,
+      queuedCard,
+      nextTurnPhase,
+      nextMessage,
+    }),
+    drawnCard: null,
+    turnPhase: "card",
+    message: offerMessage || `${player?.name || "Explorer"} discovered an Event symbol.`,
+  };
+}
+
 export function applyDrawIdolEventCardState(game) {
   const effect = game.tileEffect;
   if (!effect || effect.type !== "idol-event-choice") return game;

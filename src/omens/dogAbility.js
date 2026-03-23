@@ -13,6 +13,15 @@ export function isDogTradeAvailableThisTurn(game, viewedCard, getDogTradeTargets
   return ownerHasItems || anyTargetHasItems;
 }
 
+export function isItemTradeLockedThisTurn(card, turnNumber) {
+  if (!card) return false;
+  return (
+    card.lastActiveAbilityTurnUsed === turnNumber ||
+    card.lastAttackTurnUsed === turnNumber ||
+    card.lastUsedTurn === turnNumber
+  );
+}
+
 export function createDogTradeStartState(game, viewedCard, getDogTradeTargets) {
   if (!viewedCard || viewedCard.activeAbilityRule?.action !== "dog-remote-trade") {
     return { ok: false, reason: "not-dog-action" };
@@ -41,5 +50,215 @@ export function createDogTradeStartState(game, viewedCard, getDogTradeTargets) {
       ownerGiveIndexes: [],
       targetGiveIndexes: [],
     },
+  };
+}
+
+export function createDogTradeSelectionState(previousDogTradeState, targetPlayerIndex) {
+  if (!previousDogTradeState) return previousDogTradeState;
+  return {
+    ...previousDogTradeState,
+    phase: "trade",
+    targetPlayerIndex,
+    targetGiveIndexes: [],
+  };
+}
+
+export function applyDogTradeMoveState(previousDogTradeState, move) {
+  if (!previousDogTradeState || previousDogTradeState.phase !== "move") return previousDogTradeState;
+
+  const cost = Number(move?.cost) || 0;
+  if (cost <= 0 || cost > previousDogTradeState.movesLeft) return previousDogTradeState;
+
+  return {
+    ...previousDogTradeState,
+    floor: move.floor,
+    x: move.x,
+    y: move.y,
+    movesLeft: previousDogTradeState.movesLeft - cost,
+  };
+}
+
+export function createDogTradeBackToMoveState(previousDogTradeState) {
+  if (!previousDogTradeState) return previousDogTradeState;
+  return {
+    ...previousDogTradeState,
+    phase: "move",
+    targetPlayerIndex: null,
+    ownerGiveIndexes: [],
+    targetGiveIndexes: [],
+  };
+}
+
+export function toggleDogTradeOwnerGiveState(previousDogTradeState, game, index, turnNumber) {
+  if (!previousDogTradeState) return previousDogTradeState;
+  const owner = game.players[previousDogTradeState.ownerIndex];
+  const card = owner?.inventory?.[index];
+  if (!card || isItemTradeLockedThisTurn(card, turnNumber)) return previousDogTradeState;
+
+  const exists = previousDogTradeState.ownerGiveIndexes.includes(index);
+  return {
+    ...previousDogTradeState,
+    ownerGiveIndexes: exists
+      ? previousDogTradeState.ownerGiveIndexes.filter((value) => value !== index)
+      : [...previousDogTradeState.ownerGiveIndexes, index],
+  };
+}
+
+export function toggleDogTradeTargetGiveState(previousDogTradeState, game, index, turnNumber) {
+  if (!previousDogTradeState) return previousDogTradeState;
+  const target = game.players[previousDogTradeState.targetPlayerIndex];
+  const card = target?.inventory?.[index];
+  if (!card || isItemTradeLockedThisTurn(card, turnNumber)) return previousDogTradeState;
+
+  const exists = previousDogTradeState.targetGiveIndexes.includes(index);
+  return {
+    ...previousDogTradeState,
+    targetGiveIndexes: exists
+      ? previousDogTradeState.targetGiveIndexes.filter((value) => value !== index)
+      : [...previousDogTradeState.targetGiveIndexes, index],
+  };
+}
+
+export function resolveConfirmDogTradeState(game, dogTradeState, turnNumber) {
+  if (!dogTradeState) {
+    return {
+      nextGame: game,
+      nextDogTradeState: dogTradeState,
+    };
+  }
+
+  const owner = game.players[dogTradeState.ownerIndex];
+  const target = game.players[dogTradeState.targetPlayerIndex];
+  if (!owner || !target) {
+    return {
+      nextGame: game,
+      nextDogTradeState: null,
+    };
+  }
+
+  const targetOnDogTile =
+    target.floor === dogTradeState.floor && target.x === dogTradeState.x && target.y === dogTradeState.y;
+  if (!targetOnDogTile) {
+    return {
+      nextGame: {
+        ...game,
+        message: "Dog must be on the same tile as the explorer to trade.",
+      },
+      nextDogTradeState: dogTradeState,
+    };
+  }
+
+  const ownerGiveSet = new Set(
+    dogTradeState.ownerGiveIndexes.filter(
+      (index) =>
+        Number.isInteger(index) &&
+        index >= 0 &&
+        index < owner.inventory.length &&
+        !isItemTradeLockedThisTurn(owner.inventory[index], turnNumber)
+    )
+  );
+  const targetGiveSet = new Set(
+    dogTradeState.targetGiveIndexes.filter(
+      (index) =>
+        Number.isInteger(index) &&
+        index >= 0 &&
+        index < target.inventory.length &&
+        !isItemTradeLockedThisTurn(target.inventory[index], turnNumber)
+    )
+  );
+
+  if (ownerGiveSet.size === 0 && targetGiveSet.size === 0) {
+    return {
+      nextGame: {
+        ...game,
+        message: "Select at least one item for Dog to carry.",
+      },
+      nextDogTradeState: dogTradeState,
+    };
+  }
+
+  const ownerGivenItems = owner.inventory.filter((_, index) => ownerGiveSet.has(index));
+  const targetGivenItems = target.inventory.filter((_, index) => targetGiveSet.has(index));
+  const ownerRemainingItems = owner.inventory.filter((_, index) => !ownerGiveSet.has(index));
+  const targetRemainingItems = target.inventory.filter((_, index) => !targetGiveSet.has(index));
+
+  const nextPlayers = game.players.map((player, index) => {
+    if (index === dogTradeState.ownerIndex) {
+      return {
+        ...player,
+        inventory: [...ownerRemainingItems, ...targetGivenItems],
+        omens: player.omens.map((card, cardIndex) =>
+          cardIndex === dogTradeState.dogOmenIndex
+            ? {
+                ...card,
+                lastActiveAbilityTurnUsed: turnNumber,
+              }
+            : card
+        ),
+      };
+    }
+
+    if (index === dogTradeState.targetPlayerIndex) {
+      return {
+        ...player,
+        inventory: [...targetRemainingItems, ...ownerGivenItems],
+      };
+    }
+
+    return player;
+  });
+
+  return {
+    nextGame: {
+      ...game,
+      players: nextPlayers,
+      message: `${owner.name}'s Dog completed a trade with ${target.name} (${ownerGivenItems.length} item${ownerGivenItems.length !== 1 ? "s" : ""} sent, ${targetGivenItems.length} item${targetGivenItems.length !== 1 ? "s" : ""} returned).`,
+    },
+    nextDogTradeState: null,
+  };
+}
+
+export function getDogTradeUiState(game, dogTradeState, cameraFloor, getDogMoveOptions, getTileAtPosition) {
+  if (!dogTradeState || dogTradeState.phase !== "move") {
+    return {
+      dogMoveOptions: [],
+      dogMoveOptionsOnFloor: [],
+      dogStairMoveOption: null,
+      dogStairDestination: null,
+      dogTradeTargetsOnTile: [],
+    };
+  }
+
+  const dogMoveOptions = getDogMoveOptions(
+    game,
+    {
+      floor: dogTradeState.floor,
+      x: dogTradeState.x,
+      y: dogTradeState.y,
+    },
+    dogTradeState.movesLeft
+  );
+  const dogMoveOptionsOnFloor = dogMoveOptions.filter((move) => move.floor === cameraFloor);
+  const dogStairMoveOption = dogMoveOptions.find((move) => move.floor !== dogTradeState.floor) || null;
+  const dogStairDestination = dogStairMoveOption
+    ? getTileAtPosition(game.board, dogStairMoveOption.x, dogStairMoveOption.y, dogStairMoveOption.floor)
+    : null;
+  const dogTradeTargetsOnTile = game.players
+    .map((player, playerIndex) => ({ player, playerIndex }))
+    .filter(
+      ({ player, playerIndex }) =>
+        playerIndex !== dogTradeState.ownerIndex &&
+        player.isAlive &&
+        player.floor === dogTradeState.floor &&
+        player.x === dogTradeState.x &&
+        player.y === dogTradeState.y
+    );
+
+  return {
+    dogMoveOptions,
+    dogMoveOptionsOnFloor,
+    dogStairMoveOption,
+    dogStairDestination,
+    dogTradeTargetsOnTile,
   };
 }
