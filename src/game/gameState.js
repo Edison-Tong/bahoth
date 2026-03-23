@@ -1,5 +1,6 @@
 import { createEventDeck, createItemDeck, createOmenDeck } from "../cards";
 import { STARTING_TILES, createTileStack } from "../tiles";
+import { GAME_PHASES } from "../haunts/hauntDomain";
 
 export const DIR = {
   N: { dx: 0, dy: -1 },
@@ -81,6 +82,9 @@ export function initGameState(players) {
     mysticElevatorUsed: false,
     omenCount: 0,
     hauntTriggered: false,
+    gamePhase: GAME_PHASES.PRE_HAUNT,
+    activeHauntId: null,
+    hauntState: null,
     drawnCard: null,
     hauntRoll: null,
     tileEffect: null,

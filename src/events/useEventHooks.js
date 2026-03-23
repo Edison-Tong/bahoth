@@ -11,6 +11,7 @@ import {
   startEventFromDrawnCardState,
 } from "./eventActions";
 import { advanceEventResolution, applyResolvedEventEffect, finalizeEventState } from "./eventEngine";
+import { dismissHauntRollState, selectTriggeredHauntDefinition } from "../haunts/hauntDomain";
 
 function isEventStateInert(eventState) {
   if (!eventState) return false;
@@ -443,11 +444,11 @@ export function useDrawnCardHandlers({
 
   function handleDismissHauntRoll() {
     setDiceAnimation(null);
-    setGame((g) => ({
-      ...g,
-      hauntRoll: null,
-      turnPhase: "endTurn",
-    }));
+    setGame((g) =>
+      dismissHauntRollState(g, {
+        selectHauntDefinition: selectTriggeredHauntDefinition,
+      })
+    );
   }
 
   return {
