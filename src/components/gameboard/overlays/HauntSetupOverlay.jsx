@@ -1,13 +1,64 @@
-function BookletHeader({ title }) {
+function BookletHeader({ title, meta, number }) {
   return (
     <div className="haunt-booklet-header">
       <h1 className="haunt-booklet-title">{title}</h1>
-      <div className="haunt-booklet-meta">
-        Scenario Card: None • Haunt Trigger: A Splash of Crimson • Traitor: Haunt Revealer
-      </div>
-      <div className="haunt-booklet-number">1</div>
+      <div className="haunt-booklet-meta">{meta}</div>
+      <div className="haunt-booklet-number">{number}</div>
     </div>
   );
+}
+
+function renderSectionContent({ paragraphs, bullets }) {
+  return (
+    <>
+      {Array.isArray(paragraphs) && paragraphs.map((line, index) => <p key={`section-line-${index}`}>{line}</p>)}
+      {Array.isArray(bullets) && bullets.length > 0 && (
+        <ul>
+          {bullets.map((line, index) => (
+            <li key={`section-bullet-${index}`}>{line}</li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+function getRulesBooklet(hauntDefinition) {
+  const defaultTitle = hauntDefinition?.title || "Haunt Rules";
+  const heroIntro = hauntDefinition?.introduction?.heroes || hauntDefinition?.summary || "";
+  const traitorIntro = hauntDefinition?.introduction?.traitor || "";
+
+  const rulesBooklet = hauntDefinition?.rulesBooklet || {};
+  const header = rulesBooklet.header || {};
+  const heroes = rulesBooklet.heroes || {};
+  const traitor = rulesBooklet.traitor || {};
+
+  return {
+    header: {
+      title: header.title || defaultTitle,
+      meta: header.meta || "",
+      number: header.number || "?",
+    },
+    heroes: {
+      readFirst: {
+        introduction: heroes.readFirst?.introduction || heroIntro,
+        setupSteps: heroes.readFirst?.setupSteps || hauntDefinition?.setup?.heroes || [],
+      },
+      sidebarSections: heroes.sidebarSections || [],
+      actionGroup: heroes.actionGroup || { title: "", actions: [] },
+      mainSections: heroes.mainSections || [],
+    },
+    traitor: {
+      readFirst: {
+        introduction: traitor.readFirst?.introduction || traitorIntro,
+        setupSteps: traitor.readFirst?.setupSteps || hauntDefinition?.setup?.traitor || [],
+      },
+      sidebarSections: traitor.sidebarSections || [],
+      actionGroup: traitor.actionGroup || { title: "", actions: [] },
+      mainSections: traitor.mainSections || [],
+      monsterCard: traitor.monsterCard || null,
+    },
+  };
 }
 
 function ReadFirstBlock({ introduction, setupSteps }) {
@@ -29,72 +80,47 @@ function ReadFirstBlock({ introduction, setupSteps }) {
 }
 
 export function HeroRulesPage({ hauntDefinition, onDone }) {
+  const booklet = getRulesBooklet(hauntDefinition);
+  const heroContent = booklet.heroes;
+
   return (
     <div className="card-overlay" role="dialog" aria-label="Heroes rules">
       <div className="haunt-booklet haunt-booklet-heroes">
-        <BookletHeader title="Stacked Like Cordwood 2: Crimson Jack Returns" />
+        <BookletHeader title={booklet.header.title} meta={booklet.header.meta} number={booklet.header.number} />
         <ReadFirstBlock
-          introduction={hauntDefinition.introduction?.heroes || hauntDefinition.summary}
-          setupSteps={[
-            "The heroes have no additional setup steps.",
-            "The player to the left of the traitor takes the first turn after setup.",
-          ]}
+          introduction={heroContent.readFirst.introduction}
+          setupSteps={heroContent.readFirst.setupSteps}
         />
 
         <div className="haunt-booklet-grid">
           <aside className="haunt-booklet-sidebar">
-            <section>
-              <h4>Objective</h4>
-              <p>You win when you exorcise Jack's Spirit.</p>
-            </section>
-            <section>
-              <h4>Tokens Needed</h4>
-              <ul>
-                <li>Jack's Spirit token</li>
-                <li>2 Sanity tokens (Exorcism Circle)</li>
-                <li>2 Might tokens (Knowledge of Jack)</li>
-              </ul>
-            </section>
-            <section>
-              <h4>If You Win</h4>
-              <p>Jack's Spirit fades. For now, the house is yours again.</p>
-            </section>
+            {heroContent.sidebarSections.map((section, index) => (
+              <section key={`hero-sidebar-${index}`}>
+                <h4>{section.heading}</h4>
+                {renderSectionContent(section)}
+              </section>
+            ))}
           </aside>
 
           <main className="haunt-booklet-main">
             <div className="haunt-booklet-action-group">
-              <div className="haunt-booklet-action-group-title">Hero Once-Per-Turn Actions</div>
-              <section className="haunt-booklet-action-item">
-                <div className="haunt-booklet-once-per-turn">Once during your turn, you may</div>
-                <h4>Learn about Jack</h4>
-                <p>While on the Library tile, make a Knowledge roll.</p>
-                <p>5+: Give a Knowledge of Jack token to a hero who does not have one.</p>
-                <p>0-4: Nothing happens.</p>
-              </section>
-              <section className="haunt-booklet-action-item">
-                <div className="haunt-booklet-once-per-turn">Once during your turn, you may</div>
-                <h4>Study the Exorcism</h4>
-                <p>While on an Event symbol tile, make a Knowledge roll.</p>
-                <p>5+: Place or move the Exorcism Circle token.</p>
-                <p>0-4: Take 2 Mental damage.</p>
-              </section>
-              <section className="haunt-booklet-action-item">
-                <div className="haunt-booklet-once-per-turn">Once during your turn, you may</div>
-                <h4>Exorcise Jack's Spirit</h4>
-                <p>While on Jack's Spirit tile, make a Sanity roll.</p>
-                <p>Add 1 for each Exorcism Circle token on your floor.</p>
-                <p>7+: You win.</p>
-                <p>0-6: Each hero takes 1 Physical damage.</p>
-              </section>
+              <div className="haunt-booklet-action-group-title">{heroContent.actionGroup.title}</div>
+              {(heroContent.actionGroup.actions || []).map((action, index) => (
+                <section className="haunt-booklet-action-item" key={`hero-action-${index}`}>
+                  <div className="haunt-booklet-once-per-turn">Once during your turn, you may</div>
+                  <h4>{action.title}</h4>
+                  {(action.lines || []).map((line, lineIndex) => (
+                    <p key={`hero-action-line-${index}-${lineIndex}`}>{line}</p>
+                  ))}
+                </section>
+              ))}
             </div>
-            <section>
-              <h4>When You Attack the Traitor or Are Attacked by Jack's Spirit</h4>
-              <p>If you have a Knowledge of Jack token, add 2 to your roll result.</p>
-            </section>
-            <section>
-              <h4>When the Traitor Dies</h4>
-              <p>Place Jack's Spirit on the omen tile farthest from the traitor's corpse.</p>
-            </section>
+            {heroContent.mainSections.map((section, index) => (
+              <section key={`hero-main-${index}`}>
+                <h4>{section.heading}</h4>
+                {renderSectionContent(section)}
+              </section>
+            ))}
           </main>
         </div>
 
@@ -109,87 +135,81 @@ export function HeroRulesPage({ hauntDefinition, onDone }) {
 }
 
 export function TraitorRulesPage({ hauntDefinition, onDone }) {
+  const booklet = getRulesBooklet(hauntDefinition);
+  const traitorContent = booklet.traitor;
+  const monsterCard = traitorContent.monsterCard;
+  const monsterStats = monsterCard?.stats || {};
+
   return (
     <div className="card-overlay" role="dialog" aria-label="Traitor rules">
       <div className="haunt-booklet haunt-booklet-traitor">
-        <BookletHeader title="Stacked Like Cordwood 2: Crimson Jack Returns" />
+        <BookletHeader title={booklet.header.title} meta={booklet.header.meta} number={booklet.header.number} />
         <ReadFirstBlock
-          introduction={hauntDefinition.introduction?.traitor || "You smile. Jack is back."}
-          setupSteps={[
-            "Your explorer is still in the game. You are the traitor.",
-            "Place the Monster card by your left hand.",
-            "Heal all traits. Gain your physical bonus from player count.",
-          ]}
+          introduction={traitorContent.readFirst.introduction}
+          setupSteps={traitorContent.readFirst.setupSteps}
         />
 
         <div className="haunt-booklet-grid">
           <aside className="haunt-booklet-sidebar">
-            <section>
-              <h4>Objective</h4>
-              <p>You win when all heroes are dead.</p>
-            </section>
-            <section>
-              <h4>Tokens Needed</h4>
-              <ul>
-                <li>Jack's Spirit token</li>
-                <li>2 Sanity tokens (Exorcism Circle)</li>
-                <li>2 Might tokens (Knowledge of Jack)</li>
-              </ul>
-            </section>
-            <section>
-              <h4>If You Win</h4>
-              <p>The house belongs to you again, and no one leaves alive.</p>
-            </section>
+            {traitorContent.sidebarSections.map((section, index) => (
+              <section key={`traitor-sidebar-${index}`}>
+                <h4>{section.heading}</h4>
+                {renderSectionContent(section)}
+              </section>
+            ))}
           </aside>
 
           <main className="haunt-booklet-main">
-            <div className="haunt-booklet-action-group haunt-booklet-action-group-traitor">
-              <div className="haunt-booklet-action-group-title">Traitor Once-Per-Turn Actions</div>
-              <section className="haunt-booklet-action-item">
-                <div className="haunt-booklet-once-per-turn">Once during your turn, you may</div>
-                <h4>Stalk the Prey</h4>
-                <p>
-                  If you have not attacked and no hero is in line of sight, move to any upper/ground tile out of line of
-                  sight.
-                </p>
-              </section>
+            <div
+              className={`haunt-booklet-action-group ${traitorContent.actionGroup.isTraitor ? "haunt-booklet-action-group-traitor" : ""}`}
+            >
+              <div className="haunt-booklet-action-group-title">{traitorContent.actionGroup.title}</div>
+              {(traitorContent.actionGroup.actions || []).map((action, index) => (
+                <section className="haunt-booklet-action-item" key={`traitor-action-${index}`}>
+                  <div className="haunt-booklet-once-per-turn">Once during your turn, you may</div>
+                  <h4>{action.title}</h4>
+                  {(action.lines || []).map((line, lineIndex) => (
+                    <p key={`traitor-action-line-${index}-${lineIndex}`}>{line}</p>
+                  ))}
+                </section>
+              ))}
             </div>
-            <section>
-              <h4>If You Die</h4>
-              <p>Place Jack's Spirit on the omen tile farthest from your corpse. Repeat each time you die.</p>
-            </section>
-            <section>
-              <h4>At the Start of Your Turn If You Are Dead</h4>
-              <p>Take your turn with Jack's Spirit instead of your explorer.</p>
-            </section>
-            <section className="haunt-booklet-monster-card">
-              <h4>Monster: Jack's Spirit</h4>
-              <div className="haunt-monster-stats" aria-label="Monster stats">
-                <div className="haunt-monster-stat">
-                  <span>Might</span>
-                  <strong>5</strong>
+            {traitorContent.mainSections.map((section, index) => (
+              <section key={`traitor-main-${index}`}>
+                <h4>{section.heading}</h4>
+                {renderSectionContent(section)}
+              </section>
+            ))}
+            {monsterCard && (
+              <section className="haunt-booklet-monster-card">
+                <h4>{monsterCard.heading}</h4>
+                <div className="haunt-monster-stats" aria-label="Monster stats">
+                  <div className="haunt-monster-stat">
+                    <span>Might</span>
+                    <strong>{monsterStats.might}</strong>
+                  </div>
+                  <div className="haunt-monster-stat">
+                    <span>Speed</span>
+                    <strong>{monsterStats.speed}</strong>
+                  </div>
+                  <div className="haunt-monster-stat">
+                    <span>Sanity</span>
+                    <strong>{monsterStats.sanity}</strong>
+                  </div>
+                  <div className="haunt-monster-stat">
+                    <span>Knowledge</span>
+                    <strong>{monsterStats.knowledge}</strong>
+                  </div>
                 </div>
-                <div className="haunt-monster-stat">
-                  <span>Speed</span>
-                  <strong>3</strong>
-                </div>
-                <div className="haunt-monster-stat">
-                  <span>Sanity</span>
-                  <strong>4</strong>
-                </div>
-                <div className="haunt-monster-stat">
-                  <span>Knowledge</span>
-                  <strong>4</strong>
-                </div>
-              </div>
-              <p>Jack's Spirit may move between adjacent tiles without doorway connections.</p>
-              <p>Jack's Spirit cannot be stunned.</p>
-              <h5>At the Start of the Monster Turn</h5>
-              <p>
-                If Jack's Spirit is on your corpse tile, heal all traits, retake your explorer, and remove Jack's Spirit
-                from the house.
-              </p>
-            </section>
+                {(monsterCard.paragraphs || []).map((line, index) => (
+                  <p key={`monster-line-${index}`}>{line}</p>
+                ))}
+                {monsterCard.turnHeading && <h5>{monsterCard.turnHeading}</h5>}
+                {(monsterCard.turnParagraphs || []).map((line, index) => (
+                  <p key={`monster-turn-line-${index}`}>{line}</p>
+                ))}
+              </section>
+            )}
           </main>
         </div>
 
