@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import {
   describeEventEffects,
   getEventRollButtonLabel,
@@ -39,15 +39,82 @@ import DamageChoiceOverlay from "./components/gameboard/overlays/DamageChoiceOve
 import DiceRollOverlay from "./components/gameboard/overlays/DiceRollOverlay";
 import HauntRollOverlay from "./components/gameboard/overlays/HauntRollOverlay";
 import TileEffectOverlay from "./components/gameboard/overlays/TileEffectOverlay";
+import DebugModePanel from "./components/gameboard/DebugModePanel";
 import GameBoardActions from "./components/gameboard/GameBoardActions";
 import PlayerSidebar from "./components/gameboard/PlayerSidebar";
 import ViewedCardViewer from "./components/gameboard/ViewedCardViewer";
 import TradeViewer from "./components/gameboard/TradeViewer";
-import { applyDrawIdolEventCardState, getIdolChoiceStateForQueuedEvent, applySkipIdolEventCardState, resolveSpecialOmenNowAbilityState, getDogTradeUiState } from "./omens/omenDomain";
-import { isEndTurnItemChoiceEffect, resolveEndTurnItemPassiveChoiceState, resolveEndTurnItemPassiveState, canUseArmedSkeletonKeyMovement, createSkeletonKeyResultTileEffect, isSkeletonKeyResultEffect, resolveSkeletonKeyResultAfterDismiss } from "./items/itemDomain";
-import { applyPlacedTileDiscoverEffects, getEndTurnTileAbilityState, resolveTileDiceAnimationState, resolveDismissTileEffectState, getCurrentPlayerTile, getCanUseMysticElevator, getCanUseSecretPassage, getSecretPassageTargets, getStairTargetState, getRollMysticElevatorState, resolveMysticElevatorResultState, getConnectedMoveTarget, resolveSecretPassageMoveState } from "./tiles/tileDomain";
-import { confirmMoveState, getValidMovesState, placePendingSpecialTileState, resolveKeyboardMoveAction, getPlacementOptionsState, resolveBacktrackActionState, resolveBoardMoveActionState, resolveChangeFloorActionState, resolveExploreActionState, resolveMovePlayerActionState, getLeaveMoveCostState, hasUnconfirmedMovePathState } from "./movement/movementDomain";
-import { adjustDamageAllocationChoiceState, applyDamageAllocationState, applyPostDamagePassiveEffectsState, applyStatChangeState, getDamagePreviewState, getStatTrackCellClassState, toggleDamageConversionChoiceState, getDamageChoiceSummary, getEndTurnPreviewPlayerName, getPlayersOnFloor, resolveConfirmDamageChoiceActionState, createLocalPlayerTradeState, getPlayerTradeTargetsOnTile, resolveBackToTradeMoveState, resolveConfirmTradeActionState, resolveMoveTradeTokenState, resolveStartTradeSelectionState, resolveToggleTradeOwnerGiveState, resolveToggleTradeOwnerGiveOmenState, resolveToggleTradeTargetGiveState, resolveToggleTradeTargetGiveOmenState, resolveEndTurnActionState, resolvePassTurnActionState, resolvePassTurnCoreActionState } from "./players/playerDomain";
+import {
+  applyDrawIdolEventCardState,
+  getIdolChoiceStateForQueuedEvent,
+  applySkipIdolEventCardState,
+  resolveSpecialOmenNowAbilityState,
+  getDogTradeUiState,
+} from "./omens/omenDomain";
+import {
+  isEndTurnItemChoiceEffect,
+  resolveEndTurnItemPassiveChoiceState,
+  resolveEndTurnItemPassiveState,
+  canUseArmedSkeletonKeyMovement,
+  createSkeletonKeyResultTileEffect,
+  isSkeletonKeyResultEffect,
+  resolveSkeletonKeyResultAfterDismiss,
+} from "./items/itemDomain";
+import {
+  applyPlacedTileDiscoverEffects,
+  getEndTurnTileAbilityState,
+  resolveTileDiceAnimationState,
+  resolveDismissTileEffectState,
+  getCurrentPlayerTile,
+  getCanUseMysticElevator,
+  getCanUseSecretPassage,
+  getSecretPassageTargets,
+  getStairTargetState,
+  getRollMysticElevatorState,
+  resolveMysticElevatorResultState,
+  getConnectedMoveTarget,
+  resolveSecretPassageMoveState,
+} from "./tiles/tileDomain";
+import {
+  confirmMoveState,
+  getValidMovesState,
+  placePendingSpecialTileState,
+  resolveKeyboardMoveAction,
+  getPlacementOptionsState,
+  resolveBacktrackActionState,
+  resolveBoardMoveActionState,
+  resolveChangeFloorActionState,
+  resolveExploreActionState,
+  resolveMovePlayerActionState,
+  getLeaveMoveCostState,
+  hasUnconfirmedMovePathState,
+} from "./movement/movementDomain";
+import {
+  adjustDamageAllocationChoiceState,
+  applyDamageAllocationState,
+  applyPostDamagePassiveEffectsState,
+  applyStatChangeState,
+  getDamagePreviewState,
+  getStatTrackCellClassState,
+  toggleDamageConversionChoiceState,
+  getDamageChoiceSummary,
+  getEndTurnPreviewPlayerName,
+  getPlayersOnFloor,
+  resolveConfirmDamageChoiceActionState,
+  createLocalPlayerTradeState,
+  getPlayerTradeTargetsOnTile,
+  resolveBackToTradeMoveState,
+  resolveConfirmTradeActionState,
+  resolveMoveTradeTokenState,
+  resolveStartTradeSelectionState,
+  resolveToggleTradeOwnerGiveState,
+  resolveToggleTradeOwnerGiveOmenState,
+  resolveToggleTradeTargetGiveState,
+  resolveToggleTradeTargetGiveOmenState,
+  resolveEndTurnActionState,
+  resolvePassTurnActionState,
+  resolvePassTurnCoreActionState,
+} from "./players/playerDomain";
 import {
   CRITICAL_STAT_INDEX,
   DAMAGE_STATS,
@@ -65,10 +132,54 @@ import {
   createDrawnItemCard,
   createDrawnOmenCard,
 } from "./game/gameState";
+import { TILES, STARTING_TILES } from "./tiles";
 import "./GameBoard.css";
 
 function formatStatTrackValue(value) {
   return value === 0 ? "☠" : value;
+}
+
+const ALL_DIRECTIONS = ["N", "E", "S", "W"];
+const DEBUG_TILE_CATALOG = [...STARTING_TILES, ...TILES];
+
+function rotateDoors(doors, rotation) {
+  return doors.map((door) => {
+    const doorIndex = ALL_DIRECTIONS.indexOf(door);
+    return ALL_DIRECTIONS[(doorIndex + rotation) % 4];
+  });
+}
+
+function getValidRotationIndexesForPlacement(tile, placement) {
+  if (!tile || !placement) return [];
+
+  const validRotationSets = new Set((placement.validRotations || []).map((rotation) => rotation.join("")));
+  const rotationIndexes = [];
+
+  for (let rotation = 0; rotation < 4; rotation += 1) {
+    const rotatedDoors = rotateDoors(tile.doors, rotation).join("");
+    if (validRotationSets.has(rotatedDoors)) {
+      rotationIndexes.push(rotation);
+    }
+  }
+
+  return rotationIndexes;
+}
+
+function getCardPoolOptions(deck) {
+  const countsById = new Map();
+  for (const card of deck) {
+    const existing = countsById.get(card.id);
+    if (existing) {
+      existing.count += 1;
+      continue;
+    }
+    countsById.set(card.id, {
+      id: card.id,
+      name: card.name,
+      count: 1,
+    });
+  }
+  return Array.from(countsById.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function DiceRow({ dice, modifier = null, rolling = false }) {
@@ -91,7 +202,6 @@ function DiceRow({ dice, modifier = null, rolling = false }) {
   );
 }
 
-
 export default function GameBoard({ players, onQuit }) {
   const [game, setGame] = useState(() => initGameState(players));
   const [cameraFloor, setCameraFloor] = useState("ground");
@@ -101,6 +211,19 @@ export default function GameBoard({ players, onQuit }) {
   const [tradeState, setTradeState] = useState(null);
   const [queuedTraitRollOverride, setQueuedTraitRollOverride] = useState(null);
   const [messageBubble, setMessageBubble] = useState("");
+  const [debugModeEnabled, setDebugModeEnabled] = useState(false);
+  const [debugSelectedTileId, setDebugSelectedTileId] = useState(DEBUG_TILE_CATALOG[0]?.id || "");
+  const [debugTileRotation, setDebugTileRotation] = useState(0);
+  const [debugPlacementModeActive, setDebugPlacementModeActive] = useState(false);
+  const [debugSelectedPlacementKey, setDebugSelectedPlacementKey] = useState("");
+  const [debugGrantType, setDebugGrantType] = useState("item");
+  const [debugGrantPlayerIndex, setDebugGrantPlayerIndex] = useState(0);
+  const [debugGrantCardId, setDebugGrantCardId] = useState("");
+  const [debugEventPlayerIndex, setDebugEventPlayerIndex] = useState(0);
+  const [debugEventCardId, setDebugEventCardId] = useState("");
+  const [debugRemoveType, setDebugRemoveType] = useState("item");
+  const [debugRemovePlayerIndex, setDebugRemovePlayerIndex] = useState(0);
+  const [debugRemoveCardKey, setDebugRemoveCardKey] = useState("");
   const queuedTraitRollOverrideRef = useRef(null);
   const messageBubbleTimeoutRef = useRef(null);
   const boardRef = useRef(null);
@@ -243,6 +366,30 @@ export default function GameBoard({ players, onQuit }) {
   // Keyboard controls
   useEffect(() => {
     function handleKeyDown(e) {
+      const target = e.target;
+      const isInputFocused =
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "SELECT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+
+      if (e.shiftKey && (e.key === "D" || e.key === "d")) {
+        e.preventDefault();
+        setDebugModeEnabled((prev) => !prev);
+        return;
+      }
+
+      if (e.key === "Escape" && debugModeEnabled) {
+        e.preventDefault();
+        setDebugModeEnabled(false);
+        return;
+      }
+
+      if (debugModeEnabled || isInputFocused) {
+        return;
+      }
+
       const action = resolveKeyboardMoveAction({
         game,
         cameraFloor,
@@ -288,6 +435,252 @@ export default function GameBoard({ players, onQuit }) {
     return getPlacementOptionsState(board, tile, DIR, OPPOSITE);
   }
 
+  function setDebugPlayerStat(playerIndex, stat, nextIndex) {
+    setGame((g) => {
+      if (!g.players[playerIndex]) return g;
+
+      const updatedPlayers = g.players.map((player, index) => {
+        if (index !== playerIndex) return player;
+        const safeIndex = Math.max(0, Math.min(player.character[stat].length - 1, nextIndex));
+        const statIndex = {
+          ...player.statIndex,
+          [stat]: safeIndex,
+        };
+        const isAlive = Object.values(statIndex).every((value) => value > 0);
+        const movesLeft = index === g.currentPlayerIndex ? player.character.speed[statIndex.speed] : player.movesLeft;
+
+        return {
+          ...player,
+          statIndex,
+          isAlive,
+          movesLeft,
+        };
+      });
+
+      return {
+        ...g,
+        players: updatedPlayers,
+        message: `Debug: updated ${g.players[playerIndex].name}'s ${STAT_LABELS[stat]}.`,
+      };
+    });
+  }
+
+  function placeDebugTile() {
+    if (!debugPlacementModeActive) return;
+    if (!debugSelectedPlacementKey) return;
+
+    const selectedTile = DEBUG_TILE_CATALOG.find((tile) => tile.id === debugSelectedTileId);
+    if (!selectedTile) return;
+
+    setGame((g) => {
+      const placementOptions = getPlacementOptions(g.board, selectedTile).map((placement) => ({
+        ...placement,
+        key: `${placement.floor}:${placement.x}:${placement.y}`,
+      }));
+      const placement = placementOptions.find((option) => option.key === debugSelectedPlacementKey);
+      if (!placement) {
+        return {
+          ...g,
+          message: "Debug: selected placement is no longer valid.",
+        };
+      }
+
+      const rotatedDoors = rotateDoors(selectedTile.doors, debugTileRotation);
+      const isRotationValid = placement.validRotations.some((rotation) => rotation.join("") === rotatedDoors.join(""));
+      if (!isRotationValid) {
+        return {
+          ...g,
+          message: "Debug: selected rotation cannot connect at that placement.",
+        };
+      }
+
+      const alreadyPlaced = Object.values(g.board).some((floorTiles) =>
+        (floorTiles || []).some((placedTile) => placedTile.id === selectedTile.id)
+      );
+      if (alreadyPlaced) {
+        return {
+          ...g,
+          message: `Debug: ${selectedTile.name} is already on the board.`,
+        };
+      }
+
+      const newBoard = {
+        ...g.board,
+        [placement.floor]: [
+          ...(g.board[placement.floor] || []),
+          {
+            ...selectedTile,
+            x: placement.x,
+            y: placement.y,
+            floor: placement.floor,
+            doors: rotatedDoors,
+          },
+        ],
+      };
+
+      const tileStackIndex = g.tileStack.findIndex((tile) => tile.id === selectedTile.id);
+      const tileStack = [...g.tileStack];
+      if (tileStackIndex >= 0) {
+        tileStack.splice(tileStackIndex, 1);
+      }
+
+      return {
+        ...g,
+        board: newBoard,
+        tileStack,
+        message: `Debug: placed ${selectedTile.name} on ${placement.floor} (${placement.x}, ${placement.y}).`,
+      };
+    });
+
+    setDebugPlacementModeActive(false);
+    setDebugSelectedPlacementKey("");
+  }
+
+  function startDebugPlacementMode() {
+    if (!selectedDebugTile) return;
+
+    const alreadyPlaced = Object.values(game.board).some((floorTiles) =>
+      (floorTiles || []).some((placedTile) => placedTile.id === selectedDebugTile.id)
+    );
+    if (alreadyPlaced) {
+      setGame((g) => ({
+        ...g,
+        message: `Debug: ${selectedDebugTile.name} is already on the board.`,
+      }));
+      return;
+    }
+
+    if (debugPlacementOptions.length === 0) {
+      setGame((g) => ({
+        ...g,
+        message: `Debug: no valid placements for ${selectedDebugTile.name}.`,
+      }));
+      return;
+    }
+
+    setDebugSelectedPlacementKey("");
+    setDebugPlacementModeActive(true);
+    setGame((g) => ({
+      ...g,
+      message: `Debug: pick a highlighted spot for ${selectedDebugTile.name}, then confirm placement.`,
+    }));
+  }
+
+  function cancelDebugPlacementMode() {
+    setDebugPlacementModeActive(false);
+    setDebugSelectedPlacementKey("");
+  }
+
+  function activateDebugEvent() {
+    if (!debugEventCardId) return;
+
+    const eventTarget = game.players[debugEventPlayerIndex];
+    if (eventTarget) {
+      setCameraFloor(eventTarget.floor);
+    }
+
+    setGame((g) => {
+      const sourceDeck = [...g.eventDeck];
+      const cardIndex = sourceDeck.findIndex((card) => card.id === debugEventCardId);
+      if (cardIndex < 0 || !g.players[debugEventPlayerIndex]) {
+        return {
+          ...g,
+          message: "Debug: selected event is not available in undrawn cards.",
+        };
+      }
+
+      const [card] = sourceDeck.splice(cardIndex, 1);
+      const targetPlayer = g.players[debugEventPlayerIndex];
+
+      return {
+        ...g,
+        eventDeck: sourceDeck,
+        currentPlayerIndex: debugEventPlayerIndex,
+        movePath: [{ x: targetPlayer.x, y: targetPlayer.y, floor: targetPlayer.floor, cost: 0 }],
+        turnPhase: "card",
+        drawnCard: createDrawnEventCard(card),
+        eventState: null,
+        tileEffect: null,
+        damageChoice: null,
+        rabbitFootPendingReroll: null,
+        message: `Debug: activated ${card.name} for ${targetPlayer.name}.`,
+      };
+    });
+  }
+
+  function grantDebugCard() {
+    if (!debugGrantCardId) return;
+
+    setGame((g) => {
+      const deckKey = debugGrantType === "omen" ? "omenDeck" : "itemDeck";
+      const collectionKey = debugGrantType === "omen" ? "omens" : "inventory";
+      const sourceDeck = [...g[deckKey]];
+      const cardIndex = sourceDeck.findIndex((card) => card.id === debugGrantCardId);
+      if (cardIndex < 0 || !g.players[debugGrantPlayerIndex]) {
+        return {
+          ...g,
+          message: `Debug: selected ${debugGrantType} is not available in undrawn cards.`,
+        };
+      }
+
+      const [card] = sourceDeck.splice(cardIndex, 1);
+      const updatedPlayers = g.players.map((player, playerIndex) => {
+        if (playerIndex !== debugGrantPlayerIndex) return player;
+        return {
+          ...player,
+          [collectionKey]: [...player[collectionKey], card],
+        };
+      });
+
+      return {
+        ...g,
+        [deckKey]: sourceDeck,
+        players: updatedPlayers,
+        omenCount: debugGrantType === "omen" ? g.omenCount + 1 : g.omenCount,
+        message: `Debug: gave ${card.name} to ${g.players[debugGrantPlayerIndex].name}.`,
+      };
+    });
+  }
+
+  function removeDebugCard() {
+    if (!debugRemoveCardKey) return;
+
+    setGame((g) => {
+      const player = g.players[debugRemovePlayerIndex];
+      if (!player) return g;
+
+      const [cardType, rawIndex] = debugRemoveCardKey.split(":");
+      const cardIndex = Number(rawIndex);
+      const fromOmens = cardType === "omen";
+      const collectionKey = fromOmens ? "omens" : "inventory";
+      const deckKey = fromOmens ? "omenDeck" : "itemDeck";
+      const sourceCards = player[collectionKey] || [];
+      if (!Number.isInteger(cardIndex) || cardIndex < 0 || cardIndex >= sourceCards.length) {
+        return {
+          ...g,
+          message: "Debug: selected owned card is no longer available.",
+        };
+      }
+
+      const card = sourceCards[cardIndex];
+      const updatedPlayers = g.players.map((targetPlayer, playerIndex) => {
+        if (playerIndex !== debugRemovePlayerIndex) return targetPlayer;
+        return {
+          ...targetPlayer,
+          [collectionKey]: targetPlayer[collectionKey].filter((_, index) => index !== cardIndex),
+        };
+      });
+
+      return {
+        ...g,
+        players: updatedPlayers,
+        [deckKey]: [card, ...g[deckKey]],
+        omenCount: fromOmens ? Math.max(0, g.omenCount - 1) : g.omenCount,
+        message: `Debug: removed ${card.name} from ${player.name}.`,
+      };
+    });
+  }
+
   // Get valid move directions from current tile
   function getValidMoves() {
     return getValidMovesState({
@@ -304,6 +697,7 @@ export default function GameBoard({ players, onQuit }) {
 
   // Move player to an existing tile and extend the current path.
   function handleMove(nx, ny, cost, options = {}) {
+    if (debugModeEnabled) return;
     let nextDiceAnimation = null;
     setGame((g) => {
       const resolved = resolveMovePlayerActionState(g, {
@@ -326,6 +720,7 @@ export default function GameBoard({ players, onQuit }) {
 
   // Backtrack to previous tile in path and refund the cost of the undone step.
   function handleBacktrack() {
+    if (debugModeEnabled) return;
     let nextCameraFloor = null;
     setGame((g) => {
       const resolved = resolveBacktrackActionState(g);
@@ -340,6 +735,7 @@ export default function GameBoard({ players, onQuit }) {
 
   // Explore — move player onto placeholder, don't reveal tile yet.
   function handleExplore(dir, nx, ny, cost) {
+    if (debugModeEnabled) return;
     setGame((g) => {
       const resolved = resolveExploreActionState(g, {
         dir,
@@ -355,6 +751,7 @@ export default function GameBoard({ players, onQuit }) {
 
   // Handle clicking a move/explore/backtrack target
   function handleAction(move) {
+    if (debugModeEnabled) return;
     let nextCameraFloor = null;
     let nextDiceAnimation = null;
 
@@ -381,11 +778,13 @@ export default function GameBoard({ players, onQuit }) {
   // Confirm move — commit current position, reset path
   // If on a pending explore, enter rotate phase to choose orientation
   function handleConfirmMove() {
+    if (debugModeEnabled) return;
     setGame((g) => confirmMoveState(g));
   }
 
   // Rotate the pending tile to the next valid orientation
   function handleRotateTile(direction) {
+    if (debugModeEnabled) return;
     setGame((g) => {
       if (!g.pendingExplore) return g;
       const pe = g.pendingExplore;
@@ -400,6 +799,7 @@ export default function GameBoard({ players, onQuit }) {
 
   // Place the tile with the chosen rotation
   function handlePlaceTile() {
+    if (debugModeEnabled) return;
     setGame((g) => {
       const p = g.players[g.currentPlayerIndex];
       const pe = g.pendingExplore;
@@ -544,6 +944,7 @@ export default function GameBoard({ players, onQuit }) {
 
   // Change floor via staircase
   function handleChangeFloor() {
+    if (debugModeEnabled) return;
     let nextCameraFloor = null;
     setGame((g) => {
       const resolved = resolveChangeFloorActionState(g, {
@@ -559,12 +960,14 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleUseSecretPassage(target) {
+    if (debugModeEnabled) return;
     setGame((g) => resolveSecretPassageMoveState({ game: g, target, getTileAtPosition }));
     setCameraFloor(target.floor);
   }
 
   // End turn
   function handleEndTurn() {
+    if (debugModeEnabled) return;
     let nextCameraFloor = null;
     let nextDiceAnimation = null;
 
@@ -971,10 +1374,12 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleStartDogTrade(targetPlayerIndex) {
+    if (debugModeEnabled) return;
     setTradeState((prev) => resolveStartTradeSelectionState(prev, targetPlayerIndex));
   }
 
   function handleStartPlayerTrade(targetPlayerIndex) {
+    if (debugModeEnabled) return;
     setTradeState((prev) => {
       if (prev) return prev;
       return createLocalPlayerTradeState(game, game.currentPlayerIndex, targetPlayerIndex);
@@ -982,6 +1387,7 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleMoveDogToken(move) {
+    if (debugModeEnabled) return;
     setTradeState((prev) => {
       const resolved = resolveMoveTradeTokenState(prev, move);
       if (resolved.cameraFloor) {
@@ -992,30 +1398,37 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleBackToDogMove() {
+    if (debugModeEnabled) return;
     setTradeState((prev) => resolveBackToTradeMoveState(prev));
   }
 
   function handleToggleDogOwnerGive(index) {
+    if (debugModeEnabled) return;
     setTradeState((prev) => resolveToggleTradeOwnerGiveState(prev, game, index));
   }
 
   function handleToggleDogTargetGive(index) {
+    if (debugModeEnabled) return;
     setTradeState((prev) => resolveToggleTradeTargetGiveState(prev, game, index));
   }
 
   function handleToggleDogOwnerGiveOmen(index) {
+    if (debugModeEnabled) return;
     setTradeState((prev) => resolveToggleTradeOwnerGiveOmenState(prev, game, index));
   }
 
   function handleToggleDogTargetGiveOmen(index) {
+    if (debugModeEnabled) return;
     setTradeState((prev) => resolveToggleTradeTargetGiveOmenState(prev, game, index));
   }
 
   function handleCancelDogTrade() {
+    if (debugModeEnabled) return;
     setTradeState(null);
   }
 
   function handleConfirmDogTrade() {
+    if (debugModeEnabled) return;
     const result = resolveConfirmTradeActionState(game, tradeState);
     setGame(result.nextGame);
     setTradeState(result.nextTradeState);
@@ -1034,6 +1447,88 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   const validMoves = cameraFloor === currentPlayer.floor ? getValidMoves() : [];
+  const placedTileIds = useMemo(() => {
+    const ids = new Set();
+    for (const floorTiles of Object.values(game.board)) {
+      for (const tile of floorTiles || []) {
+        ids.add(tile.id);
+      }
+    }
+    return ids;
+  }, [game.board]);
+  const availableDebugTiles = useMemo(
+    () => DEBUG_TILE_CATALOG.filter((tile) => !placedTileIds.has(tile.id)),
+    [placedTileIds]
+  );
+  const selectedDebugTile = useMemo(
+    () => availableDebugTiles.find((tile) => tile.id === debugSelectedTileId) || availableDebugTiles[0] || null,
+    [availableDebugTiles, debugSelectedTileId]
+  );
+  const debugPlacementOptions = useMemo(
+    () =>
+      selectedDebugTile
+        ? getPlacementOptions(game.board, selectedDebugTile).map((placement) => ({
+            ...placement,
+            key: `${placement.floor}:${placement.x}:${placement.y}`,
+          }))
+        : [],
+    [game.board, selectedDebugTile]
+  );
+  const selectedDebugPlacement = useMemo(
+    () => debugPlacementOptions.find((placement) => placement.key === debugSelectedPlacementKey) || null,
+    [debugPlacementOptions, debugSelectedPlacementKey]
+  );
+  const debugRotationOptions = useMemo(
+    () => getValidRotationIndexesForPlacement(selectedDebugTile, selectedDebugPlacement),
+    [selectedDebugTile, selectedDebugPlacement]
+  );
+  const debugGrantDeck = debugGrantType === "omen" ? game.omenDeck : game.itemDeck;
+  const debugGrantOptions = useMemo(() => getCardPoolOptions(debugGrantDeck), [debugGrantDeck]);
+  const debugEventOptions = useMemo(() => getCardPoolOptions(game.eventDeck), [game.eventDeck]);
+  const debugPlacementTargetsOnFloor = useMemo(
+    () =>
+      debugPlacementModeActive ? debugPlacementOptions.filter((placement) => placement.floor === cameraFloor) : [],
+    [cameraFloor, debugPlacementModeActive, debugPlacementOptions]
+  );
+  // NOTE: DEBUG MODE
+  const debugPlacementPreview = useMemo(() => {
+    if (!debugPlacementModeActive || !selectedDebugTile || !debugSelectedPlacementKey) return null;
+
+    const selectedPlacement = debugPlacementOptions.find((placement) => placement.key === debugSelectedPlacementKey);
+    if (!selectedPlacement) return null;
+
+    return {
+      id: selectedDebugTile.id,
+      name: selectedDebugTile.name,
+      cardType: selectedDebugTile.cardType,
+      floor: selectedPlacement.floor,
+      x: selectedPlacement.x,
+      y: selectedPlacement.y,
+      doors: rotateDoors(selectedDebugTile.doors, debugTileRotation),
+    };
+  }, [
+    debugPlacementModeActive,
+    selectedDebugTile,
+    debugSelectedPlacementKey,
+    debugPlacementOptions,
+    debugTileRotation,
+  ]);
+  // NOTE: DEBUG MODE
+  const selectedDebugPlacementLabel = useMemo(() => {
+    if (!selectedDebugPlacement) return "";
+    return `${selectedDebugPlacement.floor} (${selectedDebugPlacement.x}, ${selectedDebugPlacement.y})`;
+  }, [selectedDebugPlacement]);
+  const debugRemovePlayer = game.players[debugRemovePlayerIndex];
+  const debugRemovableCards = useMemo(
+    () =>
+      debugRemovePlayer
+        ? (debugRemoveType === "omen" ? debugRemovePlayer.omens : debugRemovePlayer.inventory).map((card, index) => ({
+            ...card,
+            key: `${debugRemoveType}:${index}`,
+          }))
+        : [],
+    [debugRemovePlayer, debugRemoveType]
+  );
   const { dogMoveOptionsOnFloor, dogStairMoveOption, dogStairDestination, dogTradeTargetsOnTile } = getDogTradeUiState(
     game,
     tradeState,
@@ -1094,6 +1589,80 @@ export default function GameBoard({ players, onQuit }) {
   });
   const stairTarget = stairTargetState.target;
   const stairIsBacktrack = stairTargetState.isBacktrack;
+
+  useEffect(() => {
+    if (availableDebugTiles.length === 0) {
+      if (debugSelectedTileId !== "") {
+        setDebugSelectedTileId("");
+      }
+      return;
+    }
+    if (!availableDebugTiles.some((tile) => tile.id === debugSelectedTileId)) {
+      setDebugSelectedTileId(availableDebugTiles[0].id);
+      setDebugPlacementModeActive(false);
+      setDebugSelectedPlacementKey("");
+    }
+  }, [availableDebugTiles, debugSelectedTileId]);
+
+  useEffect(() => {
+    if (!debugPlacementModeActive) {
+      if (debugSelectedPlacementKey !== "") {
+        setDebugSelectedPlacementKey("");
+      }
+      return;
+    }
+
+    if (debugPlacementOptions.length === 0) {
+      setDebugSelectedPlacementKey("");
+      setDebugPlacementModeActive(false);
+      return;
+    }
+    if (
+      debugSelectedPlacementKey &&
+      !debugPlacementOptions.some((placement) => placement.key === debugSelectedPlacementKey)
+    ) {
+      setDebugSelectedPlacementKey("");
+    }
+  }, [debugPlacementModeActive, debugPlacementOptions, debugSelectedPlacementKey]);
+
+  useEffect(() => {
+    if (!selectedDebugPlacement) return;
+    if (debugRotationOptions.length === 0) return;
+
+    if (!debugRotationOptions.includes(debugTileRotation)) {
+      setDebugTileRotation(debugRotationOptions[0]);
+    }
+  }, [selectedDebugPlacement, debugRotationOptions, debugTileRotation]);
+
+  useEffect(() => {
+    if (debugGrantOptions.length === 0) {
+      setDebugGrantCardId("");
+      return;
+    }
+    if (!debugGrantOptions.some((option) => option.id === debugGrantCardId)) {
+      setDebugGrantCardId(debugGrantOptions[0].id);
+    }
+  }, [debugGrantCardId, debugGrantOptions]);
+
+  useEffect(() => {
+    if (debugEventOptions.length === 0) {
+      setDebugEventCardId("");
+      return;
+    }
+    if (!debugEventOptions.some((option) => option.id === debugEventCardId)) {
+      setDebugEventCardId(debugEventOptions[0].id);
+    }
+  }, [debugEventCardId, debugEventOptions]);
+
+  useEffect(() => {
+    if (debugRemovableCards.length === 0) {
+      setDebugRemoveCardKey("");
+      return;
+    }
+    if (!debugRemovableCards.some((card) => card.key === debugRemoveCardKey)) {
+      setDebugRemoveCardKey(debugRemovableCards[0].key);
+    }
+  }, [debugRemoveCardKey, debugRemovableCards]);
 
   // Calculate board bounds for centering
   const allXs = floorTiles.map((t) => t.x);
@@ -1167,6 +1736,12 @@ export default function GameBoard({ players, onQuit }) {
         handlePlacePendingSpecialTile={handlePlacePendingSpecialTile}
         handleMoveDogToken={handleMoveDogToken}
         dogMoveOptionsOnFloor={dogMoveOptionsOnFloor}
+        debugPlacementModeActive={debugPlacementModeActive}
+        debugPlacementTargetsOnFloor={debugPlacementTargetsOnFloor}
+        debugPlacementPreview={debugPlacementPreview}
+        selectedDebugPlacementKey={debugSelectedPlacementKey}
+        onSelectDebugPlacement={setDebugSelectedPlacementKey}
+        interactionLocked={debugModeEnabled}
       />
 
       <GameBoardActions
@@ -1198,6 +1773,7 @@ export default function GameBoard({ players, onQuit }) {
         dogTradeTargetsOnTile={dogTradeTargetsOnTile}
         handleStartDogTrade={handleStartDogTrade}
         handleCancelDogTrade={handleCancelDogTrade}
+        controlsDisabled={debugModeEnabled}
       />
 
       <PlayerSidebar
@@ -1231,6 +1807,7 @@ export default function GameBoard({ players, onQuit }) {
       <TradeViewer
         game={game}
         tradeState={tradeState}
+        actionsDisabled={debugModeEnabled}
         handlers={{
           handleToggleDogOwnerGive,
           handleToggleDogOwnerGiveOmen,
@@ -1240,6 +1817,50 @@ export default function GameBoard({ players, onQuit }) {
           handleBackToDogMove,
           handleCancelDogTrade,
         }}
+      />
+
+      <DebugModePanel
+        game={game}
+        isOpen={debugModeEnabled}
+        onClose={() => setDebugModeEnabled(false)}
+        playerStatOrder={PLAYER_STAT_ORDER}
+        debugTileCatalog={availableDebugTiles}
+        selectedTileId={selectedDebugTile?.id || ""}
+        onTileChange={setDebugSelectedTileId}
+        tileRotation={debugTileRotation}
+        onTileRotationChange={setDebugTileRotation}
+        rotationOptions={debugRotationOptions}
+        rotationDisabled={!selectedDebugPlacement}
+        placementModeActive={debugPlacementModeActive}
+        selectedPlacementLabel={selectedDebugPlacementLabel}
+        onStartPlacementMode={startDebugPlacementMode}
+        onCancelPlacementMode={cancelDebugPlacementMode}
+        onConfirmPlacement={placeDebugTile}
+        selectedPlacementKey={debugSelectedPlacementKey}
+        placementOptions={debugPlacementOptions}
+        grantType={debugGrantType}
+        onGrantTypeChange={(value) => setDebugGrantType(value === "omen" ? "omen" : "item")}
+        grantPlayerIndex={debugGrantPlayerIndex}
+        onGrantPlayerChange={setDebugGrantPlayerIndex}
+        grantCardId={debugGrantCardId}
+        onGrantCardChange={setDebugGrantCardId}
+        grantOptions={debugGrantOptions}
+        onGrantCard={grantDebugCard}
+        eventPlayerIndex={debugEventPlayerIndex}
+        onEventPlayerChange={setDebugEventPlayerIndex}
+        eventCardId={debugEventCardId}
+        onEventCardChange={setDebugEventCardId}
+        eventOptions={debugEventOptions}
+        onActivateEvent={activateDebugEvent}
+        removeType={debugRemoveType}
+        onRemoveTypeChange={(value) => setDebugRemoveType(value === "omen" ? "omen" : "item")}
+        removePlayerIndex={debugRemovePlayerIndex}
+        onRemovePlayerChange={setDebugRemovePlayerIndex}
+        removeCardKey={debugRemoveCardKey}
+        onRemoveCardKeyChange={setDebugRemoveCardKey}
+        removableCards={debugRemovableCards}
+        onRemoveCard={removeDebugCard}
+        onSetPlayerStat={setDebugPlayerStat}
       />
 
       {showEventResolutionModal && (
@@ -1258,10 +1879,7 @@ export default function GameBoard({ players, onQuit }) {
         />
       )}
 
-      <DiceRollOverlay
-        diceAnimation={diceAnimation}
-        renderDiceRow={(props) => <DiceRow {...props} />}
-      />
+      <DiceRollOverlay diceAnimation={diceAnimation} renderDiceRow={(props) => <DiceRow {...props} />} />
 
       <HauntRollOverlay
         game={game}

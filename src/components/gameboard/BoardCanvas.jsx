@@ -23,6 +23,12 @@ export default function BoardCanvas({
   handlePlacePendingSpecialTile,
   handleMoveDogToken,
   dogMoveOptionsOnFloor,
+  debugPlacementModeActive,
+  debugPlacementTargetsOnFloor,
+  debugPlacementPreview,
+  selectedDebugPlacementKey,
+  onSelectDebugPlacement,
+  interactionLocked = false,
 }) {
   return (
     <div className="board-container" ref={boardRef}>
@@ -51,7 +57,8 @@ export default function BoardCanvas({
             const left = (tile.x - minX) * (TILE_SIZE + GAP);
             const top = (tile.y - minY) * (TILE_SIZE + GAP);
             const tilePlayersHere = playersOnFloor.filter((p) => p.x === tile.x && p.y === tile.y);
-            const isCurrentTile = currentPlayer.x === tile.x && currentPlayer.y === tile.y && currentPlayer.floor === cameraFloor;
+            const isCurrentTile =
+              currentPlayer.x === tile.x && currentPlayer.y === tile.y && currentPlayer.floor === cameraFloor;
 
             return (
               <div
@@ -93,11 +100,14 @@ export default function BoardCanvas({
                   </div>
                 )}
 
-                {tradeState?.mode === "dog-remote" && tradeState.floor === cameraFloor && tradeState.x === tile.x && tradeState.y === tile.y && (
-                  <div className="player-token" title="Dog">
-                    🐕
-                  </div>
-                )}
+                {tradeState?.mode === "dog-remote" &&
+                  tradeState.floor === cameraFloor &&
+                  tradeState.x === tile.x &&
+                  tradeState.y === tile.y && (
+                    <div className="player-token" title="Dog">
+                      🐕
+                    </div>
+                  )}
               </div>
             );
           })}
@@ -122,7 +132,9 @@ export default function BoardCanvas({
                   {isRotating ? (
                     <>
                       <div className="tile-name">{pe.tile.name}</div>
-                      {pe.tile.cardType && <div className={`tile-type tile-type-${pe.tile.cardType}`}>{pe.tile.cardType}</div>}
+                      {pe.tile.cardType && (
+                        <div className={`tile-type tile-type-${pe.tile.cardType}`}>{pe.tile.cardType}</div>
+                      )}
                       <div className="tile-doors">
                         {previewDoors.map((d) => (
                           <div key={d} className={`door door-${d}`} />
@@ -146,9 +158,38 @@ export default function BoardCanvas({
                 </div>
               );
             })()}
+          {/* NOTE: DEBUG MODE */}
+          {debugPlacementPreview &&
+            debugPlacementPreview.floor === cameraFloor &&
+            (() => {
+              const left = (debugPlacementPreview.x - minX) * (TILE_SIZE + GAP);
+              const top = (debugPlacementPreview.y - minY) * (TILE_SIZE + GAP);
+
+              return (
+                <div
+                  key={`debug-preview-${debugPlacementPreview.floor}-${debugPlacementPreview.x}-${debugPlacementPreview.y}`}
+                  className={`board-tile board-tile-debug-preview ${debugPlacementPreview.cardType ? "board-tile-" + debugPlacementPreview.cardType : ""}`}
+                  style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
+                >
+                  <div className="tile-name">{debugPlacementPreview.name}</div>
+                  {debugPlacementPreview.cardType && (
+                    <div className={`tile-type tile-type-${debugPlacementPreview.cardType}`}>
+                      {debugPlacementPreview.cardType}
+                    </div>
+                  )}
+                  <div className="tile-doors">
+                    {debugPlacementPreview.doors.map((d) => (
+                      <div key={`debug-preview-door-${d}`} className={`door door-${d}`} />
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+          {/* NOTE: DEBUG MODE */}
 
           {/* Explore/move targets */}
           {!tradeState &&
+            !interactionLocked &&
             !game.pendingExplore &&
             validMoves.map((m) => {
               // Don't show target if there's already a tile there (move targets are on existing tiles)
@@ -168,6 +209,7 @@ export default function BoardCanvas({
             })}
 
           {game.pendingSpecialPlacement &&
+            !interactionLocked &&
             pendingSpecialPlacementTargets.map((placement) => {
               const left = (placement.x - minX) * (TILE_SIZE + GAP);
               const top = (placement.y - minY) * (TILE_SIZE + GAP);
@@ -183,17 +225,37 @@ export default function BoardCanvas({
               );
             })}
 
+          {debugPlacementModeActive &&
+            !game.pendingSpecialPlacement &&
+            debugPlacementTargetsOnFloor.map((placement) => {
+              const left = (placement.x - minX) * (TILE_SIZE + GAP);
+              const top = (placement.y - minY) * (TILE_SIZE + GAP);
+              const isSelected = selectedDebugPlacementKey === placement.key;
+              return (
+                <button
+                  key={`debug-placement-${placement.floor}-${placement.x}-${placement.y}`}
+                  className={`explore-target debug-placement-target ${isSelected ? "debug-placement-target-selected" : ""}`}
+                  style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
+                  onClick={() => onSelectDebugPlacement(placement.key)}
+                  title={`Debug placement: ${placement.floor} (${placement.x}, ${placement.y})`}
+                >
+                  <span className="explore-icon">+</span>
+                </button>
+              );
+            })}
+
           <EventTileChoiceTargets
             eventTileChoiceOptions={eventTileChoiceOptions}
             selectedEventTileChoiceId={selectedEventTileChoiceId}
             cameraFloor={cameraFloor}
             minX={minX}
             minY={minY}
-            onSelectOption={handleEventTileChoice}
+            onSelectOption={interactionLocked ? () => {} : handleEventTileChoice}
           />
 
           {/* Clickable overlay on existing tiles for movement/backtrack */}
           {!tradeState &&
+            !interactionLocked &&
             validMoves
               .filter((m) => m.type === "move" || m.type === "backtrack" || m.type === "wall-move")
               .map((m) => {
@@ -210,6 +272,7 @@ export default function BoardCanvas({
               })}
 
           {tradeState?.phase === "move" &&
+            !interactionLocked &&
             dogMoveOptionsOnFloor.map((move) => {
               const left = (move.x - minX) * (TILE_SIZE + GAP);
               const top = (move.y - minY) * (TILE_SIZE + GAP);
@@ -228,4 +291,3 @@ export default function BoardCanvas({
     </div>
   );
 }
-
