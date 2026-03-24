@@ -36,6 +36,7 @@ import {
 import EventResolutionModal, { DrawnCardModal } from "./components/EventResolutionModal";
 import BoardCanvas from "./components/gameboard/BoardCanvas";
 import DamageChoiceOverlay from "./components/gameboard/overlays/DamageChoiceOverlay";
+import CombatOverlay from "./components/gameboard/overlays/CombatOverlay";
 import DiceRollOverlay from "./components/gameboard/overlays/DiceRollOverlay";
 import HauntRollOverlay from "./components/gameboard/overlays/HauntRollOverlay";
 import TileEffectOverlay from "./components/gameboard/overlays/TileEffectOverlay";
@@ -141,6 +142,7 @@ import {
   getHauntDefinitionById,
 } from "./haunts/hauntDomain";
 import { TILES, STARTING_TILES } from "./tiles";
+import { getDamageConversionOptions, getPassiveEffects } from "./items/passiveItemEffectAbility";
 import "./GameBoard.css";
 
 function formatStatTrackValue(value) {
@@ -149,6 +151,11 @@ function formatStatTrackValue(value) {
 
 const ALL_DIRECTIONS = ["N", "E", "S", "W"];
 const DEBUG_TILE_CATALOG = [...STARTING_TILES, ...TILES];
+const SUPPORTED_COMBAT_ITEM_ACTIONS = new Set([
+  "attack-bonus-die",
+  "attack-bonus-total",
+  "optional-speed-loss-for-attack-dice",
+]);
 
 function rotateDoors(doors, rotation) {
   return doors.map((door) => {
@@ -188,6 +195,76 @@ function getCardPoolOptions(deck) {
     });
   }
   return Array.from(countsById.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function getPlayerMightDiceCount(player) {
+  return player.character.might[player.statIndex.might] || 0;
+}
+
+function getDefenseRollDiceBonus(player) {
+  const effects = getPassiveEffects(player).filter((effect) => effect.type === "defense-roll-dice-bonus");
+  return {
+    amount: effects.reduce((sum, effect) => sum + (effect.amount || 0), 0),
+    sourceNames: effects.map((effect) => effect.sourceName),
+  };
+}
+
+function getCombatTargetsOnCurrentTile(game) {
+  if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return [];
+  if (!game.hauntState) return [];
+  if (game.hasAttackedThisTurn) return [];
+
+  const attackerIndex = game.currentPlayerIndex;
+  const attacker = game.players[attackerIndex];
+  if (!attacker?.isAlive) return [];
+
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  const onSameTile = (player) =>
+    player.floor === attacker.floor && player.x === attacker.x && player.y === attacker.y && player.isAlive;
+
+  if (attackerIndex === traitorIndex) {
+    return game.players
+      .map((player, playerIndex) => ({ player, playerIndex }))
+      .filter(
+        ({ player, playerIndex }) => playerIndex !== attackerIndex && playerIndex !== traitorIndex && onSameTile(player)
+      );
+  }
+
+  const traitor = game.players[traitorIndex];
+  if (!traitor || !onSameTile(traitor)) return [];
+  return [{ player: traitor, playerIndex: traitorIndex }];
+}
+
+function getCombatItemOptionsForPlayer(player, usedItemKeys) {
+  const options = [];
+
+  (player.inventory || []).forEach((card, cardIndex) => {
+    const action = card.activeAbilityRule?.action;
+    if (card.activeAbilityRule?.trigger !== "attack") return;
+    if (!SUPPORTED_COMBAT_ITEM_ACTIONS.has(action)) return;
+
+    const key = `inventory:${cardIndex}:${card.id}`;
+    const alreadyUsed = usedItemKeys.includes(key);
+    const requiresSpeed = action === "optional-speed-loss-for-attack-dice";
+    const canPaySpeed = (player.statIndex.speed || 0) > 0;
+
+    options.push({
+      key,
+      name: card.name,
+      action,
+      cardIndex,
+      collection: "inventory",
+      canUse: !alreadyUsed && (!requiresSpeed || canPaySpeed),
+      disabledReason: alreadyUsed
+        ? "Already used this attack"
+        : requiresSpeed && !canPaySpeed
+          ? "Not enough Speed"
+          : "",
+      rule: card.activeAbilityRule,
+    });
+  });
+
+  return options;
 }
 
 function DiceRow({ dice, modifier = null, rolling = false }) {
@@ -237,7 +314,8 @@ export default function GameBoard({ players, onQuit }) {
   const messageBubbleTimeoutRef = useRef(null);
   const boardRef = useRef(null);
   const gameplayLockedByHauntSetup = game.gamePhase === GAME_PHASES.HAUNT_SETUP;
-  const gameplayUiLocked = debugModeEnabled || gameplayLockedByHauntSetup;
+  const gameplayLockedByCombat = !!game.combatState;
+  const gameplayUiLocked = debugModeEnabled || gameplayLockedByHauntSetup || gameplayLockedByCombat;
 
   useEffect(() => {
     queuedTraitRollOverrideRef.current = queuedTraitRollOverride;
@@ -361,6 +439,8 @@ export default function GameBoard({ players, onQuit }) {
           };
         });
         setDiceAnimation(null);
+      } else if (da.purpose === "combat-attacker-roll" || da.purpose === "combat-defender-roll") {
+        setDiceAnimation(null);
       }
     }, 2000);
 
@@ -397,7 +477,7 @@ export default function GameBoard({ players, onQuit }) {
         return;
       }
 
-      if (debugModeEnabled || gameplayLockedByHauntSetup || isInputFocused) {
+      if (debugModeEnabled || gameplayLockedByHauntSetup || gameplayLockedByCombat || isInputFocused) {
         return;
       }
 
@@ -971,6 +1051,7 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleUseSecretPassage(target) {
+    if (hasUnconfirmedMovePathState(game)) return;
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setGame((g) => resolveSecretPassageMoveState({ game: g, target, getTileAtPosition }));
     setCameraFloor(target.floor);
@@ -978,6 +1059,7 @@ export default function GameBoard({ players, onQuit }) {
 
   // End turn
   function handleEndTurn() {
+    if (hasUnconfirmedMovePathState(game)) return;
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     let nextCameraFloor = null;
     let nextDiceAnimation = null;
@@ -1012,6 +1094,266 @@ export default function GameBoard({ players, onQuit }) {
 
   function applyDamageAllocation(players, playerIndex, allocation, adjustmentMode = "decrease") {
     return applyDamageAllocationState(players, playerIndex, allocation, adjustmentMode);
+  }
+
+  function handleStartCombat(defenderIndex) {
+    if (hasUnconfirmedMovePathState(game)) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
+
+    setGame((g) => {
+      const targets = getCombatTargetsOnCurrentTile(g);
+      if (!targets.some((target) => target.playerIndex === defenderIndex)) return g;
+
+      const attacker = g.players[g.currentPlayerIndex];
+      const defender = g.players[defenderIndex];
+
+      return {
+        ...g,
+        hasAttackedThisTurn: true,
+        combatState: {
+          phase: "attacker-roll",
+          attackerIndex: g.currentPlayerIndex,
+          defenderIndex,
+          attacker: {
+            dice: [],
+            total: null,
+            itemMessages: [],
+            usedItemKeys: [],
+          },
+          defender: {
+            dice: [],
+            total: null,
+            itemMessages: [],
+            usedItemKeys: [],
+          },
+          outcome: null,
+        },
+        message: `${attacker.name} attacks ${defender.name}.`,
+      };
+    });
+  }
+
+  function handleRollCombat(role) {
+    const combatState = game.combatState;
+    if (!combatState) return;
+
+    const expectedPhase = role === "attacker" ? "attacker-roll" : "defender-roll";
+    if (combatState.phase !== expectedPhase) return;
+
+    const actorIndex = role === "attacker" ? combatState.attackerIndex : combatState.defenderIndex;
+    const actor = game.players[actorIndex];
+    if (!actor?.isAlive) return;
+
+    const defenseBonus = role === "defender" ? getDefenseRollDiceBonus(actor) : { amount: 0, sourceNames: [] };
+    const baseDiceCount = getPlayerMightDiceCount(actor) + defenseBonus.amount;
+    const rollResult = resolveTraitRoll(actor, {
+      stat: "might",
+      baseDiceCount,
+      context: "attack",
+      board: game.board,
+      usePassives: true,
+    });
+
+    const itemMessages = [];
+    if (defenseBonus.amount > 0) {
+      itemMessages.push(`+${defenseBonus.amount} defense dice from ${formatSourceNames(defenseBonus.sourceNames)}.`);
+    }
+
+    setGame((g) => {
+      if (!g.combatState || g.combatState.phase !== expectedPhase) return g;
+
+      const nextActorState = {
+        ...g.combatState[role],
+        dice: rollResult.dice,
+        total: rollResult.total,
+        itemMessages,
+      };
+
+      return {
+        ...g,
+        combatState: {
+          ...g.combatState,
+          [role]: nextActorState,
+          phase: role === "attacker" ? "attacker-item" : "defender-item",
+        },
+      };
+    });
+
+    setDiceAnimation({
+      purpose: role === "attacker" ? "combat-attacker-roll" : "combat-defender-roll",
+      final: rollResult.dice,
+      display: Array.from({ length: rollResult.dice.length }, () => Math.floor(Math.random() * 3)),
+      settled: false,
+      modifier: rollResult.modifier,
+    });
+  }
+
+  function handleUseCombatItem(role, itemKey) {
+    setGame((g) => {
+      const combatState = g.combatState;
+      if (!combatState) return g;
+
+      const expectedPhase = role === "attacker" ? "attacker-item" : "defender-item";
+      if (combatState.phase !== expectedPhase) return g;
+
+      const actorState = combatState[role];
+      if (actorState.total == null) return g;
+
+      const actorIndex = role === "attacker" ? combatState.attackerIndex : combatState.defenderIndex;
+      const actor = g.players[actorIndex];
+      if (!actor) return g;
+
+      const itemOptions = getCombatItemOptionsForPlayer(actor, actorState.usedItemKeys || []);
+      const option = itemOptions.find((item) => item.key === itemKey && item.canUse);
+      if (!option) return g;
+
+      let nextPlayers = g.players;
+      let extraDiceCount = 0;
+      let extraTotal = 0;
+      let itemMessage = "";
+
+      if (option.action === "attack-bonus-die") {
+        extraDiceCount = 1;
+        itemMessage = `${option.name}: +1 attack die`;
+      } else if (option.action === "attack-bonus-total") {
+        extraTotal = 1;
+        itemMessage = `${option.name}: +1 to roll total`;
+      } else if (option.action === "optional-speed-loss-for-attack-dice") {
+        const costAmount = option.rule?.costAmount || 1;
+        const bonusDice = option.rule?.bonusDice || 2;
+        nextPlayers = applyStatChangeState(g.players, actorIndex, "speed", -costAmount);
+        extraDiceCount = bonusDice;
+        itemMessage = `${option.name}: paid ${costAmount} Speed for +${bonusDice} attack dice`;
+      }
+
+      const bonusDice = extraDiceCount > 0 ? rollDice(extraDiceCount) : [];
+      const bonusDiceTotal = bonusDice.reduce((sum, value) => sum + value, 0);
+
+      const nextActorState = {
+        ...actorState,
+        dice: [...actorState.dice, ...bonusDice],
+        total: actorState.total + bonusDiceTotal + extraTotal,
+        itemMessages: [
+          ...(actorState.itemMessages || []),
+          extraDiceCount > 0 ? `${itemMessage} (rolled ${bonusDice.join(", ")})` : itemMessage,
+        ],
+        usedItemKeys: [...(actorState.usedItemKeys || []), itemKey],
+      };
+
+      return {
+        ...g,
+        players: nextPlayers,
+        combatState: {
+          ...combatState,
+          [role]: nextActorState,
+        },
+        message: `${actor.name} uses ${option.name}.`,
+      };
+    });
+  }
+
+  function handleContinueCombatAttacker() {
+    setGame((g) => {
+      if (!g.combatState || g.combatState.phase !== "attacker-item") return g;
+      return {
+        ...g,
+        combatState: {
+          ...g.combatState,
+          phase: "defender-roll",
+        },
+      };
+    });
+  }
+
+  function handleContinueCombatDefender() {
+    setGame((g) => {
+      if (!g.combatState || g.combatState.phase !== "defender-item") return g;
+
+      const attackerTotal = g.combatState.attacker.total || 0;
+      const defenderTotal = g.combatState.defender.total || 0;
+
+      const tie = attackerTotal === defenderTotal;
+      const winnerIndex = tie
+        ? null
+        : attackerTotal > defenderTotal
+          ? g.combatState.attackerIndex
+          : g.combatState.defenderIndex;
+      const loserIndex = tie
+        ? null
+        : winnerIndex === g.combatState.attackerIndex
+          ? g.combatState.defenderIndex
+          : g.combatState.attackerIndex;
+      const damage = tie ? 0 : Math.abs(attackerTotal - defenderTotal);
+
+      const outcome = {
+        tie,
+        attackerTotal,
+        defenderTotal,
+        winnerIndex,
+        loserIndex,
+        damage,
+        winnerName: winnerIndex != null ? g.players[winnerIndex]?.name || "Winner" : "No one",
+        loserName: loserIndex != null ? g.players[loserIndex]?.name || "Loser" : "No one",
+      };
+
+      return {
+        ...g,
+        combatState: {
+          ...g.combatState,
+          phase: "resolution",
+          outcome,
+        },
+      };
+    });
+  }
+
+  function handleAdvanceCombatResolution() {
+    setGame((g) => {
+      const combatState = g.combatState;
+      const outcome = combatState?.outcome;
+      if (!combatState || combatState.phase !== "resolution" || !outcome) return g;
+
+      if (outcome.tie || outcome.damage <= 0 || outcome.loserIndex == null) {
+        return {
+          ...g,
+          combatState: null,
+          message: `Combat tied at ${outcome.attackerTotal}. No damage dealt.`,
+        };
+      }
+
+      const loser = g.players[outcome.loserIndex];
+      const allocation = Object.fromEntries(DAMAGE_STATS.physical.map((stat) => [stat, 0]));
+      const conversionOptions = getDamageConversionOptions(loser, "physical");
+
+      const damageChoice = {
+        source: "combat",
+        effect: null,
+        playerIndex: outcome.loserIndex,
+        playerName: loser.name,
+        originalDamageType: "physical",
+        damageType: "physical",
+        adjustmentMode: "decrease",
+        amount: outcome.damage,
+        allowedStats: DAMAGE_STATS.physical,
+        allocation,
+        canConvertToGeneral: conversionOptions.canConvertToGeneral,
+        conversionSourceNames: conversionOptions.sourceNames,
+        postDamageEffects: getPostDamageEffectsForChoice(loser, {
+          damageType: "physical",
+          originalDamageType: "physical",
+          allocation,
+          amount: outcome.damage,
+        }),
+        combatSummaryMessage: `${outcome.winnerName} wins combat (${outcome.attackerTotal} vs ${outcome.defenderTotal}). ${outcome.loserName} takes ${outcome.damage} Physical damage.`,
+      };
+
+      return {
+        ...g,
+        combatState: null,
+        damageChoice,
+        message: `${outcome.loserName} must allocate ${outcome.damage} Physical damage.`,
+      };
+    });
   }
 
   const eventEngineDeps = {
@@ -1090,7 +1432,11 @@ export default function GameBoard({ players, onQuit }) {
   function handleToggleDamageConversion() {
     setGame((g) =>
       toggleDamageConversionChoiceState(g, {
-        updateDamageChoiceType,
+        updateDamageChoiceType: (choice, _player, damageType) => {
+          const playerIndex = Number.isInteger(choice.playerIndex) ? choice.playerIndex : g.currentPlayerIndex;
+          const targetPlayer = g.players[playerIndex];
+          return updateDamageChoiceType(choice, targetPlayer, damageType);
+        },
       })
     );
   }
@@ -1244,6 +1590,7 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleRollMysticElevator() {
+    if (hasUnconfirmedMovePathState(game)) return;
     const rollState = getRollMysticElevatorState(game, rollDice);
     if (!rollState) return;
 
@@ -1316,6 +1663,7 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleUseViewedCardActiveAbilityNow() {
+    if (hasUnconfirmedMovePathState(game)) return;
     const resolved = resolveUseViewedCardActiveAbilityNowState({
       game,
       viewedCard,
@@ -1357,6 +1705,7 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleChooseActiveAbilityValue(total) {
+    if (hasUnconfirmedMovePathState(game)) return;
     const resolved = resolveChooseViewedCardActiveAbilityValueState({
       game,
       total,
@@ -1385,11 +1734,13 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleStartDogTrade(targetPlayerIndex) {
+    if (hasUnconfirmedMovePathState(game)) return;
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => resolveStartTradeSelectionState(prev, targetPlayerIndex));
   }
 
   function handleStartPlayerTrade(targetPlayerIndex) {
+    if (hasUnconfirmedMovePathState(game)) return;
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => {
       if (prev) return prev;
@@ -1434,6 +1785,7 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleCancelDogTrade() {
+    if (hasUnconfirmedMovePathState(game)) return;
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState(null);
   }
@@ -1573,10 +1925,27 @@ export default function GameBoard({ players, onQuit }) {
     currentPlayer.x,
     currentPlayer.y
   );
+  const combatTargetsOnTile = getCombatTargetsOnCurrentTile(game);
   const pendingSpecialPlacementTargets = (game.pendingSpecialPlacement?.placements || []).filter(
     (placement) => placement.floor === cameraFloor
   );
   const damageChoice = game.damageChoice;
+  const damageChoicePlayerIndex = Number.isInteger(damageChoice?.playerIndex)
+    ? damageChoice.playerIndex
+    : game.currentPlayerIndex;
+  const damageChoicePlayer = game.players[damageChoicePlayerIndex] || currentPlayer;
+  const attackerCombatItemOptions = useMemo(() => {
+    if (!game.combatState || game.combatState.phase !== "attacker-item") return [];
+    const attacker = game.players[game.combatState.attackerIndex];
+    if (!attacker) return [];
+    return getCombatItemOptionsForPlayer(attacker, game.combatState.attacker?.usedItemKeys || []);
+  }, [game.combatState, game.players]);
+  const defenderCombatItemOptions = useMemo(() => {
+    if (!game.combatState || game.combatState.phase !== "defender-item") return [];
+    const defender = game.players[game.combatState.defenderIndex];
+    if (!defender) return [];
+    return getCombatItemOptionsForPlayer(defender, game.combatState.defender?.usedItemKeys || []);
+  }, [game.combatState, game.players]);
   const eventState = game.eventState;
   const isItemAbilityTileChoiceActive = isItemAbilityTileChoiceAwaiting(eventState);
   const { drawnEventPrimaryAction, eventTileChoiceOptions, selectedEventTileChoiceId, showEventResolutionModal } =
@@ -1593,7 +1962,7 @@ export default function GameBoard({ players, onQuit }) {
   const showMoveConfirmUseNowDisabled =
     !!viewedCard?.activeAbilityRule && viewedCard.ownerIndex === game.currentPlayerIndex && isUnconfirmedMovePath;
   const { damageAllocated, damageRemaining, canConfirmDamageChoice } = getDamageChoiceSummary(damageChoice);
-  const damagePreview = damageChoice ? getDamagePreview(currentPlayer, damageChoice) : null;
+  const damagePreview = damageChoice ? getDamagePreview(damageChoicePlayer, damageChoice) : null;
 
   // Check if current player is on a staircase tile
   const currentTileObj = getCurrentPlayerTile(game.board, currentPlayer);
@@ -1826,6 +2195,8 @@ export default function GameBoard({ players, onQuit }) {
         handleEndTurn={handleEndTurn}
         playerTradeTargetsOnTile={playerTradeTargetsOnTile}
         handleStartPlayerTrade={handleStartPlayerTrade}
+        combatTargetsOnTile={combatTargetsOnTile}
+        handleStartCombat={handleStartCombat}
         dogStairMoveOption={dogStairMoveOption}
         handleMoveDogToken={handleMoveDogToken}
         dogStairDestination={dogStairDestination}
@@ -1976,9 +2347,24 @@ export default function GameBoard({ players, onQuit }) {
         onDismissTileEffect={handleDismissTileEffect}
       />
 
+      <CombatOverlay
+        combatState={game.combatState}
+        diceAnimation={diceAnimation}
+        players={game.players}
+        attackerItemOptions={attackerCombatItemOptions}
+        defenderItemOptions={defenderCombatItemOptions}
+        onRollAttacker={() => handleRollCombat("attacker")}
+        onRollDefender={() => handleRollCombat("defender")}
+        onUseAttackerItem={(itemKey) => handleUseCombatItem("attacker", itemKey)}
+        onUseDefenderItem={(itemKey) => handleUseCombatItem("defender", itemKey)}
+        onContinueAttacker={handleContinueCombatAttacker}
+        onContinueDefender={handleContinueCombatDefender}
+        onAdvanceResolution={handleAdvanceCombatResolution}
+      />
+
       <DamageChoiceOverlay
         damageChoice={damageChoice}
-        currentPlayer={currentPlayer}
+        currentPlayer={damageChoicePlayer}
         damageAllocated={damageAllocated}
         damageRemaining={damageRemaining}
         canConfirmDamageChoice={canConfirmDamageChoice}

@@ -85,6 +85,8 @@ export function initGameState(players) {
     gamePhase: GAME_PHASES.PRE_HAUNT,
     activeHauntId: null,
     hauntState: null,
+    hasAttackedThisTurn: false,
+    combatState: null,
     drawnCard: null,
     hauntRoll: null,
     tileEffect: null,

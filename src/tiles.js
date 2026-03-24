@@ -247,7 +247,7 @@ export const TILES = [
   {
     id: "mystic-elevator",
     name: "Mystic Elevator",
-    floors: ["ground", "upper", "basement"],
+    floors: ["ground", "upper", "basement"], // NOT: POTENTIAL BUG WHEN MYSTIC ELEVATOR ENDS UP BEING PLACED ON THE SAME FLOOR IT IS ALREADY ON. DOUBLE ELEVATOR. ALSO, IF YOU START YOUR TURN INSIDE THE ELEVATOR YOU DON'T SEEM TO BE ABLE TO USE IT UNTIL YOU LEAVE AND ENTER IT ON YOUR NEXT TURN
     doors: ["N"],
     cardType: null,
     description:

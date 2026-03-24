@@ -1235,6 +1235,8 @@ export function isQueuedTileEffectType(type) {
 }
 
 export function applyTileEffectConsequences(g, players, effect) {
+  if (!effect) return players;
+
   let updatedPlayers = [...players];
   const pi = g.currentPlayerIndex;
 

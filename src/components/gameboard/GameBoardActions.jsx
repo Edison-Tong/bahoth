@@ -21,6 +21,8 @@ export default function GameBoardActions({
   handleEndTurn,
   playerTradeTargetsOnTile,
   handleStartPlayerTrade,
+  combatTargetsOnTile,
+  handleStartCombat,
   dogStairMoveOption,
   handleMoveDogToken,
   dogStairDestination,
@@ -29,6 +31,8 @@ export default function GameBoardActions({
   handleCancelDogTrade,
   controlsDisabled,
 }) {
+  const isPathTracking = !tradeState && game.turnPhase === "move" && game.movePath.length > 1;
+
   return (
     <div className="game-actions">
       {eventState?.awaiting?.type === "tile-choice" && (
@@ -50,12 +54,13 @@ export default function GameBoardActions({
           {stairIsBacktrack ? `Go back to ${stairTarget.name}` : `Move to ${stairTarget.name}`}
         </button>
       )}
-      {!tradeState && canUseMysticElevator && (
+      {!tradeState && !isPathTracking && canUseMysticElevator && (
         <button className="btn btn-stairs" onClick={handleRollMysticElevator} disabled={controlsDisabled}>
           Use Elevator
         </button>
       )}
       {!tradeState &&
+        !isPathTracking &&
         canUseSecretPassage &&
         secretPassageTargets.map((target) => (
           <button
@@ -83,6 +88,7 @@ export default function GameBoardActions({
       {(game.turnPhase === "endTurn" || game.turnPhase === "move") &&
         !game.pendingExplore &&
         !tradeState &&
+        !isPathTracking &&
         !isItemAbilityTileChoiceAwaiting(eventState) && (
           <button className="btn btn-primary" onClick={handleEndTurn} disabled={controlsDisabled}>
             End Turn — Pass to {endTurnPreviewPlayerName}
@@ -92,6 +98,24 @@ export default function GameBoardActions({
       {!tradeState &&
         game.turnPhase === "move" &&
         !game.pendingExplore &&
+        !isPathTracking &&
+        !isItemAbilityTileChoiceAwaiting(eventState) &&
+        combatTargetsOnTile.length > 0 &&
+        combatTargetsOnTile.map(({ player, playerIndex }) => (
+          <button
+            key={`combat-start-${playerIndex}`}
+            className="btn btn-danger"
+            onClick={() => handleStartCombat(playerIndex)}
+            disabled={controlsDisabled}
+          >
+            Attack {player.name}
+          </button>
+        ))}
+
+      {!tradeState &&
+        game.turnPhase === "move" &&
+        !game.pendingExplore &&
+        !isPathTracking &&
         !isItemAbilityTileChoiceAwaiting(eventState) &&
         playerTradeTargetsOnTile.length > 0 &&
         playerTradeTargetsOnTile.map(({ player, playerIndex }) => (

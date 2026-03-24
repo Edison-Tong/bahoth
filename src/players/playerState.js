@@ -59,6 +59,8 @@ export function passTurnCoreState(g) {
       pendingSpecialPlacement: null,
       mysticElevatorReady: false,
       mysticElevatorUsed: false,
+      hasAttackedThisTurn: false,
+      combatState: null,
       tileEffect: null,
       damageChoice: null,
       rabbitFootPendingReroll: null,
@@ -106,7 +108,9 @@ export function adjustDamageAllocationChoiceState(g, stat, delta, { getPostDamag
   const choice = g.damageChoice;
   if (!choice || !choice.allowedStats.includes(stat)) return g;
 
-  const currentPlayerState = g.players[g.currentPlayerIndex];
+  const choicePlayerIndex = Number.isInteger(choice.playerIndex) ? choice.playerIndex : g.currentPlayerIndex;
+  const currentPlayerState = g.players[choicePlayerIndex];
+  if (!currentPlayerState) return g;
   const currentAmount = choice.allocation[stat] || 0;
   const selectedTotal = Object.values(choice.allocation).reduce((sum, value) => sum + value, 0);
   const maxForStat =
@@ -188,6 +192,7 @@ export function confirmDamageChoiceState(
 ) {
   const choice = g.damageChoice;
   if (!choice) return { game: g, cameraFloor: null, clearDiceAnimation: false };
+  const choicePlayerIndex = Number.isInteger(choice.playerIndex) ? choice.playerIndex : g.currentPlayerIndex;
 
   const selectedTotal = Object.values(choice.allocation).reduce((sum, value) => sum + value, 0);
   if (choice.allowPartial) {
@@ -196,13 +201,8 @@ export function confirmDamageChoiceState(
     return { game: g, cameraFloor: null, clearDiceAnimation: false };
   }
 
-  const damagedPlayers = applyDamageAllocation(
-    g.players,
-    g.currentPlayerIndex,
-    choice.allocation,
-    choice.adjustmentMode
-  );
-  const postDamageResult = applyPostDamagePassiveEffects(damagedPlayers, g.currentPlayerIndex, choice);
+  const damagedPlayers = applyDamageAllocation(g.players, choicePlayerIndex, choice.allocation, choice.adjustmentMode);
+  const postDamageResult = applyPostDamagePassiveEffects(damagedPlayers, choicePlayerIndex, choice);
   const resolvedPlayers = applyTileEffectConsequences(g, postDamageResult.players, choice.effect);
   const baseState = {
     ...g,
@@ -210,6 +210,22 @@ export function confirmDamageChoiceState(
     tileEffect: null,
     damageChoice: null,
   };
+
+  if (choice.source === "combat") {
+    const combatMessage = choice.combatSummaryMessage || "";
+    const postDamageMessage = postDamageResult.message || "";
+    const combinedMessage = [combatMessage, postDamageMessage].filter(Boolean).join(" ");
+
+    return {
+      game: {
+        ...baseState,
+        combatState: null,
+        message: combinedMessage || g.message,
+      },
+      cameraFloor: null,
+      clearDiceAnimation: true,
+    };
+  }
 
   const eventDamageResult = resolveEventDamageChoiceState(g, choice, baseState, postDamageResult.message, {
     runAdvanceEventResolution,

@@ -40,6 +40,7 @@ export default function ViewedCardViewer({
                   key={`active-ability-value-${String(optionValue)}`}
                   className="btn btn-secondary"
                   onClick={() => handleChooseActiveAbilityValue(optionValue)}
+                  disabled={showMoveConfirmUseNowDisabled}
                 >
                   {optionLabel}
                 </button>
@@ -57,4 +58,3 @@ export default function ViewedCardViewer({
     </div>
   );
 }
-

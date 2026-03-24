@@ -1796,6 +1796,104 @@
   background: #4a443c;
 }
 
+.btn-danger {
+  background: rgba(180, 42, 42, 0.24);
+  border: 1px solid rgba(222, 112, 112, 0.6);
+  color: #ffdede;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: rgba(180, 42, 42, 0.35);
+}
+
+.card-combat {
+  width: min(720px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  background: #221614;
+  border-color: #b64b4b;
+}
+
+.combat-roll-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.6rem;
+  margin: 0.85rem 0;
+}
+
+.combat-roll-card {
+  border: 1px solid rgba(212, 194, 157, 0.22);
+  border-radius: 8px;
+  padding: 0.6rem;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.combat-roll-card-pending {
+  opacity: 0.75;
+}
+
+.combat-roll-label {
+  font-size: 0.64rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #cfb0a1;
+}
+
+.combat-roll-name {
+  font-size: 0.9rem;
+  color: #f4e6d7;
+  margin-top: 0.2rem;
+}
+
+.combat-roll-value {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff6f1;
+  margin-top: 0.2rem;
+}
+
+.combat-roll-detail {
+  font-size: 0.72rem;
+  color: #d6c3b5;
+  margin-top: 0.22rem;
+  line-height: 1.35;
+}
+
+.combat-roll-dice-container {
+  margin-top: 0.25rem;
+  justify-content: flex-start;
+  gap: 0.35rem;
+}
+
+.combat-roll-dice-container .die {
+  min-width: 26px;
+  min-height: 26px;
+  font-size: 0.8rem;
+}
+
+.combat-controls {
+  margin-top: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.combat-item-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  justify-content: center;
+  min-height: 2.2rem;
+  align-items: center;
+}
+
+.combat-empty-items {
+  font-size: 0.78rem;
+  color: #af9786;
+  font-style: italic;
+}
+
 .btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -2019,6 +2117,16 @@
   .card-event-resolution {
     width: min(100vw - 1rem, 640px);
     max-height: calc(100vh - 1rem);
+  }
+
+  .card-combat {
+    width: min(100vw - 1rem, 640px);
+    max-height: calc(100vh - 1rem);
+    padding: 1.25rem;
+  }
+
+  .combat-roll-grid {
+    grid-template-columns: 1fr;
   }
 
   .event-sequence-grid {
