@@ -30,6 +30,8 @@ export default function BoardCanvas({
   onSelectDebugPlacement,
   interactionLocked = false,
 }) {
+  const traitorPlayerIndex = game?.hauntState?.traitorPlayerIndex;
+
   return (
     <div className="board-container" ref={boardRef}>
       <div className="board-scroll">
@@ -92,11 +94,19 @@ export default function BoardCanvas({
                 {/* Player tokens */}
                 {tilePlayersHere.length > 0 && (
                   <div className="tile-players">
-                    {tilePlayersHere.map((p) => (
-                      <div key={p.index} className="player-token" style={{ background: p.color }} title={p.name}>
-                        {p.name.charAt(0)}
-                      </div>
-                    ))}
+                    {tilePlayersHere.map((p) => {
+                      const isTraitor = traitorPlayerIndex === p.index;
+                      return (
+                        <div
+                          key={p.index}
+                          className={`player-token ${isTraitor ? "player-token-traitor" : ""}`}
+                          style={{ background: p.color }}
+                          title={isTraitor ? `${p.name} (Traitor)` : p.name}
+                        >
+                          {p.name.charAt(0)}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -148,11 +158,19 @@ export default function BoardCanvas({
                   )}
                   {tilePlayersHere.length > 0 && (
                     <div className="tile-players">
-                      {tilePlayersHere.map((p) => (
-                        <div key={p.index} className="player-token" style={{ background: p.color }} title={p.name}>
-                          {p.name.charAt(0)}
-                        </div>
-                      ))}
+                      {tilePlayersHere.map((p) => {
+                        const isTraitor = traitorPlayerIndex === p.index;
+                        return (
+                          <div
+                            key={p.index}
+                            className={`player-token ${isTraitor ? "player-token-traitor" : ""}`}
+                            style={{ background: p.color }}
+                            title={isTraitor ? `${p.name} (Traitor)` : p.name}
+                          >
+                            {p.name.charAt(0)}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

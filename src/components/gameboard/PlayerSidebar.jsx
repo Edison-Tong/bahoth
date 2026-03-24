@@ -10,20 +10,24 @@ export default function PlayerSidebar({
   handleViewOwnedCard,
   onQuit,
 }) {
+  const traitorPlayerIndex = game?.hauntState?.traitorPlayerIndex;
+
   return (
     <div className="player-sidebar">
       {game.players.map((p, i) => {
         const isCurrent = i === game.currentPlayerIndex;
         const isExpanded = isCurrent || expandedSidebarPlayers.has(i);
+        const isTraitor = traitorPlayerIndex === i;
         return (
           <div
             key={i}
-            className={`sidebar-player ${isCurrent ? "sidebar-current" : ""} ${isExpanded ? "sidebar-expanded" : "sidebar-collapsed"} ${!p.isAlive ? "sidebar-dead" : ""}`}
+            className={`sidebar-player ${isCurrent ? "sidebar-current" : ""} ${isExpanded ? "sidebar-expanded" : "sidebar-collapsed"} ${!p.isAlive ? "sidebar-dead" : ""} ${isTraitor ? "sidebar-traitor" : ""}`}
             style={{ borderColor: isCurrent ? p.color : "transparent" }}
           >
             <button className="sidebar-header" onClick={() => toggleSidebarPlayer(i)} type="button">
               <div className="sidebar-name" style={{ color: p.color }}>
                 {p.name} {isCurrent && "◄"}
+                {isTraitor && <span className="sidebar-traitor-badge">Traitor</span>}
               </div>
               <span className={`sidebar-toggle ${isExpanded ? "sidebar-toggle-expanded" : ""}`} aria-hidden="true">
                 ▾
