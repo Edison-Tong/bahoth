@@ -81,3 +81,184 @@ export function dismissHauntRollState(game, { selectHauntDefinition }) {
     turnPhase: "endTurn",
   };
 }
+
+function getTraitorPhysicalBonus(hauntDefinition, playerCount) {
+  if (!hauntDefinition?.scaling?.traitorPhysicalBonusByPlayerCount) return 0;
+  return hauntDefinition.scaling.traitorPhysicalBonusByPlayerCount[playerCount] || 0;
+}
+
+function healAllTraits(player) {
+  const nextStatIndex = { ...player.statIndex };
+  for (const stat of ["might", "speed", "sanity", "knowledge"]) {
+    nextStatIndex[stat] = player.character[stat].length - 1;
+  }
+  return {
+    ...player,
+    statIndex: nextStatIndex,
+    isAlive: true,
+  };
+}
+
+function applyTraitorSetupBonuses(players, traitorPlayerIndex, hauntDefinition) {
+  const traitor = players[traitorPlayerIndex];
+  if (!traitor) return players;
+
+  const healedTraitor = healAllTraits(traitor);
+  const physicalBonus = getTraitorPhysicalBonus(hauntDefinition, players.length);
+  const boostedStatIndex = {
+    ...healedTraitor.statIndex,
+    might: Math.min(healedTraitor.character.might.length - 1, healedTraitor.statIndex.might + physicalBonus),
+    speed: Math.min(healedTraitor.character.speed.length - 1, healedTraitor.statIndex.speed + physicalBonus),
+  };
+
+  return players.map((player, index) => {
+    if (index !== traitorPlayerIndex) return player;
+    return {
+      ...healedTraitor,
+      statIndex: boostedStatIndex,
+    };
+  });
+}
+
+export function completeHauntSetupState(game, { getHauntDefinitionById }) {
+  if (game.gamePhase !== GAME_PHASES.HAUNT_SETUP) return game;
+  if (!game.hauntState || !game.activeHauntId) return game;
+
+  const hauntDefinition = getHauntDefinitionById(game.activeHauntId);
+  if (!hauntDefinition) return game;
+
+  const traitorPlayerIndex = game.hauntState.traitorPlayerIndex;
+  const playersAfterSetup = applyTraitorSetupBonuses(game.players, traitorPlayerIndex, hauntDefinition);
+
+  const desiredFirstPlayer = game.hauntState.firstPlayerAfterSetup ?? ((traitorPlayerIndex + 1) % playersAfterSetup.length);
+  const firstPlayer = playersAfterSetup[desiredFirstPlayer] || playersAfterSetup[0];
+  const firstPlayerSpeed = firstPlayer.character.speed[firstPlayer.statIndex.speed];
+  const playersWithMoves = playersAfterSetup.map((player, index) => ({
+    ...player,
+    movesLeft: index === desiredFirstPlayer ? firstPlayerSpeed : 0,
+  }));
+
+  return {
+    ...game,
+    players: playersWithMoves,
+    currentPlayerIndex: desiredFirstPlayer,
+    gamePhase: GAME_PHASES.HAUNT_ACTIVE,
+    turnPhase: "move",
+    movePath: [{ x: firstPlayer.x, y: firstPlayer.y, floor: firstPlayer.floor, cost: 0 }],
+    pendingExplore: null,
+    pendingSpecialPlacement: null,
+    mysticElevatorReady: false,
+    mysticElevatorUsed: false,
+    drawnCard: null,
+    tileEffect: null,
+    damageChoice: null,
+    rabbitFootPendingReroll: null,
+    eventState: null,
+    hauntState: {
+      ...game.hauntState,
+      status: "active",
+      setup: {
+        ...game.hauntState.setup,
+        currentStepIndex: Math.max(
+          game.hauntState.setup?.heroSteps?.length || 0,
+          game.hauntState.setup?.traitorSteps?.length || 0
+        ),
+        completed: true,
+      },
+    },
+    message: `${firstPlayer.name} takes the first hero turn. The haunt is active.`,
+  };
+}
+
+function markHauntActionUsed(hauntState, actionKey) {
+  return {
+    ...hauntState,
+    oncePerTurnUsage: {
+      ...(hauntState.oncePerTurnUsage || {}),
+      [actionKey]: true,
+    },
+  };
+}
+
+export function resolveHaunt1LearnAboutJackState(game, { resolveTraitRoll }) {
+  if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return game;
+  if (game.activeHauntId !== "haunt_1") return game;
+  if (!game.hauntState) return game;
+
+  const currentPlayerIndex = game.currentPlayerIndex;
+  if (currentPlayerIndex === game.hauntState.traitorPlayerIndex) {
+    return {
+      ...game,
+      message: "Only heroes can use Learn about Jack.",
+    };
+  }
+
+  const currentPlayer = game.players[currentPlayerIndex];
+  if (!currentPlayer?.isAlive) {
+    return {
+      ...game,
+      message: "Dead heroes cannot use Learn about Jack.",
+    };
+  }
+
+  const floorTiles = game.board[currentPlayer.floor] || [];
+  const currentTile = floorTiles.find((tile) => tile.x === currentPlayer.x && tile.y === currentPlayer.y);
+  if (!currentTile || currentTile.id !== "library") {
+    return {
+      ...game,
+      message: "Learn about Jack can only be used in the Library.",
+    };
+  }
+
+  const usageKey = `${game.turnNumber}:${currentPlayerIndex}:learn-about-jack`;
+  if (game.hauntState.oncePerTurnUsage?.[usageKey]) {
+    return {
+      ...game,
+      message: "Learn about Jack has already been used this turn.",
+    };
+  }
+
+  const knowledgeDice = currentPlayer.character.knowledge[currentPlayer.statIndex.knowledge];
+  const roll = resolveTraitRoll(currentPlayer, {
+    stat: "knowledge",
+    baseDiceCount: knowledgeDice,
+    context: "haunt",
+    board: game.board,
+  });
+
+  let nextHauntState = markHauntActionUsed(game.hauntState, usageKey);
+  if (roll.total >= 5) {
+    const existingHolders = new Set(nextHauntState.scenarioState?.revealedKnowledgeOfJackHolders || []);
+    const heroCandidates = nextHauntState.teams?.[HAUNT_TEAMS.HEROES]?.playerIndexes || [];
+    const heroWithoutToken = heroCandidates.find((playerIndex) => !existingHolders.has(playerIndex));
+
+    if (heroWithoutToken !== undefined) {
+      existingHolders.add(heroWithoutToken);
+      nextHauntState = {
+        ...nextHauntState,
+        scenarioState: {
+          ...nextHauntState.scenarioState,
+          revealedKnowledgeOfJackHolders: Array.from(existingHolders),
+        },
+      };
+
+      return {
+        ...game,
+        hauntState: nextHauntState,
+        message: `${currentPlayer.name} rolled ${roll.total} and discovered Knowledge of Jack for ${game.players[heroWithoutToken].name}.`,
+      };
+    }
+
+    return {
+      ...game,
+      hauntState: nextHauntState,
+      message: `${currentPlayer.name} rolled ${roll.total}, but all heroes already have Knowledge of Jack.`,
+    };
+  }
+
+  return {
+    ...game,
+    hauntState: nextHauntState,
+    message: `${currentPlayer.name} rolled ${roll.total}. Learn about Jack failed.`,
+  };
+}

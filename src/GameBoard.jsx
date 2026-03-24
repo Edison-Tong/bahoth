@@ -39,6 +39,8 @@ import DamageChoiceOverlay from "./components/gameboard/overlays/DamageChoiceOve
 import DiceRollOverlay from "./components/gameboard/overlays/DiceRollOverlay";
 import HauntRollOverlay from "./components/gameboard/overlays/HauntRollOverlay";
 import TileEffectOverlay from "./components/gameboard/overlays/TileEffectOverlay";
+import HauntSetupOverlay from "./components/gameboard/overlays/HauntSetupOverlay";
+import HauntActionOverlay from "./components/gameboard/overlays/HauntActionOverlay";
 import DebugModePanel from "./components/gameboard/DebugModePanel";
 import GameBoardActions from "./components/gameboard/GameBoardActions";
 import PlayerSidebar from "./components/gameboard/PlayerSidebar";
@@ -132,6 +134,12 @@ import {
   createDrawnItemCard,
   createDrawnOmenCard,
 } from "./game/gameState";
+import {
+  completeHauntSetupState,
+  GAME_PHASES,
+  getHauntDefinitionById,
+  resolveHaunt1LearnAboutJackState,
+} from "./haunts/hauntDomain";
 import { TILES, STARTING_TILES } from "./tiles";
 import "./GameBoard.css";
 
@@ -227,6 +235,8 @@ export default function GameBoard({ players, onQuit }) {
   const queuedTraitRollOverrideRef = useRef(null);
   const messageBubbleTimeoutRef = useRef(null);
   const boardRef = useRef(null);
+  const gameplayLockedByHauntSetup = game.gamePhase === GAME_PHASES.HAUNT_SETUP;
+  const gameplayUiLocked = debugModeEnabled || gameplayLockedByHauntSetup;
 
   useEffect(() => {
     queuedTraitRollOverrideRef.current = queuedTraitRollOverride;
@@ -386,7 +396,7 @@ export default function GameBoard({ players, onQuit }) {
         return;
       }
 
-      if (debugModeEnabled || isInputFocused) {
+      if (debugModeEnabled || gameplayLockedByHauntSetup || isInputFocused) {
         return;
       }
 
@@ -697,7 +707,7 @@ export default function GameBoard({ players, onQuit }) {
 
   // Move player to an existing tile and extend the current path.
   function handleMove(nx, ny, cost, options = {}) {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     let nextDiceAnimation = null;
     setGame((g) => {
       const resolved = resolveMovePlayerActionState(g, {
@@ -720,7 +730,7 @@ export default function GameBoard({ players, onQuit }) {
 
   // Backtrack to previous tile in path and refund the cost of the undone step.
   function handleBacktrack() {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     let nextCameraFloor = null;
     setGame((g) => {
       const resolved = resolveBacktrackActionState(g);
@@ -735,7 +745,7 @@ export default function GameBoard({ players, onQuit }) {
 
   // Explore — move player onto placeholder, don't reveal tile yet.
   function handleExplore(dir, nx, ny, cost) {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setGame((g) => {
       const resolved = resolveExploreActionState(g, {
         dir,
@@ -751,7 +761,7 @@ export default function GameBoard({ players, onQuit }) {
 
   // Handle clicking a move/explore/backtrack target
   function handleAction(move) {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     let nextCameraFloor = null;
     let nextDiceAnimation = null;
 
@@ -778,13 +788,13 @@ export default function GameBoard({ players, onQuit }) {
   // Confirm move — commit current position, reset path
   // If on a pending explore, enter rotate phase to choose orientation
   function handleConfirmMove() {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setGame((g) => confirmMoveState(g));
   }
 
   // Rotate the pending tile to the next valid orientation
   function handleRotateTile(direction) {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setGame((g) => {
       if (!g.pendingExplore) return g;
       const pe = g.pendingExplore;
@@ -799,7 +809,7 @@ export default function GameBoard({ players, onQuit }) {
 
   // Place the tile with the chosen rotation
   function handlePlaceTile() {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setGame((g) => {
       const p = g.players[g.currentPlayerIndex];
       const pe = g.pendingExplore;
@@ -944,7 +954,7 @@ export default function GameBoard({ players, onQuit }) {
 
   // Change floor via staircase
   function handleChangeFloor() {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     let nextCameraFloor = null;
     setGame((g) => {
       const resolved = resolveChangeFloorActionState(g, {
@@ -960,14 +970,14 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleUseSecretPassage(target) {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setGame((g) => resolveSecretPassageMoveState({ game: g, target, getTileAtPosition }));
     setCameraFloor(target.floor);
   }
 
   // End turn
   function handleEndTurn() {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     let nextCameraFloor = null;
     let nextDiceAnimation = null;
 
@@ -1374,12 +1384,12 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleStartDogTrade(targetPlayerIndex) {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => resolveStartTradeSelectionState(prev, targetPlayerIndex));
   }
 
   function handleStartPlayerTrade(targetPlayerIndex) {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => {
       if (prev) return prev;
       return createLocalPlayerTradeState(game, game.currentPlayerIndex, targetPlayerIndex);
@@ -1387,7 +1397,7 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleMoveDogToken(move) {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => {
       const resolved = resolveMoveTradeTokenState(prev, move);
       if (resolved.cameraFloor) {
@@ -1398,40 +1408,59 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleBackToDogMove() {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => resolveBackToTradeMoveState(prev));
   }
 
   function handleToggleDogOwnerGive(index) {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => resolveToggleTradeOwnerGiveState(prev, game, index));
   }
 
   function handleToggleDogTargetGive(index) {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => resolveToggleTradeTargetGiveState(prev, game, index));
   }
 
   function handleToggleDogOwnerGiveOmen(index) {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => resolveToggleTradeOwnerGiveOmenState(prev, game, index));
   }
 
   function handleToggleDogTargetGiveOmen(index) {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => resolveToggleTradeTargetGiveOmenState(prev, game, index));
   }
 
   function handleCancelDogTrade() {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState(null);
   }
 
   function handleConfirmDogTrade() {
-    if (debugModeEnabled) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     const result = resolveConfirmTradeActionState(game, tradeState);
     setGame(result.nextGame);
     setTradeState(result.nextTradeState);
+  }
+
+  function handleCompleteHauntSetup() {
+    let nextCameraFloor = null;
+
+    setGame((g) => {
+      const nextState = completeHauntSetupState(g, { getHauntDefinitionById });
+      const activePlayer = nextState.players[nextState.currentPlayerIndex];
+      nextCameraFloor = activePlayer?.floor || null;
+      return nextState;
+    });
+
+    if (nextCameraFloor) {
+      setCameraFloor(nextCameraFloor);
+    }
+  }
+
+  function handleUseLearnAboutJack() {
+    setGame((g) => resolveHaunt1LearnAboutJackState(g, { resolveTraitRoll }));
   }
 
   function handleSelectRabbitFootDie(dieIndex) {
@@ -1579,6 +1608,16 @@ export default function GameBoard({ players, onQuit }) {
     isItemAbilityTileChoiceActive,
   });
   const canUseSecretPassage = getCanUseSecretPassage(currentTileObj, secretPassageTargets);
+  const activeHauntDefinition = useMemo(() => getHauntDefinitionById(game.activeHauntId), [game.activeHauntId]);
+  const hauntLearnAboutJackUsageKey = `${game.turnNumber}:${game.currentPlayerIndex}:learn-about-jack`;
+  const canUseLearnAboutJack =
+    game.gamePhase === GAME_PHASES.HAUNT_ACTIVE &&
+    game.activeHauntId === "haunt_1" &&
+    !!game.hauntState &&
+    game.currentPlayerIndex !== game.hauntState.traitorPlayerIndex &&
+    currentPlayer.isAlive &&
+    currentTileObj?.id === "library" &&
+    !game.hauntState.oncePerTurnUsage?.[hauntLearnAboutJackUsageKey];
   const endTurnPreviewPlayerName = getEndTurnPreviewPlayerName(game, currentPlayer);
   const stairTargetState = getStairTargetState({
     game,
@@ -1741,7 +1780,7 @@ export default function GameBoard({ players, onQuit }) {
         debugPlacementPreview={debugPlacementPreview}
         selectedDebugPlacementKey={debugSelectedPlacementKey}
         onSelectDebugPlacement={setDebugSelectedPlacementKey}
-        interactionLocked={debugModeEnabled}
+        interactionLocked={gameplayUiLocked}
       />
 
       <GameBoardActions
@@ -1773,7 +1812,7 @@ export default function GameBoard({ players, onQuit }) {
         dogTradeTargetsOnTile={dogTradeTargetsOnTile}
         handleStartDogTrade={handleStartDogTrade}
         handleCancelDogTrade={handleCancelDogTrade}
-        controlsDisabled={debugModeEnabled}
+        controlsDisabled={gameplayUiLocked}
       />
 
       <PlayerSidebar
@@ -1807,7 +1846,7 @@ export default function GameBoard({ players, onQuit }) {
       <TradeViewer
         game={game}
         tradeState={tradeState}
-        actionsDisabled={debugModeEnabled}
+        actionsDisabled={gameplayUiLocked}
         handlers={{
           handleToggleDogOwnerGive,
           handleToggleDogOwnerGiveOmen,
@@ -1817,6 +1856,19 @@ export default function GameBoard({ players, onQuit }) {
           handleBackToDogMove,
           handleCancelDogTrade,
         }}
+      />
+
+      <HauntSetupOverlay
+        game={game}
+        hauntDefinition={activeHauntDefinition}
+        onCompleteSetup={handleCompleteHauntSetup}
+      />
+
+      <HauntActionOverlay
+        game={game}
+        hauntDefinition={activeHauntDefinition}
+        canUseLearnAboutJack={canUseLearnAboutJack}
+        onUseLearnAboutJack={handleUseLearnAboutJack}
       />
 
       <DebugModePanel

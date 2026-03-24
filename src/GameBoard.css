@@ -1088,6 +1088,35 @@
 .card-haunt-safe .card-type-label { color: #2ecc71; }
 .card-haunt-triggered .card-type-label { color: #c0392b; }
 
+.card-haunt-setup {
+  width: min(640px, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  background: #1f1628;
+  border-color: #8e44ad;
+}
+
+.card-haunt-setup ul {
+  margin: 0.35rem 0 0.25rem 1rem;
+  padding: 0;
+  text-align: left;
+}
+
+.card-haunt-setup li {
+  margin: 0.2rem 0;
+}
+
+.card-haunt-active {
+  background: #1d1320;
+  border-color: #b388ff;
+}
+
+.haunt-action-viewer {
+  top: auto;
+  bottom: 0.75rem;
+  transform: none;
+}
+
 /* Dice */
 .dice-row {
   display: flex;
