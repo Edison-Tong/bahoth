@@ -239,6 +239,8 @@ function getCombatItemOptionsForPlayer(player, usedItemKeys) {
   const options = [];
 
   (player.inventory || []).forEach((card, cardIndex) => {
+    if (card.isWeapon) return;
+
     const action = card.activeAbilityRule?.action;
     if (card.activeAbilityRule?.trigger !== "attack") return;
     if (!SUPPORTED_COMBAT_ITEM_ACTIONS.has(action)) return;
@@ -1097,6 +1099,10 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handleStartCombat(defenderIndex) {
+    handleStartCombatWithSource(defenderIndex, null);
+  }
+
+  function handleStartCombatWithSource(defenderIndex, sourceCard) {
     if (hasUnconfirmedMovePathState(game)) return;
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
 
@@ -1106,9 +1112,43 @@ export default function GameBoard({ players, onQuit }) {
 
       const attacker = g.players[g.currentPlayerIndex];
       const defender = g.players[defenderIndex];
+      const sourceRule = sourceCard?.activeAbilityRule || null;
+      let nextPlayers = g.players;
+      let preRollBonusDice = 0;
+      let preRollFlatBonus = 0;
+      const preRollItemMessages = [];
+      const usedItemKeys = [];
+
+      if (sourceRule?.trigger === "attack") {
+        if (sourceRule.action === "optional-speed-loss-for-attack-dice") {
+          const costAmount = sourceRule.costAmount || 1;
+          const bonusDice = sourceRule.bonusDice || 2;
+          if ((attacker.statIndex.speed || 0) >= costAmount) {
+            nextPlayers = applyStatChangeState(g.players, g.currentPlayerIndex, "speed", -costAmount);
+            preRollBonusDice += bonusDice;
+            preRollItemMessages.push(`${sourceCard.name}: paid ${costAmount} Speed for +${bonusDice} attack dice`);
+            if (sourceCard.ownerCollection != null && sourceCard.ownerCardIndex != null) {
+              usedItemKeys.push(`${sourceCard.ownerCollection}:${sourceCard.ownerCardIndex}:${sourceCard.id}`);
+            }
+          }
+        } else if (sourceRule.action === "attack-bonus-die") {
+          preRollBonusDice += 1;
+          preRollItemMessages.push(`${sourceCard.name}: +1 attack die`);
+          if (sourceCard.ownerCollection != null && sourceCard.ownerCardIndex != null) {
+            usedItemKeys.push(`${sourceCard.ownerCollection}:${sourceCard.ownerCardIndex}:${sourceCard.id}`);
+          }
+        } else if (sourceRule.action === "attack-bonus-total") {
+          preRollFlatBonus += 1;
+          preRollItemMessages.push(`${sourceCard.name}: +1 to roll total`);
+          if (sourceCard.ownerCollection != null && sourceCard.ownerCardIndex != null) {
+            usedItemKeys.push(`${sourceCard.ownerCollection}:${sourceCard.ownerCardIndex}:${sourceCard.id}`);
+          }
+        }
+      }
 
       return {
         ...g,
+        players: nextPlayers,
         hasAttackedThisTurn: true,
         combatState: {
           phase: "attacker-roll",
@@ -1118,13 +1158,18 @@ export default function GameBoard({ players, onQuit }) {
             dice: [],
             total: null,
             itemMessages: [],
-            usedItemKeys: [],
+            usedItemKeys,
+            preRollBonusDice,
+            preRollFlatBonus,
+            preRollItemMessages,
+            bonusDiceIndexes: [],
           },
           defender: {
             dice: [],
             total: null,
             itemMessages: [],
             usedItemKeys: [],
+            bonusDiceIndexes: [],
           },
           outcome: null,
         },
@@ -1159,14 +1204,26 @@ export default function GameBoard({ players, onQuit }) {
       itemMessages.push(`+${defenseBonus.amount} defense dice from ${formatSourceNames(defenseBonus.sourceNames)}.`);
     }
 
+    const roleState = combatState[role] || {};
+    const preRollBonusDice = roleState.preRollBonusDice || 0;
+    const preRollFlatBonus = roleState.preRollFlatBonus || 0;
+    const preRollItemMessages = roleState.preRollItemMessages || [];
+    const preRollDice = preRollBonusDice > 0 ? rollDice(preRollBonusDice) : [];
+    const preRollDiceTotal = preRollDice.reduce((sum, value) => sum + value, 0);
+    const animatedDice = [...rollResult.dice, ...preRollDice];
+
     setGame((g) => {
       if (!g.combatState || g.combatState.phase !== expectedPhase) return g;
 
       const nextActorState = {
         ...g.combatState[role],
-        dice: rollResult.dice,
-        total: rollResult.total,
-        itemMessages,
+        dice: [...rollResult.dice, ...preRollDice],
+        total: rollResult.total + preRollDiceTotal + preRollFlatBonus,
+        itemMessages: [...itemMessages, ...preRollItemMessages],
+        preRollBonusDice: 0,
+        preRollFlatBonus: 0,
+        preRollItemMessages: [],
+        bonusDiceIndexes: preRollDice.map((_, index) => rollResult.dice.length + index),
       };
 
       return {
@@ -1181,8 +1238,8 @@ export default function GameBoard({ players, onQuit }) {
 
     setDiceAnimation({
       purpose: role === "attacker" ? "combat-attacker-roll" : "combat-defender-roll",
-      final: rollResult.dice,
-      display: Array.from({ length: rollResult.dice.length }, () => Math.floor(Math.random() * 3)),
+      final: animatedDice,
+      display: Array.from({ length: animatedDice.length }, () => Math.floor(Math.random() * 3)),
       settled: false,
       modifier: rollResult.modifier,
     });
@@ -1238,6 +1295,10 @@ export default function GameBoard({ players, onQuit }) {
           extraDiceCount > 0 ? `${itemMessage} (rolled ${bonusDice.join(", ")})` : itemMessage,
         ],
         usedItemKeys: [...(actorState.usedItemKeys || []), itemKey],
+        bonusDiceIndexes: [
+          ...(actorState.bonusDiceIndexes || []),
+          ...bonusDice.map((_, index) => actorState.dice.length + index),
+        ],
       };
 
       return {
@@ -1733,6 +1794,15 @@ export default function GameBoard({ players, onQuit }) {
     setViewedCard(null);
   }
 
+  function handleStartCombatFromViewedCard(defenderIndex) {
+    if (!viewedCard) return;
+    if (viewedCard.ownerIndex !== game.currentPlayerIndex) return;
+    if (viewedCard.activeAbilityRule?.trigger !== "attack") return;
+
+    handleStartCombatWithSource(defenderIndex, viewedCard);
+    setViewedCard(null);
+  }
+
   function handleStartDogTrade(targetPlayerIndex) {
     if (hasUnconfirmedMovePathState(game)) return;
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
@@ -1961,6 +2031,13 @@ export default function GameBoard({ players, onQuit }) {
   const isUnconfirmedMovePath = hasUnconfirmedMovePathState(game);
   const showMoveConfirmUseNowDisabled =
     !!viewedCard?.activeAbilityRule && viewedCard.ownerIndex === game.currentPlayerIndex && isUnconfirmedMovePath;
+  const canStartCardAttackFromViewer =
+    game.turnPhase === "move" &&
+    !game.pendingExplore &&
+    !tradeState &&
+    !isItemAbilityTileChoiceAwaiting(eventState) &&
+    !isUnconfirmedMovePath &&
+    !gameplayUiLocked;
   const { damageAllocated, damageRemaining, canConfirmDamageChoice } = getDamageChoiceSummary(damageChoice);
   const damagePreview = damageChoice ? getDamagePreview(damageChoicePlayer, damageChoice) : null;
 
@@ -2229,6 +2306,9 @@ export default function GameBoard({ players, onQuit }) {
         viewedCard={viewedCard}
         viewedCardActiveAbilityState={viewedCardActiveAbilityState}
         showMoveConfirmUseNowDisabled={showMoveConfirmUseNowDisabled}
+        canStartCardAttack={canStartCardAttackFromViewer}
+        cardAttackTargets={combatTargetsOnTile}
+        handleStartCardAttack={handleStartCombatFromViewedCard}
         handleUseViewedCardActiveAbilityNow={handleUseViewedCardActiveAbilityNow}
         handleChooseActiveAbilityValue={handleChooseActiveAbilityValue}
         handleCloseViewedCard={handleCloseViewedCard}

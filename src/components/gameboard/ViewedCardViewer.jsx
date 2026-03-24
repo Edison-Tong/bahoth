@@ -4,11 +4,17 @@ export default function ViewedCardViewer({
   viewedCard,
   viewedCardActiveAbilityState,
   showMoveConfirmUseNowDisabled,
+  canStartCardAttack,
+  cardAttackTargets,
+  handleStartCardAttack,
   handleUseViewedCardActiveAbilityNow,
   handleChooseActiveAbilityValue,
   handleCloseViewedCard,
 }) {
   if (!viewedCard) return null;
+
+  const showCardAttackButtons =
+    viewedCard.activeAbilityRule?.trigger === "attack" && viewedCard.ownerIndex != null && canStartCardAttack;
 
   return (
     <div className="sidebar-card-viewer" role="dialog" aria-label={`${viewedCard.type} details`}>
@@ -46,6 +52,21 @@ export default function ViewedCardViewer({
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {showCardAttackButtons && cardAttackTargets.length > 0 && (
+          <div className="event-option-list" style={{ marginTop: "0.75rem" }}>
+            {cardAttackTargets.map(({ player, playerIndex }) => (
+              <button
+                key={`card-attack-${playerIndex}`}
+                className="btn btn-danger"
+                onClick={() => handleStartCardAttack(playerIndex)}
+                disabled={showMoveConfirmUseNowDisabled}
+              >
+                Attack {player.name}
+              </button>
+            ))}
           </div>
         )}
 

@@ -16,7 +16,10 @@ function CombatRollSummary({ label, state, playerName }) {
       <div className="combat-roll-value">{state.total}</div>
       <div className="dice-container combat-roll-dice-container">
         {state.dice.map((die, index) => (
-          <div key={`combat-die-${label}-${index}`} className="die">
+          <div
+            key={`combat-die-${label}-${index}`}
+            className={`die ${(state.bonusDiceIndexes || []).includes(index) ? "combat-die-bonus" : ""}`}
+          >
             {die}
           </div>
         ))}
