@@ -1,9 +1,4 @@
-export default function HauntActionOverlay({
-  game,
-  hauntDefinition,
-  canUseLearnAboutJack,
-  onUseLearnAboutJack,
-}) {
+export default function HauntActionOverlay({ game, hauntDefinition, canUseLearnAboutJack, onUseLearnAboutJack }) {
   if (!game?.hauntState || game.gamePhase !== "hauntActive") return null;
   if (!hauntDefinition) return null;
 
@@ -30,7 +25,10 @@ export default function HauntActionOverlay({
           <strong>Knowledge of Jack holders</strong>
           <p>
             {tokenHolders.length > 0
-              ? tokenHolders.map((index) => game.players[index]?.name).filter(Boolean).join(", ")
+              ? tokenHolders
+                  .map((index) => game.players[index]?.name)
+                  .filter(Boolean)
+                  .join(", ")
               : "None"}
           </p>
         </div>

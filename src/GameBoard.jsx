@@ -40,7 +40,6 @@ import DiceRollOverlay from "./components/gameboard/overlays/DiceRollOverlay";
 import HauntRollOverlay from "./components/gameboard/overlays/HauntRollOverlay";
 import TileEffectOverlay from "./components/gameboard/overlays/TileEffectOverlay";
 import HauntSetupOverlay from "./components/gameboard/overlays/HauntSetupOverlay";
-import HauntActionOverlay from "./components/gameboard/overlays/HauntActionOverlay";
 import DebugModePanel from "./components/gameboard/DebugModePanel";
 import GameBoardActions from "./components/gameboard/GameBoardActions";
 import PlayerSidebar from "./components/gameboard/PlayerSidebar";
@@ -135,10 +134,10 @@ import {
   createDrawnOmenCard,
 } from "./game/gameState";
 import {
-  completeHauntSetupState,
+  advanceHauntRulesViewState,
+  beginHauntAfterRulesViewState,
   GAME_PHASES,
   getHauntDefinitionById,
-  resolveHaunt1LearnAboutJackState,
 } from "./haunts/hauntDomain";
 import { TILES, STARTING_TILES } from "./tiles";
 import "./GameBoard.css";
@@ -1444,11 +1443,15 @@ export default function GameBoard({ players, onQuit }) {
     setTradeState(result.nextTradeState);
   }
 
-  function handleCompleteHauntSetup() {
+  function handleAdvanceHauntRules() {
+    setGame((g) => advanceHauntRulesViewState(g));
+  }
+
+  function handleBeginHauntAfterRules() {
     let nextCameraFloor = null;
 
     setGame((g) => {
-      const nextState = completeHauntSetupState(g, { getHauntDefinitionById });
+      const nextState = beginHauntAfterRulesViewState(g);
       const activePlayer = nextState.players[nextState.currentPlayerIndex];
       nextCameraFloor = activePlayer?.floor || null;
       return nextState;
@@ -1457,10 +1460,6 @@ export default function GameBoard({ players, onQuit }) {
     if (nextCameraFloor) {
       setCameraFloor(nextCameraFloor);
     }
-  }
-
-  function handleUseLearnAboutJack() {
-    setGame((g) => resolveHaunt1LearnAboutJackState(g, { resolveTraitRoll }));
   }
 
   function handleSelectRabbitFootDie(dieIndex) {
@@ -1609,15 +1608,6 @@ export default function GameBoard({ players, onQuit }) {
   });
   const canUseSecretPassage = getCanUseSecretPassage(currentTileObj, secretPassageTargets);
   const activeHauntDefinition = useMemo(() => getHauntDefinitionById(game.activeHauntId), [game.activeHauntId]);
-  const hauntLearnAboutJackUsageKey = `${game.turnNumber}:${game.currentPlayerIndex}:learn-about-jack`;
-  const canUseLearnAboutJack =
-    game.gamePhase === GAME_PHASES.HAUNT_ACTIVE &&
-    game.activeHauntId === "haunt_1" &&
-    !!game.hauntState &&
-    game.currentPlayerIndex !== game.hauntState.traitorPlayerIndex &&
-    currentPlayer.isAlive &&
-    currentTileObj?.id === "library" &&
-    !game.hauntState.oncePerTurnUsage?.[hauntLearnAboutJackUsageKey];
   const endTurnPreviewPlayerName = getEndTurnPreviewPlayerName(game, currentPlayer);
   const stairTargetState = getStairTargetState({
     game,
@@ -1861,14 +1851,8 @@ export default function GameBoard({ players, onQuit }) {
       <HauntSetupOverlay
         game={game}
         hauntDefinition={activeHauntDefinition}
-        onCompleteSetup={handleCompleteHauntSetup}
-      />
-
-      <HauntActionOverlay
-        game={game}
-        hauntDefinition={activeHauntDefinition}
-        canUseLearnAboutJack={canUseLearnAboutJack}
-        onUseLearnAboutJack={handleUseLearnAboutJack}
+        onAdvanceRules={handleAdvanceHauntRules}
+        onBeginHaunt={handleBeginHauntAfterRules}
       />
 
       <DebugModePanel
