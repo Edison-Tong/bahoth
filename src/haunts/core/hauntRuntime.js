@@ -95,25 +95,9 @@ export function advanceHauntRulesViewState(game) {
     "heroes-prompt": "heroes-rules",
     "heroes-rules": "traitor-prompt",
     "traitor-prompt": "traitor-rules",
-    "traitor-rules": "completed",
   };
   const nextStep = nextStepByCurrent[currentStep];
   if (!nextStep) return game;
-
-  if (nextStep === "completed") {
-    return {
-      ...game,
-      hauntState: {
-        ...game.hauntState,
-        rulesView: {
-          ...game.hauntState.rulesView,
-          step: nextStep,
-          completed: true,
-        },
-      },
-      message: "Rules review complete. Begin haunt setup actions when ready.",
-    };
-  }
 
   return {
     ...game,
@@ -129,7 +113,8 @@ export function advanceHauntRulesViewState(game) {
 
 export function beginHauntAfterRulesViewState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_SETUP) return game;
-  if (!game.hauntState?.rulesView?.completed) return game;
+  const rulesStep = game.hauntState?.rulesView?.step;
+  if (rulesStep !== "traitor-rules" && !game.hauntState?.rulesView?.completed) return game;
 
   const desiredFirstPlayer =
     game.hauntState.firstPlayerAfterSetup ?? (game.hauntState.traitorPlayerIndex + 1) % game.players.length;

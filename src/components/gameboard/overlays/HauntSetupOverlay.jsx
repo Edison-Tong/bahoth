@@ -1,21 +1,206 @@
-function getHaunt1HeroRules() {
-  return [
-    "Kill the traitor to release Jack's Spirit.",
-    "Exorcise Jack's Spirit to win.",
-    "Learn about Jack (Library, once per turn): Knowledge roll 5+ gives a Knowledge of Jack token to a hero without one.",
-    "Study the Exorcism (Event tile, once per turn): Knowledge roll 5+ places or moves the Exorcism token.",
-    "Exorcise Jack's Spirit (same tile, once per turn): Sanity roll 7+ with floor token bonuses wins for heroes.",
-  ];
+function BookletHeader({ title }) {
+  return (
+    <div className="haunt-booklet-header">
+      <h1 className="haunt-booklet-title">{title}</h1>
+      <div className="haunt-booklet-meta">
+        Scenario Card: None • Haunt Trigger: A Splash of Crimson • Traitor: Haunt Revealer
+      </div>
+      <div className="haunt-booklet-number">1</div>
+    </div>
+  );
 }
 
-function getHaunt1TraitorRules() {
-  return [
-    "You are still in the house and are the traitor.",
-    "Win when all heroes are dead.",
-    "When the traitor dies, Jack's Spirit appears at the omen tile farthest from the corpse.",
-    "If Jack's Spirit reaches the traitor corpse tile, heal the traitor and return control to your explorer.",
-    "Stalk Prey (once per turn): if you have not attacked and no hero is in line of sight, move to any upper/ground tile out of hero line of sight.",
-  ];
+function ReadFirstBlock({ introduction, setupSteps }) {
+  return (
+    <section className="haunt-booklet-readfirst">
+      <div className="haunt-booklet-bar">Read First!</div>
+      <div className="haunt-booklet-readfirst-body">
+        <h3>Introduction</h3>
+        <p>{introduction}</p>
+        <h3>Setup</h3>
+        <ol>
+          {setupSteps.map((step, index) => (
+            <li key={`setup-step-${index}`}>{step}</li>
+          ))}
+        </ol>
+      </div>
+    </section>
+  );
+}
+
+export function HeroRulesPage({ hauntDefinition, onDone }) {
+  return (
+    <div className="card-overlay" role="dialog" aria-label="Heroes rules">
+      <div className="haunt-booklet haunt-booklet-heroes">
+        <BookletHeader title="Stacked Like Cordwood 2: Crimson Jack Returns" />
+        <ReadFirstBlock
+          introduction={hauntDefinition.introduction?.heroes || hauntDefinition.summary}
+          setupSteps={[
+            "The heroes have no additional setup steps.",
+            "The player to the left of the traitor takes the first turn after setup.",
+          ]}
+        />
+
+        <div className="haunt-booklet-grid">
+          <aside className="haunt-booklet-sidebar">
+            <section>
+              <h4>Objective</h4>
+              <p>You win when you exorcise Jack's Spirit.</p>
+            </section>
+            <section>
+              <h4>Tokens Needed</h4>
+              <ul>
+                <li>Jack's Spirit token</li>
+                <li>2 Sanity tokens (Exorcism Circle)</li>
+                <li>2 Might tokens (Knowledge of Jack)</li>
+              </ul>
+            </section>
+            <section>
+              <h4>If You Win</h4>
+              <p>Jack's Spirit fades. For now, the house is yours again.</p>
+            </section>
+          </aside>
+
+          <main className="haunt-booklet-main">
+            <div className="haunt-booklet-action-group">
+              <div className="haunt-booklet-action-group-title">Hero Once-Per-Turn Actions</div>
+              <section className="haunt-booklet-action-item">
+                <div className="haunt-booklet-once-per-turn">Once during your turn, you may</div>
+                <h4>Learn about Jack</h4>
+                <p>While on the Library tile, make a Knowledge roll.</p>
+                <p>5+: Give a Knowledge of Jack token to a hero who does not have one.</p>
+                <p>0-4: Nothing happens.</p>
+              </section>
+              <section className="haunt-booklet-action-item">
+                <div className="haunt-booklet-once-per-turn">Once during your turn, you may</div>
+                <h4>Study the Exorcism</h4>
+                <p>While on an Event symbol tile, make a Knowledge roll.</p>
+                <p>5+: Place or move the Exorcism Circle token.</p>
+                <p>0-4: Take 2 Mental damage.</p>
+              </section>
+              <section className="haunt-booklet-action-item">
+                <div className="haunt-booklet-once-per-turn">Once during your turn, you may</div>
+                <h4>Exorcise Jack's Spirit</h4>
+                <p>While on Jack's Spirit tile, make a Sanity roll.</p>
+                <p>Add 1 for each Exorcism Circle token on your floor.</p>
+                <p>7+: You win.</p>
+                <p>0-6: Each hero takes 1 Physical damage.</p>
+              </section>
+            </div>
+            <section>
+              <h4>When You Attack the Traitor or Are Attacked by Jack's Spirit</h4>
+              <p>If you have a Knowledge of Jack token, add 2 to your roll result.</p>
+            </section>
+            <section>
+              <h4>When the Traitor Dies</h4>
+              <p>Place Jack's Spirit on the omen tile farthest from the traitor's corpse.</p>
+            </section>
+          </main>
+        </div>
+
+        <div className="haunt-booklet-footer-actions">
+          <button className="btn btn-primary" onClick={onDone}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function TraitorRulesPage({ hauntDefinition, onDone }) {
+  return (
+    <div className="card-overlay" role="dialog" aria-label="Traitor rules">
+      <div className="haunt-booklet haunt-booklet-traitor">
+        <BookletHeader title="Stacked Like Cordwood 2: Crimson Jack Returns" />
+        <ReadFirstBlock
+          introduction={hauntDefinition.introduction?.traitor || "You smile. Jack is back."}
+          setupSteps={[
+            "Your explorer is still in the game. You are the traitor.",
+            "Place the Monster card by your left hand.",
+            "Heal all traits. Gain your physical bonus from player count.",
+          ]}
+        />
+
+        <div className="haunt-booklet-grid">
+          <aside className="haunt-booklet-sidebar">
+            <section>
+              <h4>Objective</h4>
+              <p>You win when all heroes are dead.</p>
+            </section>
+            <section>
+              <h4>Tokens Needed</h4>
+              <ul>
+                <li>Jack's Spirit token</li>
+                <li>2 Sanity tokens (Exorcism Circle)</li>
+                <li>2 Might tokens (Knowledge of Jack)</li>
+              </ul>
+            </section>
+            <section>
+              <h4>If You Win</h4>
+              <p>The house belongs to you again, and no one leaves alive.</p>
+            </section>
+          </aside>
+
+          <main className="haunt-booklet-main">
+            <div className="haunt-booklet-action-group haunt-booklet-action-group-traitor">
+              <div className="haunt-booklet-action-group-title">Traitor Once-Per-Turn Actions</div>
+              <section className="haunt-booklet-action-item">
+                <div className="haunt-booklet-once-per-turn">Once during your turn, you may</div>
+                <h4>Stalk the Prey</h4>
+                <p>
+                  If you have not attacked and no hero is in line of sight, move to any upper/ground tile out of line of
+                  sight.
+                </p>
+              </section>
+            </div>
+            <section>
+              <h4>If You Die</h4>
+              <p>Place Jack's Spirit on the omen tile farthest from your corpse. Repeat each time you die.</p>
+            </section>
+            <section>
+              <h4>At the Start of Your Turn If You Are Dead</h4>
+              <p>Take your turn with Jack's Spirit instead of your explorer.</p>
+            </section>
+            <section className="haunt-booklet-monster-card">
+              <h4>Monster: Jack's Spirit</h4>
+              <div className="haunt-monster-stats" aria-label="Monster stats">
+                <div className="haunt-monster-stat">
+                  <span>Might</span>
+                  <strong>5</strong>
+                </div>
+                <div className="haunt-monster-stat">
+                  <span>Speed</span>
+                  <strong>3</strong>
+                </div>
+                <div className="haunt-monster-stat">
+                  <span>Sanity</span>
+                  <strong>4</strong>
+                </div>
+                <div className="haunt-monster-stat">
+                  <span>Knowledge</span>
+                  <strong>4</strong>
+                </div>
+              </div>
+              <p>Jack's Spirit may move between adjacent tiles without doorway connections.</p>
+              <p>Jack's Spirit cannot be stunned.</p>
+              <h5>At the Start of the Monster Turn</h5>
+              <p>
+                If Jack's Spirit is on your corpse tile, heal all traits, retake your explorer, and remove Jack's Spirit
+                from the house.
+              </p>
+            </section>
+          </main>
+        </div>
+
+        <div className="haunt-booklet-footer-actions">
+          <button className="btn btn-primary" onClick={onDone}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function HauntSetupOverlay({ game, hauntDefinition, onAdvanceRules, onBeginHaunt }) {
@@ -43,30 +228,7 @@ export default function HauntSetupOverlay({ game, hauntDefinition, onAdvanceRule
   }
 
   if (rulesStep === "heroes-rules") {
-    return (
-      <div className="card-overlay" role="dialog" aria-label="Heroes rules">
-        <div className={`card-modal card-haunt-setup ${panelClass}`}>
-          <div className="card-type-label">HAUNT RULES</div>
-          <h2 className="card-name">Heroes: {hauntDefinition.title}</h2>
-          <p className="card-description">{hauntDefinition.introduction?.heroes || hauntDefinition.summary}</p>
-          <div className="card-special">
-            <strong>Hero objective</strong>
-            <p>{hauntDefinition.objectives?.heroes}</p>
-          </div>
-          <div className="card-special">
-            <strong>Hero rules</strong>
-            <ul>
-              {getHaunt1HeroRules().map((rule, index) => (
-                <li key={`hero-rule-${index}`}>{rule}</li>
-              ))}
-            </ul>
-          </div>
-          <button className="btn btn-primary" onClick={onAdvanceRules}>
-            Done
-          </button>
-        </div>
-      </div>
-    );
+    return <HeroRulesPage hauntDefinition={hauntDefinition} onDone={onAdvanceRules} />;
   }
 
   if (rulesStep === "traitor-prompt") {
@@ -85,47 +247,7 @@ export default function HauntSetupOverlay({ game, hauntDefinition, onAdvanceRule
   }
 
   if (rulesStep === "traitor-rules") {
-    return (
-      <div className="card-overlay" role="dialog" aria-label="Traitor rules">
-        <div className={`card-modal card-haunt-setup ${panelClass}`}>
-          <div className="card-type-label">HAUNT RULES</div>
-          <h2 className="card-name">Traitor: {hauntDefinition.title}</h2>
-          <p className="card-description">{hauntDefinition.introduction?.traitor || "You smile. Jack is back."}</p>
-          <div className="card-special">
-            <strong>Traitor objective</strong>
-            <p>{hauntDefinition.objectives?.traitor}</p>
-          </div>
-          <div className="card-special">
-            <strong>Traitor rules</strong>
-            <ul>
-              {getHaunt1TraitorRules().map((rule, index) => (
-                <li key={`traitor-rule-${index}`}>{rule}</li>
-              ))}
-            </ul>
-          </div>
-          <button className="btn btn-primary" onClick={onAdvanceRules}>
-            Done
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (rulesStep === "completed") {
-    return (
-      <div className="card-overlay" role="dialog" aria-label="Begin haunt">
-        <div className="card-modal card-haunt-setup card-haunt-rules-heroes">
-          <div className="card-type-label">HAUNT READY</div>
-          <h2 className="card-name">Rules Reviewed</h2>
-          <p className="card-description">
-            Everyone can return to the computer. Setup-specific actions will be added next.
-          </p>
-          <button className="btn btn-primary" onClick={onBeginHaunt}>
-            Done
-          </button>
-        </div>
-      </div>
-    );
+    return <TraitorRulesPage hauntDefinition={hauntDefinition} onDone={onBeginHaunt} />;
   }
 
   return null;

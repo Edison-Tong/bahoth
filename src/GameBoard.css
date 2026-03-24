@@ -28,6 +28,19 @@
   gap: 12px;
 }
 
+.haunt-rule-shortcuts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.haunt-rule-shortcut-btn {
+  padding: 5px 10px;
+  font-size: 0.75rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .turn-badge {
   background: var(--accent);
   color: #fff;
@@ -1114,6 +1127,278 @@
   color: #ff9d9d;
 }
 
+.haunt-rules-viewer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+}
+
+.haunt-booklet {
+  position: relative;
+  width: min(920px, calc(100vw - 1.5rem));
+  max-height: calc(100vh - 1rem);
+  overflow-y: auto;
+  padding: 1.15rem 1.2rem 1rem;
+  border-radius: 10px;
+  border: 2px solid #735d3c;
+  background:
+    radial-gradient(circle at 22% 18%, rgba(132, 96, 52, 0.18), transparent 24%),
+    radial-gradient(circle at 78% 72%, rgba(84, 52, 29, 0.16), transparent 20%),
+    linear-gradient(180deg, #f2e7cf 0%, #eadcc2 58%, #e2d1b0 100%);
+  color: #2f2417;
+  box-shadow: 0 22px 46px rgba(0, 0, 0, 0.5);
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+.haunt-booklet-heroes {
+  border-color: #7f6543;
+}
+
+.haunt-booklet-traitor {
+  border-color: #8b5a4d;
+  background:
+    radial-gradient(circle at 20% 16%, rgba(138, 78, 67, 0.2), transparent 22%),
+    radial-gradient(circle at 82% 68%, rgba(118, 55, 47, 0.18), transparent 18%),
+    linear-gradient(180deg, #f0dfcc 0%, #e6cfb5 55%, #d8b89e 100%);
+}
+
+.haunt-booklet-header {
+  position: relative;
+  margin-bottom: 0.65rem;
+  padding-right: 4rem;
+}
+
+.haunt-booklet-title {
+  margin: 0;
+  font-size: 2rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #27180f;
+  line-height: 1.08;
+}
+
+.haunt-booklet-meta {
+  margin-top: 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #4a3322;
+}
+
+.haunt-booklet-number {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 3rem;
+  height: 3rem;
+  border: 2px solid #7a5f43;
+  background: #e1c155;
+  color: #5b1616;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 800;
+}
+
+.haunt-booklet-readfirst {
+  border: 2px solid #84523d;
+  background: rgba(255, 255, 255, 0.32);
+  margin-bottom: 0.8rem;
+}
+
+.haunt-booklet-bar {
+  background: linear-gradient(180deg, #8b2520, #6d1512);
+  color: #f9e6cb;
+  text-align: center;
+  padding: 0.35rem 0.5rem;
+  font-size: 1.05rem;
+  font-style: italic;
+  font-weight: 700;
+}
+
+.haunt-booklet-readfirst-body {
+  padding: 0.7rem 0.8rem;
+  text-align: left;
+}
+
+.haunt-booklet-readfirst-body h3 {
+  margin: 0.2rem 0 0.35rem;
+  font-size: 1.45rem;
+  color: #531d12;
+  text-transform: uppercase;
+}
+
+.haunt-booklet-readfirst-body p,
+.haunt-booklet-readfirst-body li {
+  font-size: 1.02rem;
+  line-height: 1.35;
+  color: #2f2417;
+}
+
+.haunt-booklet-readfirst-body ol {
+  margin: 0.35rem 0 0 1.2rem;
+  padding: 0;
+}
+
+.haunt-booklet-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 240px) 1fr;
+  gap: 0.65rem;
+  align-items: start;
+}
+
+.haunt-booklet-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.haunt-booklet-sidebar section {
+  border: 1px solid rgba(107, 83, 58, 0.62);
+  background: rgba(255, 252, 240, 0.5);
+  padding: 0.5rem 0.6rem;
+  text-align: left;
+}
+
+.haunt-booklet-sidebar h4,
+.haunt-booklet-main h4 {
+  margin: 0;
+  font-size: 1.7rem;
+  color: #5b1f15;
+}
+
+.haunt-booklet-sidebar p,
+.haunt-booklet-sidebar li,
+.haunt-booklet-main p,
+.haunt-booklet-main li {
+  margin: 0.35rem 0 0;
+  font-size: 1.02rem;
+  line-height: 1.32;
+  color: #2a1d11;
+  text-align: left;
+}
+
+.haunt-booklet-sidebar ul,
+.haunt-booklet-main ul {
+  margin: 0.35rem 0 0 1.1rem;
+  padding: 0;
+}
+
+.haunt-booklet-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.haunt-booklet-main section {
+  border-left: 3px solid rgba(121, 93, 64, 0.78);
+  padding: 0.2rem 0.55rem 0.45rem;
+  text-align: left;
+}
+
+.haunt-booklet-action-group {
+  border: 2px dashed rgba(108, 74, 44, 0.72);
+  background: rgba(255, 242, 209, 0.72);
+  border-radius: 8px;
+  padding: 0.45rem 0.55rem 0.5rem;
+}
+
+.haunt-booklet-action-group-traitor {
+  border-color: rgba(130, 62, 57, 0.78);
+  background: rgba(255, 224, 212, 0.66);
+}
+
+.haunt-booklet-action-group-title {
+  font-size: 0.82rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #5a3b24;
+  font-weight: 700;
+  margin: 0 0 0.3rem;
+}
+
+.haunt-booklet-action-group-traitor .haunt-booklet-action-group-title {
+  color: #6a2d24;
+}
+
+.haunt-booklet-action-item {
+  border-left: 3px solid rgba(160, 117, 62, 0.76);
+  padding: 0.2rem 0.5rem 0.45rem;
+  margin-top: 0.35rem;
+  background: rgba(255, 255, 255, 0.45);
+}
+
+.haunt-booklet-action-group-traitor .haunt-booklet-action-item {
+  border-left-color: rgba(153, 69, 61, 0.82);
+  background: rgba(255, 245, 240, 0.55);
+}
+
+.haunt-booklet-once-per-turn {
+  font-size: 0.8rem;
+  font-style: italic;
+  color: #6c4e36;
+  margin: 0 0 0.15rem;
+}
+
+.haunt-booklet-monster-card {
+  border: 1px solid rgba(115, 90, 61, 0.72);
+  border-left-width: 1px;
+  border-radius: 8px;
+  background: rgba(255, 249, 226, 0.62);
+  padding: 0.65rem 0.7rem;
+}
+
+.haunt-monster-stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+  gap: 0.4rem;
+  margin: 0.45rem 0 0.5rem;
+}
+
+.haunt-monster-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+  border: 1px solid rgba(99, 70, 38, 0.7);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.78);
+  padding: 0.35rem 0.45rem;
+}
+
+.haunt-monster-stat span {
+  font-size: 0.84rem;
+  color: #4c3219;
+  font-weight: 700;
+}
+
+.haunt-monster-stat strong {
+  min-width: 1.5rem;
+  text-align: center;
+  font-size: 1.02rem;
+  color: #2c1809;
+  background: #f3d98f;
+  border: 1px solid rgba(89, 63, 29, 0.65);
+  border-radius: 4px;
+  padding: 0.1rem 0.2rem;
+}
+
+.haunt-booklet-monster-card h5 {
+  margin: 0.45rem 0 0;
+  font-size: 1.08rem;
+  color: #50351f;
+}
+
+.haunt-booklet-footer-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.8rem;
+}
+
+.haunt-booklet-footer-actions .btn {
+  min-width: 120px;
+}
+
 .card-haunt-setup ul {
   margin: 0.35rem 0 0.25rem 1rem;
   padding: 0;
@@ -1688,6 +1973,40 @@
   }
 
   .event-sequence-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .haunt-booklet {
+    width: calc(100vw - 0.9rem);
+    padding: 0.75rem 0.75rem 0.7rem;
+  }
+
+  .haunt-booklet-title {
+    font-size: 1.45rem;
+  }
+
+  .haunt-booklet-meta {
+    font-size: 0.78rem;
+    line-height: 1.25;
+    padding-right: 1.2rem;
+  }
+
+  .haunt-booklet-number {
+    width: 2.2rem;
+    height: 2.2rem;
+    font-size: 1.4rem;
+  }
+
+  .haunt-booklet-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .haunt-booklet-sidebar h4,
+  .haunt-booklet-main h4 {
+    font-size: 1.35rem;
+  }
+
+  .haunt-monster-stats {
     grid-template-columns: 1fr;
   }
 

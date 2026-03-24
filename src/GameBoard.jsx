@@ -40,6 +40,7 @@ import DiceRollOverlay from "./components/gameboard/overlays/DiceRollOverlay";
 import HauntRollOverlay from "./components/gameboard/overlays/HauntRollOverlay";
 import TileEffectOverlay from "./components/gameboard/overlays/TileEffectOverlay";
 import HauntSetupOverlay from "./components/gameboard/overlays/HauntSetupOverlay";
+import HauntRulesViewerOverlay from "./components/gameboard/overlays/HauntRulesViewerOverlay";
 import DebugModePanel from "./components/gameboard/DebugModePanel";
 import GameBoardActions from "./components/gameboard/GameBoardActions";
 import PlayerSidebar from "./components/gameboard/PlayerSidebar";
@@ -231,6 +232,7 @@ export default function GameBoard({ players, onQuit }) {
   const [debugRemoveType, setDebugRemoveType] = useState("item");
   const [debugRemovePlayerIndex, setDebugRemovePlayerIndex] = useState(0);
   const [debugRemoveCardKey, setDebugRemoveCardKey] = useState("");
+  const [hauntRulesViewerRole, setHauntRulesViewerRole] = useState(null);
   const queuedTraitRollOverrideRef = useRef(null);
   const messageBubbleTimeoutRef = useRef(null);
   const boardRef = useRef(null);
@@ -1608,6 +1610,11 @@ export default function GameBoard({ players, onQuit }) {
   });
   const canUseSecretPassage = getCanUseSecretPassage(currentTileObj, secretPassageTargets);
   const activeHauntDefinition = useMemo(() => getHauntDefinitionById(game.activeHauntId), [game.activeHauntId]);
+  const hauntTraitorName =
+    game.hauntState?.traitorPlayerIndex != null
+      ? game.players[game.hauntState.traitorPlayerIndex]?.name || "the traitor"
+      : "the traitor";
+  const canOpenHauntRulesViewer = game.gamePhase === GAME_PHASES.HAUNT_ACTIVE && !!activeHauntDefinition;
   const endTurnPreviewPlayerName = getEndTurnPreviewPlayerName(game, currentPlayer);
   const stairTargetState = getStairTargetState({
     game,
@@ -1693,6 +1700,12 @@ export default function GameBoard({ players, onQuit }) {
     }
   }, [debugRemoveCardKey, debugRemovableCards]);
 
+  useEffect(() => {
+    if (!canOpenHauntRulesViewer && hauntRulesViewerRole !== null) {
+      setHauntRulesViewerRole(null);
+    }
+  }, [canOpenHauntRulesViewer, hauntRulesViewerRole]);
+
   // Calculate board bounds for centering
   const allXs = floorTiles.map((t) => t.x);
   const allYs = floorTiles.map((t) => t.y);
@@ -1736,7 +1749,24 @@ export default function GameBoard({ players, onQuit }) {
             ))}
           </span>
         </div>
-        <div className="game-header-right"></div>
+        <div className="game-header-right">
+          {canOpenHauntRulesViewer && (
+            <div className="haunt-rule-shortcuts" aria-label="Haunt rules shortcuts">
+              <button
+                className="btn btn-secondary haunt-rule-shortcut-btn"
+                onClick={() => setHauntRulesViewerRole("heroes")}
+              >
+                View Hero Rules
+              </button>
+              <button
+                className="btn btn-secondary haunt-rule-shortcut-btn"
+                onClick={() => setHauntRulesViewerRole("traitor")}
+              >
+                View Traitor Rules
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {messageBubble && <div className="game-message-bubble">{messageBubble}</div>}
@@ -1853,6 +1883,13 @@ export default function GameBoard({ players, onQuit }) {
         hauntDefinition={activeHauntDefinition}
         onAdvanceRules={handleAdvanceHauntRules}
         onBeginHaunt={handleBeginHauntAfterRules}
+      />
+
+      <HauntRulesViewerOverlay
+        role={hauntRulesViewerRole}
+        hauntDefinition={activeHauntDefinition}
+        traitorName={hauntTraitorName}
+        onClose={() => setHauntRulesViewerRole(null)}
       />
 
       <DebugModePanel
