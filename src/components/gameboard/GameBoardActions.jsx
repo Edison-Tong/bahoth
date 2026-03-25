@@ -121,7 +121,7 @@ export default function GameBoardActions({
         playerTradeTargetsOnTile.map(({ player, playerIndex }) => (
           <button
             key={`player-trade-start-${playerIndex}`}
-            className="btn btn-primary"
+            className="btn btn-trade"
             onClick={() => handleStartPlayerTrade(playerIndex)}
             disabled={controlsDisabled}
           >
@@ -146,7 +146,7 @@ export default function GameBoardActions({
           {dogTradeTargetsOnTile.map(({ player, playerIndex }) => (
             <button
               key={`dog-trade-start-${playerIndex}`}
-              className="btn btn-primary"
+              className="btn btn-trade"
               onClick={() => handleStartDogTrade(playerIndex)}
               disabled={controlsDisabled}
             >

@@ -17,6 +17,15 @@ export function isDogTradeAvailableThisTurn(game, viewedCard, getDogTradeTargets
   return ownerHasItems || ownerHasTradableOmens || anyTargetHasTradableCards;
 }
 
+function canPlayersTradeAcrossTeams(game, ownerIndex, targetPlayerIndex) {
+  const traitorPlayerIndex = game?.hauntState?.traitorPlayerIndex;
+  if (!Number.isInteger(traitorPlayerIndex)) return true;
+
+  const ownerIsTraitor = ownerIndex === traitorPlayerIndex;
+  const targetIsTraitor = targetPlayerIndex === traitorPlayerIndex;
+  return ownerIsTraitor === targetIsTraitor;
+}
+
 export function isItemTradeLockedThisTurn(card, turnNumber) {
   if (!card) return false;
   return (
@@ -142,6 +151,16 @@ export function resolveConfirmDogTradeState(game, dogTradeState, turnNumber) {
   if (!owner || !target) {
     return {
       nextGame: game,
+      nextDogTradeState: null,
+    };
+  }
+
+  if (!canPlayersTradeAcrossTeams(game, dogTradeState.ownerIndex, dogTradeState.targetPlayerIndex)) {
+    return {
+      nextGame: {
+        ...game,
+        message: "Heroes and traitor cannot trade with each other.",
+      },
       nextDogTradeState: null,
     };
   }

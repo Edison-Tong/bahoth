@@ -1806,6 +1806,16 @@
   background: rgba(180, 42, 42, 0.35);
 }
 
+.btn-trade {
+  background: rgba(36, 108, 147, 0.26);
+  border: 1px solid rgba(118, 205, 247, 0.72);
+  color: #def5ff;
+}
+
+.btn-trade:hover:not(:disabled) {
+  background: rgba(36, 108, 147, 0.42);
+}
+
 .card-combat {
   width: min(720px, calc(100vw - 2rem));
   max-height: calc(100vh - 2rem);

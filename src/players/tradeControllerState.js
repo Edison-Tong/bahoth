@@ -8,12 +8,26 @@ import {
   toggleDogTradeTargetGiveState,
 } from "../omens/dogAbility";
 
+function canPlayersTradeAcrossTeams(game, ownerIndex, targetPlayerIndex) {
+  const traitorPlayerIndex = game?.hauntState?.traitorPlayerIndex;
+  if (!Number.isInteger(traitorPlayerIndex)) return true;
+
+  const ownerIsTraitor = ownerIndex === traitorPlayerIndex;
+  const targetIsTraitor = targetPlayerIndex === traitorPlayerIndex;
+  return ownerIsTraitor === targetIsTraitor;
+}
+
 export function getPlayerTradeTargetsOnTile(game, ownerIndex, floor, x, y) {
   return game.players
     .map((player, playerIndex) => ({ player, playerIndex }))
     .filter(
       ({ player, playerIndex }) =>
-        playerIndex !== ownerIndex && player.isAlive && player.floor === floor && player.x === x && player.y === y
+        playerIndex !== ownerIndex &&
+        player.isAlive &&
+        player.floor === floor &&
+        player.x === x &&
+        player.y === y &&
+        canPlayersTradeAcrossTeams(game, ownerIndex, playerIndex)
     );
 }
 
@@ -21,6 +35,7 @@ export function createLocalPlayerTradeState(game, ownerIndex, targetPlayerIndex)
   const owner = game.players[ownerIndex];
   const target = game.players[targetPlayerIndex];
   if (!owner || !target) return null;
+  if (!canPlayersTradeAcrossTeams(game, ownerIndex, targetPlayerIndex)) return null;
 
   const isSameTile = owner.floor === target.floor && owner.x === target.x && owner.y === target.y;
   if (!isSameTile) return null;
@@ -133,6 +148,16 @@ function resolveConfirmLocalPlayerTradeState(game, tradeState) {
         message: "Players must be on the same tile to trade.",
       },
       nextTradeState: tradeState,
+    };
+  }
+
+  if (!canPlayersTradeAcrossTeams(game, tradeState.ownerIndex, tradeState.targetPlayerIndex)) {
+    return {
+      nextGame: {
+        ...game,
+        message: "Heroes and traitor cannot trade with each other.",
+      },
+      nextTradeState: null,
     };
   }
 

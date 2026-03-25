@@ -157,13 +157,20 @@ function computeReachableDistances(board, start, maxDistance, options = {}) {
 export function getDogTradeTargets(game, ownerIndex, maxDistance = 4) {
   const owner = game?.players?.[ownerIndex];
   if (!owner || !owner.isAlive) return [];
+  const traitorPlayerIndex = game?.hauntState?.traitorPlayerIndex;
+  const ownerIsTraitor = Number.isInteger(traitorPlayerIndex) && ownerIndex === traitorPlayerIndex;
 
   const start = { floor: owner.floor, x: owner.x, y: owner.y };
   const distances = computeReachableDistances(game.board, start, maxDistance, { ignoreObstacles: true });
 
   return (game.players || [])
     .map((player, playerIndex) => ({ player, playerIndex }))
-    .filter(({ player, playerIndex }) => playerIndex !== ownerIndex && player.isAlive)
+    .filter(({ player, playerIndex }) => {
+      if (playerIndex === ownerIndex || !player.isAlive) return false;
+      if (!Number.isInteger(traitorPlayerIndex)) return true;
+      const targetIsTraitor = playerIndex === traitorPlayerIndex;
+      return ownerIsTraitor === targetIsTraitor;
+    })
     .map(({ player, playerIndex }) => {
       const key = `${player.floor}:${player.x}:${player.y}`;
       const distance = distances.get(key);
