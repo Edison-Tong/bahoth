@@ -1,7 +1,10 @@
 import { GAME_PHASES, HAUNT_TEAMS } from "./hauntPhases";
 
-function createInitialHauntState(game, hauntDefinition) {
-  const traitorPlayerIndex = game.currentPlayerIndex;
+function createInitialHauntState(game, hauntDefinition, traitorPlayerIndexOverride = null) {
+  const defaultTraitorIndex = game.currentPlayerIndex;
+  const traitorPlayerIndex = Number.isInteger(traitorPlayerIndexOverride)
+    ? Math.max(0, Math.min(game.players.length - 1, traitorPlayerIndexOverride))
+    : defaultTraitorIndex;
   const heroPlayerIndexes = game.players.map((_, index) => index).filter((index) => index !== traitorPlayerIndex);
   const firstPlayerAfterSetup = (traitorPlayerIndex + 1) % game.players.length;
 
@@ -55,6 +58,35 @@ function createInitialHauntState(game, hauntDefinition) {
   };
 }
 
+export function startSelectedHauntState(game, { hauntDefinition, traitorPlayerIndex = null }) {
+  if (!hauntDefinition) return game;
+
+  return {
+    ...game,
+    gamePhase: GAME_PHASES.HAUNT_SETUP,
+    hauntTriggered: true,
+    activeHauntId: hauntDefinition.id,
+    drawnCard: null,
+    tileEffect: null,
+    damageChoice: null,
+    eventState: null,
+    combatState: null,
+    turnPhase: "move",
+    movePath: [{
+      x: game.players[game.currentPlayerIndex]?.x ?? 0,
+      y: game.players[game.currentPlayerIndex]?.y ?? 0,
+      floor: game.players[game.currentPlayerIndex]?.floor ?? "ground",
+      cost: 0,
+    }],
+    pendingExplore: null,
+    pendingSpecialPlacement: null,
+    mysticElevatorReady: false,
+    mysticElevatorUsed: false,
+    hauntState: createInitialHauntState(game, hauntDefinition, traitorPlayerIndex),
+    message: `[Debug] ${hauntDefinition.title} started. Complete haunt setup before continuing play.`,
+  };
+}
+
 export function startHauntFromTriggerState(game, { selectHauntDefinition }) {
   if (game.gamePhase !== GAME_PHASES.PRE_HAUNT) {
     return game;
@@ -64,11 +96,7 @@ export function startHauntFromTriggerState(game, { selectHauntDefinition }) {
   if (!hauntDefinition) return game;
 
   return {
-    ...game,
-    gamePhase: GAME_PHASES.HAUNT_SETUP,
-    hauntTriggered: true,
-    activeHauntId: hauntDefinition.id,
-    hauntState: createInitialHauntState(game, hauntDefinition),
+    ...startSelectedHauntState(game, { hauntDefinition }),
     message: `${hauntDefinition.title} begins. Complete haunt setup before continuing play.`,
   };
 }

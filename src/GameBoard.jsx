@@ -139,7 +139,9 @@ import {
   advanceHauntRulesViewState,
   beginHauntAfterRulesViewState,
   GAME_PHASES,
+  getAllHauntDefinitions,
   getHauntDefinitionById,
+  startSelectedHauntState,
 } from "./haunts/hauntDomain";
 import { TILES, STARTING_TILES } from "./tiles";
 import { getDamageConversionOptions, getPassiveEffects } from "./items/passiveItemEffectAbility";
@@ -151,6 +153,7 @@ function formatStatTrackValue(value) {
 
 const ALL_DIRECTIONS = ["N", "E", "S", "W"];
 const DEBUG_TILE_CATALOG = [...STARTING_TILES, ...TILES];
+const DEBUG_HAUNT_CATALOG = getAllHauntDefinitions();
 const SUPPORTED_COMBAT_ITEM_ACTIONS = new Set([
   "attack-bonus-die",
   "attack-bonus-total",
@@ -311,6 +314,8 @@ export default function GameBoard({ players, onQuit }) {
   const [debugRemoveType, setDebugRemoveType] = useState("item");
   const [debugRemovePlayerIndex, setDebugRemovePlayerIndex] = useState(0);
   const [debugRemoveCardKey, setDebugRemoveCardKey] = useState("");
+  const [debugSelectedHauntId, setDebugSelectedHauntId] = useState(DEBUG_HAUNT_CATALOG[0]?.id || "");
+  const [debugHauntTraitorPlayerIndex, setDebugHauntTraitorPlayerIndex] = useState(0);
   const [hauntRulesViewerRole, setHauntRulesViewerRole] = useState(null);
   const queuedTraitRollOverrideRef = useRef(null);
   const messageBubbleTimeoutRef = useRef(null);
@@ -770,6 +775,40 @@ export default function GameBoard({ players, onQuit }) {
         [deckKey]: [card, ...g[deckKey]],
         omenCount: fromOmens ? Math.max(0, g.omenCount - 1) : g.omenCount,
         message: `Debug: removed ${card.name} from ${player.name}.`,
+      };
+    });
+  }
+
+  function startDebugHaunt() {
+    if (!debugSelectedHauntId) return;
+
+    const targetTraitor = game.players[debugHauntTraitorPlayerIndex];
+    if (targetTraitor?.floor) {
+      setCameraFloor(targetTraitor.floor);
+    }
+
+    setViewedCard(null);
+    setTradeState(null);
+
+    setGame((g) => {
+      const hauntDefinition = getHauntDefinitionById(debugSelectedHauntId);
+      if (!hauntDefinition) {
+        return {
+          ...g,
+          message: "Debug: selected haunt is not available.",
+        };
+      }
+
+      const clampedTraitorIndex = Math.max(0, Math.min(g.players.length - 1, debugHauntTraitorPlayerIndex));
+      const nextState = startSelectedHauntState(g, {
+        hauntDefinition,
+        traitorPlayerIndex: clampedTraitorIndex,
+      });
+      const traitorName = nextState.players[clampedTraitorIndex]?.name || "the traitor";
+
+      return {
+        ...nextState,
+        message: `Debug: started ${hauntDefinition.title} with ${traitorName} as traitor.`,
       };
     });
   }
@@ -1930,6 +1969,7 @@ export default function GameBoard({ players, onQuit }) {
     () => debugPlacementOptions.find((placement) => placement.key === debugSelectedPlacementKey) || null,
     [debugPlacementOptions, debugSelectedPlacementKey]
   );
+  const debugHauntOptions = useMemo(() => DEBUG_HAUNT_CATALOG, []);
   const debugRotationOptions = useMemo(
     () => getValidRotationIndexesForPlacement(selectedDebugTile, selectedDebugPlacement),
     [selectedDebugTile, selectedDebugPlacement]
@@ -2071,6 +2111,32 @@ export default function GameBoard({ players, onQuit }) {
   });
   const stairTarget = stairTargetState.target;
   const stairIsBacktrack = stairTargetState.isBacktrack;
+
+  useEffect(() => {
+    if (debugHauntOptions.length === 0) {
+      if (debugSelectedHauntId !== "") {
+        setDebugSelectedHauntId("");
+      }
+      return;
+    }
+
+    if (!debugHauntOptions.some((haunt) => haunt.id === debugSelectedHauntId)) {
+      setDebugSelectedHauntId(debugHauntOptions[0].id);
+    }
+  }, [debugHauntOptions, debugSelectedHauntId]);
+
+  useEffect(() => {
+    if (game.players.length === 0) {
+      if (debugHauntTraitorPlayerIndex !== 0) {
+        setDebugHauntTraitorPlayerIndex(0);
+      }
+      return;
+    }
+
+    if (debugHauntTraitorPlayerIndex < 0 || debugHauntTraitorPlayerIndex >= game.players.length) {
+      setDebugHauntTraitorPlayerIndex(0);
+    }
+  }, [debugHauntTraitorPlayerIndex, game.players.length]);
 
   useEffect(() => {
     if (availableDebugTiles.length === 0) {
@@ -2384,6 +2450,12 @@ export default function GameBoard({ players, onQuit }) {
         onRemoveCardKeyChange={setDebugRemoveCardKey}
         removableCards={debugRemovableCards}
         onRemoveCard={removeDebugCard}
+        hauntOptions={debugHauntOptions}
+        selectedHauntId={debugSelectedHauntId}
+        onHauntChange={setDebugSelectedHauntId}
+        hauntTraitorPlayerIndex={debugHauntTraitorPlayerIndex}
+        onHauntTraitorPlayerChange={setDebugHauntTraitorPlayerIndex}
+        onStartHaunt={startDebugHaunt}
         onSetPlayerStat={setDebugPlayerStat}
       />
 

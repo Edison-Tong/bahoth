@@ -46,6 +46,12 @@ export default function DebugModePanel({
   onRemoveCardKeyChange,
   removableCards,
   onRemoveCard,
+  hauntOptions,
+  selectedHauntId,
+  onHauntChange,
+  hauntTraitorPlayerIndex,
+  onHauntTraitorPlayerChange,
+  onStartHaunt,
   onSetPlayerStat,
 }) {
   if (!isOpen) return null;
@@ -235,6 +241,43 @@ export default function DebugModePanel({
           onClick={onActivateEvent}
         >
           Activate Event
+        </button>
+      </div>
+
+      <div className="debug-section">
+        <h4>Start Haunt</h4>
+        <div className="debug-form-row">
+          <label>Haunt</label>
+          <select value={selectedHauntId} onChange={(event) => onHauntChange(event.target.value)}>
+            {hauntOptions.length === 0 && <option value="">No haunts available</option>}
+            {hauntOptions.map((haunt) => (
+              <option key={`debug-haunt-${haunt.id}`} value={haunt.id}>
+                {haunt.title}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="debug-form-row">
+          <label>Traitor</label>
+          <select
+            value={hauntTraitorPlayerIndex}
+            onChange={(event) => onHauntTraitorPlayerChange(Number(event.target.value))}
+            disabled={game.players.length === 0}
+          >
+            {game.players.map((player, playerIndex) => (
+              <option key={`debug-haunt-traitor-${playerIndex}`} value={playerIndex}>
+                {player.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          className="btn btn-primary"
+          type="button"
+          disabled={!selectedHauntId || hauntOptions.length === 0 || game.players.length === 0}
+          onClick={onStartHaunt}
+        >
+          Start Selected Haunt
         </button>
       </div>
 

@@ -2,9 +2,10 @@ export { GAME_PHASES, HAUNT_ACTION_LIMIT_SCOPE, HAUNT_TEAMS } from "./core/haunt
 export {
   dismissHauntRollState,
   startHauntFromTriggerState,
+  startSelectedHauntState,
   completeHauntSetupState,
   resolveHaunt1LearnAboutJackState,
   advanceHauntRulesViewState,
   beginHauntAfterRulesViewState,
 } from "./core/hauntRuntime";
-export { getHauntDefinitionById, selectTriggeredHauntDefinition } from "./registry";
+export { getHauntDefinitionById, getAllHauntDefinitions, selectTriggeredHauntDefinition } from "./registry";

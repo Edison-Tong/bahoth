@@ -9,6 +9,10 @@ export function getHauntDefinitionById(id) {
   return HAUNT_REGISTRY[id] || null;
 }
 
+export function getAllHauntDefinitions() {
+  return Object.values(HAUNT_REGISTRY);
+}
+
 // Temporary behavior: always pick Haunt 1 after a triggered haunt roll.
 export function selectTriggeredHauntDefinition() {
   return haunt1Definition;
