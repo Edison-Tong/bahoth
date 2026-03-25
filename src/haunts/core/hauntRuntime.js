@@ -72,12 +72,14 @@ export function startSelectedHauntState(game, { hauntDefinition, traitorPlayerIn
     eventState: null,
     combatState: null,
     turnPhase: "move",
-    movePath: [{
-      x: game.players[game.currentPlayerIndex]?.x ?? 0,
-      y: game.players[game.currentPlayerIndex]?.y ?? 0,
-      floor: game.players[game.currentPlayerIndex]?.floor ?? "ground",
-      cost: 0,
-    }],
+    movePath: [
+      {
+        x: game.players[game.currentPlayerIndex]?.x ?? 0,
+        y: game.players[game.currentPlayerIndex]?.y ?? 0,
+        floor: game.players[game.currentPlayerIndex]?.floor ?? "ground",
+        cost: 0,
+      },
+    ],
     pendingExplore: null,
     pendingSpecialPlacement: null,
     mysticElevatorReady: false,

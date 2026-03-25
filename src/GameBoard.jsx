@@ -722,11 +722,12 @@ export default function GameBoard({ players, onQuit }) {
       }
 
       const [card] = sourceDeck.splice(cardIndex, 1);
+      const grantedCard = debugGrantType === "omen" ? createDrawnOmenCard(card) : createDrawnItemCard(card);
       const updatedPlayers = g.players.map((player, playerIndex) => {
         if (playerIndex !== debugGrantPlayerIndex) return player;
         return {
           ...player,
-          [collectionKey]: [...player[collectionKey], card],
+          [collectionKey]: [...player[collectionKey], grantedCard],
         };
       });
 
@@ -761,6 +762,7 @@ export default function GameBoard({ players, onQuit }) {
       }
 
       const card = sourceCards[cardIndex];
+      const { type: _discardedType, ...deckCard } = card;
       const updatedPlayers = g.players.map((targetPlayer, playerIndex) => {
         if (playerIndex !== debugRemovePlayerIndex) return targetPlayer;
         return {
@@ -772,7 +774,7 @@ export default function GameBoard({ players, onQuit }) {
       return {
         ...g,
         players: updatedPlayers,
-        [deckKey]: [card, ...g[deckKey]],
+        [deckKey]: [deckCard, ...g[deckKey]],
         omenCount: fromOmens ? Math.max(0, g.omenCount - 1) : g.omenCount,
         message: `Debug: removed ${card.name} from ${player.name}.`,
       };
