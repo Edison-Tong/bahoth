@@ -283,11 +283,23 @@ export function placePendingSpecialTileState(g, placement, { getIdolChoiceStateF
   if (pendingPlacement.mode === "move-existing") {
     const currentPlayerIndex = g.currentPlayerIndex;
     const oldFloor = pendingPlacement.tile.floor;
-    const updatedBoard = {
-      ...g.board,
-      [oldFloor]: (g.board[oldFloor] || []).filter((tile) => tile !== pendingPlacement.tile),
-      [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
-    };
+    const isOldTile = (tile) =>
+      tile.id === pendingPlacement.tile.id &&
+      tile.floor === oldFloor &&
+      tile.x === pendingPlacement.tile.x &&
+      tile.y === pendingPlacement.tile.y;
+    const oldFloorWithoutTile = (g.board[oldFloor] || []).filter((tile) => !isOldTile(tile));
+    const updatedBoard =
+      oldFloor === placement.floor
+        ? {
+            ...g.board,
+            [oldFloor]: [...oldFloorWithoutTile, placedTile],
+          }
+        : {
+            ...g.board,
+            [oldFloor]: oldFloorWithoutTile,
+            [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
+          };
     const updatedPlayers = g.players.map((player, index) =>
       index === currentPlayerIndex ? { ...player, x: placement.x, y: placement.y, floor: placement.floor } : player
     );
