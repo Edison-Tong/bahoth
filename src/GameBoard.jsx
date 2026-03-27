@@ -429,6 +429,7 @@ export default function GameBoard({ players, onQuit }) {
               createDiceModifier,
             }) || g
         );
+        setDiceAnimation(null);
       } else if (da.purpose === "mystic-elevator") {
         setGame((g) =>
           resolveMysticElevatorResultState({
@@ -456,7 +457,7 @@ export default function GameBoard({ players, onQuit }) {
       clearTimeout(timeout);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [diceAnimation?.purpose, diceAnimation?.settled]);
+  }, [diceAnimation?.purpose, diceAnimation?.settled, diceAnimation?.token]);
 
   const currentPlayer = game.players[game.currentPlayerIndex];
   const floorTiles = game.board[cameraFloor] || [];

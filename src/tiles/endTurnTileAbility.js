@@ -8,6 +8,8 @@ export function getEndTurnTileAbilityState({
   getDamageReduction,
   createDiceModifier,
 }) {
+  const createRollToken = () => `${Date.now()}-${Math.random()}`;
+
   if (!tile?.endOfTurn || game.tileEffect) {
     return null;
   }
@@ -19,6 +21,7 @@ export function getEndTurnTileAbilityState({
       game: { ...game, message: `${tile.name} — rolling for damage...` },
       diceAnimation: {
         purpose: "furnace",
+        token: createRollToken(),
         final: finalDice,
         display: Array.from({ length: 1 }, () => Math.floor(Math.random() * 3)),
         tileName: tile.name,
@@ -46,6 +49,7 @@ export function getEndTurnTileAbilityState({
       game: { ...game, message: `${tile.name} — rolling for stability...` },
       diceAnimation: {
         purpose: "collapsed",
+        token: createRollToken(),
         final: roll.dice,
         display: Array.from({ length: roll.dice.length }, () => Math.floor(Math.random() * 3)),
         tileName: tile.name,
