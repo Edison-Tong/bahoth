@@ -281,8 +281,9 @@ export function placePendingSpecialTileState(g, placement, { getIdolChoiceStateF
   };
 
   if (pendingPlacement.mode === "move-existing") {
-    const currentPlayerIndex = g.currentPlayerIndex;
     const oldFloor = pendingPlacement.tile.floor;
+    const oldX = pendingPlacement.tile.x;
+    const oldY = pendingPlacement.tile.y;
     const isOldTile = (tile) =>
       tile.id === pendingPlacement.tile.id &&
       tile.floor === oldFloor &&
@@ -300,8 +301,10 @@ export function placePendingSpecialTileState(g, placement, { getIdolChoiceStateF
             [oldFloor]: oldFloorWithoutTile,
             [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
           };
-    const updatedPlayers = g.players.map((player, index) =>
-      index === currentPlayerIndex ? { ...player, x: placement.x, y: placement.y, floor: placement.floor } : player
+    const updatedPlayers = g.players.map((player) =>
+      player.floor === oldFloor && player.x === oldX && player.y === oldY
+        ? { ...player, x: placement.x, y: placement.y, floor: placement.floor }
+        : player
     );
 
     const idolOfferState = getIdolChoiceStateForQueuedEvent({
