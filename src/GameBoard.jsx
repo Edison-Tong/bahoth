@@ -984,13 +984,16 @@ export default function GameBoard({ players, onQuit }) {
             nextEventDeck = deck;
             drawnCard = nextEvent ? createDrawnEventCard(nextEvent) : null;
           }
-          if (cardType === "omen") {
+          if (cardType === "omen" && drawnCard) {
             nextOmenCount += 1;
           }
           if (drawnCard) {
             message += ` A${cardType === "omen" || cardType === "event" ? "n" : "n"} ${cardType} card appears...`;
+            turnPhase = "card";
+          } else {
+            message += ` No ${cardType} cards remain. ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`;
+            turnPhase = "move";
           }
-          turnPhase = "card";
         } else {
           message += ` ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left.`;
         }
