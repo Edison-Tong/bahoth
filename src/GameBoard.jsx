@@ -439,6 +439,7 @@ export default function GameBoard({ players, onQuit }) {
             getPlacementOptions,
           })
         );
+        setDiceAnimation(null);
       } else if (da.purpose === "skeleton-key") {
         setGame((g) => {
           return {

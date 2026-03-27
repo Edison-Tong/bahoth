@@ -149,7 +149,7 @@ export const TILES = [
     floors: ["basement"],
     doors: ["E", "S", "W"],
     cardType: "event",
-    description: "If you end your turn on this tile, take one die of Physical damage", // NOTE: DICE ROLL DOESN'T HAPPEN AND GAME IS FROZEN
+    description: "If you end your turn on this tile, take one die of Physical damage",
     endOfTurn: "furnace",
   },
   {

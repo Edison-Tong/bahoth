@@ -46,6 +46,8 @@ export function passTurnCoreState(g) {
 
   const nextPlayer = g.players[next];
   const speed = nextPlayer.character.speed[nextPlayer.statIndex.speed];
+  const nextPlayerTile = g.board[nextPlayer.floor]?.find((tile) => tile.x === nextPlayer.x && tile.y === nextPlayer.y);
+  const canReadyMysticElevator = nextPlayerTile?.id === "mystic-elevator";
   const updatedPlayers = g.players.map((pl, i) => (i === next ? { ...pl, movesLeft: speed } : pl));
 
   return {
@@ -57,7 +59,7 @@ export function passTurnCoreState(g) {
       movePath: [{ x: nextPlayer.x, y: nextPlayer.y, floor: nextPlayer.floor, cost: 0 }],
       pendingExplore: null,
       pendingSpecialPlacement: null,
-      mysticElevatorReady: false,
+      mysticElevatorReady: canReadyMysticElevator,
       mysticElevatorUsed: false,
       hasAttackedThisTurn: false,
       combatState: null,

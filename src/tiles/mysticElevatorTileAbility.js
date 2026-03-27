@@ -80,7 +80,7 @@ export function resolveMysticElevatorResultState({ game, animation, total, getPl
 export function getRollMysticElevatorState(game, rollDice) {
   const player = game.players[game.currentPlayerIndex];
   const currentTile = game.board[player.floor]?.find((tile) => tile.x === player.x && tile.y === player.y);
-  if (!game.mysticElevatorReady || game.mysticElevatorUsed || currentTile?.id !== "mystic-elevator") {
+  if (game.mysticElevatorUsed || currentTile?.id !== "mystic-elevator") {
     return null;
   }
 

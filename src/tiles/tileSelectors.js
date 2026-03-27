@@ -14,7 +14,6 @@ export function getCanUseMysticElevator({ game, currentTile, isItemAbilityTileCh
     !game.drawnCard &&
     !diceAnimation &&
     currentTile?.id === "mystic-elevator" &&
-    game.mysticElevatorReady &&
     !game.mysticElevatorUsed
   );
 }
