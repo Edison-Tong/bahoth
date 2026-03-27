@@ -179,6 +179,24 @@ export function applyPlacedTileDiscoverEffects({
 
     nextPlayers = applyStatChange(nextPlayers, currentPlayerIndex, stat, appliedAmount);
 
+    if (stat === "speed" && appliedAmount > 0) {
+      const beforeSpeed = player.character.speed[player.statIndex.speed] || 0;
+      const updatedPlayer = nextPlayers[currentPlayerIndex];
+      const afterSpeed = updatedPlayer?.character?.speed?.[updatedPlayer?.statIndex?.speed] || beforeSpeed;
+      const moveBonus = Math.max(0, afterSpeed - beforeSpeed);
+
+      if (moveBonus > 0) {
+        nextPlayers = nextPlayers.map((targetPlayer, index) =>
+          index === currentPlayerIndex
+            ? {
+                ...targetPlayer,
+                movesLeft: (targetPlayer.movesLeft || 0) + moveBonus,
+              }
+            : targetPlayer
+        );
+      }
+    }
+
     const nextValue = nextPlayers[currentPlayerIndex].character[stat][nextPlayers[currentPlayerIndex].statIndex[stat]];
     const statLabel = statLabels[stat] || stat;
     const gainMessage =
