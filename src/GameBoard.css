@@ -975,6 +975,12 @@
   background: rgba(142, 68, 173, 0.12);
 }
 
+.sidebar-card-chip-token {
+  border-color: rgba(173, 152, 74, 0.4);
+  background: rgba(173, 152, 74, 0.16);
+  color: #f6ebc8;
+}
+
 .sidebar-card-empty {
   font-size: 0.68rem;
   color: #8f8167;

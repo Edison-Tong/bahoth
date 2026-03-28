@@ -14,6 +14,7 @@ export function createInitialScenarioState() {
     jacksSpiritActorId: "jacks-spirit",
     revealedKnowledgeOfJackHolders: [],
     exorcismTokenPlacements: [],
+    pendingChoice: null,
     jacksSpirit: {
       active: false,
       floor: null,
@@ -59,8 +60,22 @@ function getScenarioState(hauntState) {
     revealedKnowledgeOfJackHolders:
       scenarioState.revealedKnowledgeOfJackHolders || defaults.revealedKnowledgeOfJackHolders,
     exorcismTokenPlacements: scenarioState.exorcismTokenPlacements || defaults.exorcismTokenPlacements,
+    pendingChoice: scenarioState.pendingChoice || defaults.pendingChoice,
     jacksSpirit: scenarioState.jacksSpirit || defaults.jacksSpirit,
   };
+}
+
+function formatTileReference(game, placement) {
+  const tile = (game.board?.[placement.floor] || []).find(
+    (candidate) => candidate.x === placement.x && candidate.y === placement.y
+  );
+  if (tile?.name) return `${tile.name} (${placement.floor})`;
+  return `(${placement.x}, ${placement.y}) ${placement.floor}`;
+}
+
+function getKnowledgeEligibleHeroIndexes(game, tokenHolders = []) {
+  const holderSet = new Set(tokenHolders);
+  return getHeroIndexes(game).filter((playerIndex) => !holderSet.has(playerIndex));
 }
 
 export function getCombatActorProxyState(game, actorIndex) {
@@ -158,6 +173,15 @@ export function getActionAvailabilityState(game, { hauntActionLocked }) {
   const currentPlayer = getCurrentPlayer(game);
   const currentTile = getCurrentTile(game);
   const scenarioState = getScenarioState(game.hauntState);
+  if (scenarioState.pendingChoice) {
+    return {
+      learnAboutJack: false,
+      studyExorcism: false,
+      exorciseJacksSpirit: false,
+      stalkPrey: false,
+    };
+  }
+
   const spirit = scenarioState.jacksSpirit;
   const onSpiritTile =
     !!currentPlayer &&
@@ -168,9 +192,12 @@ export function getActionAvailabilityState(game, { hauntActionLocked }) {
   const onLibrary = !!currentTile && currentTile.id === "library";
   const onEventTile = !!currentTile && currentTile.cardType === "event";
   const canUseHeroAction = !isTraitorTurn && !!currentPlayer?.isAlive && !hauntActionLocked;
+  const knowledgeTokenHolders = scenarioState.revealedKnowledgeOfJackHolders.slice(0, 2);
+  const canGainKnowledgeToken =
+    knowledgeTokenHolders.length < 2 && getKnowledgeEligibleHeroIndexes(game, knowledgeTokenHolders).length > 0;
 
   return {
-    learnAboutJack: canUseHeroAction && onLibrary,
+    learnAboutJack: canUseHeroAction && onLibrary && canGainKnowledgeToken,
     studyExorcism: canUseHeroAction && onEventTile,
     exorciseJacksSpirit: canUseHeroAction && onSpiritTile,
     stalkPrey: isTraitorTurn && !hauntActionLocked,
@@ -187,6 +214,26 @@ export function canDeadPlayerTakeTurn(game, playerIndex) {
 }
 
 export function getActionButtonsState(game, context) {
+  const scenarioState = getScenarioState(game.hauntState);
+  const pendingChoice = scenarioState.pendingChoice;
+  if (pendingChoice?.type === "assign-knowledge-token") {
+    return (pendingChoice.options || []).map((option) => ({
+      id: `pending-assign-knowledge:${option.playerIndex}`,
+      label: `Give Knowledge of Jack to ${option.label}`,
+      tone: "secondary",
+      enabled: true,
+    }));
+  }
+
+  if (pendingChoice?.type === "move-exorcism-token") {
+    return (pendingChoice.options || []).map((option) => ({
+      id: `pending-move-exorcism:${option.index}`,
+      label: `Move Exorcism Circle from ${option.label}`,
+      tone: "secondary",
+      enabled: true,
+    }));
+  }
+
   const availability = getActionAvailabilityState(game, context);
   return [
     {
@@ -217,6 +264,15 @@ export function getActionButtonsState(game, context) {
 }
 
 export function resolveActionState(game, { actionId }) {
+  if (typeof actionId === "string" && actionId.startsWith("pending-assign-knowledge:")) {
+    const playerIndex = Number(actionId.replace("pending-assign-knowledge:", ""));
+    return resolvePendingAssignKnowledgeState(game, playerIndex);
+  }
+  if (typeof actionId === "string" && actionId.startsWith("pending-move-exorcism:")) {
+    const placementIndex = Number(actionId.replace("pending-move-exorcism:", ""));
+    return resolvePendingMoveExorcismState(game, placementIndex);
+  }
+
   if (actionId === "learn-about-jack") {
     return resolveLearnAboutJackState(game);
   }
@@ -465,6 +521,82 @@ function healAllTraits(player) {
   };
 }
 
+function resolvePendingAssignKnowledgeState(game, recipientIndex) {
+  if (game.activeHauntId !== "haunt_1" || !game.hauntState) return game;
+  const scenarioState = getScenarioState(game.hauntState);
+  const pendingChoice = scenarioState.pendingChoice;
+  if (pendingChoice?.type !== "assign-knowledge-token") return game;
+  if (pendingChoice.actorIndex !== game.currentPlayerIndex) return game;
+
+  const tokenHolders = Array.from(new Set(scenarioState.revealedKnowledgeOfJackHolders)).slice(0, 2);
+  if (tokenHolders.length >= 2) {
+    return {
+      ...game,
+      hauntState: {
+        ...game.hauntState,
+        scenarioState: {
+          ...scenarioState,
+          pendingChoice: null,
+          revealedKnowledgeOfJackHolders: tokenHolders,
+        },
+      },
+      message: "Both Knowledge of Jack tokens are already claimed.",
+    };
+  }
+
+  const isEligible = (pendingChoice.options || []).some((option) => option.playerIndex === recipientIndex);
+  if (!isEligible) return game;
+
+  const nextHolders = [...tokenHolders, recipientIndex].slice(0, 2);
+  const actor = game.players[pendingChoice.actorIndex];
+  const recipient = game.players[recipientIndex];
+
+  return {
+    ...game,
+    hauntState: {
+      ...game.hauntState,
+      scenarioState: {
+        ...scenarioState,
+        pendingChoice: null,
+        revealedKnowledgeOfJackHolders: nextHolders,
+      },
+    },
+    message: `${actor?.name || "Explorer"} gives Knowledge of Jack to ${recipient?.name || "a hero"}.`,
+  };
+}
+
+function resolvePendingMoveExorcismState(game, placementIndex) {
+  if (game.activeHauntId !== "haunt_1" || !game.hauntState) return game;
+  const scenarioState = getScenarioState(game.hauntState);
+  const pendingChoice = scenarioState.pendingChoice;
+  if (pendingChoice?.type !== "move-exorcism-token") return game;
+  if (pendingChoice.actorIndex !== game.currentPlayerIndex) return game;
+
+  const sourcePlacement = scenarioState.exorcismTokenPlacements[placementIndex];
+  if (!sourcePlacement) return game;
+
+  const target = pendingChoice.targetPlacement;
+  if (!target) return game;
+
+  const nextPlacements = scenarioState.exorcismTokenPlacements.map((placement, index) =>
+    index === placementIndex ? { ...target } : placement
+  );
+
+  const actor = game.players[pendingChoice.actorIndex];
+  return {
+    ...game,
+    hauntState: {
+      ...game.hauntState,
+      scenarioState: {
+        ...scenarioState,
+        pendingChoice: null,
+        exorcismTokenPlacements: nextPlacements,
+      },
+    },
+    message: `${actor?.name || "Explorer"} moves an Exorcism Circle token.`,
+  };
+}
+
 export function resolveLearnAboutJackState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
     return game;
@@ -642,9 +774,9 @@ export function resolveActionRollContinueState(game, { createDamageChoice }) {
       };
     }
 
-    const tokenHolders = new Set(scenarioState.revealedKnowledgeOfJackHolders);
-    const heroWithoutToken = getHeroIndexes(game).find((playerIndex) => !tokenHolders.has(playerIndex));
-    if (heroWithoutToken == null) {
+    const tokenHolders = Array.from(new Set(scenarioState.revealedKnowledgeOfJackHolders)).slice(0, 2);
+    const eligibleHeroes = getKnowledgeEligibleHeroIndexes(game, tokenHolders);
+    if (tokenHolders.length >= 2 || eligibleHeroes.length === 0) {
       return {
         ...clearHauntActionRoll(game),
         hauntState: nextHauntState,
@@ -652,17 +784,23 @@ export function resolveActionRollContinueState(game, { createDamageChoice }) {
       };
     }
 
-    tokenHolders.add(heroWithoutToken);
     return {
       ...clearHauntActionRoll(game),
       hauntState: {
         ...nextHauntState,
         scenarioState: {
           ...scenarioState,
-          revealedKnowledgeOfJackHolders: Array.from(tokenHolders),
+          pendingChoice: {
+            type: "assign-knowledge-token",
+            actorIndex: actionRoll.actorIndex,
+            options: eligibleHeroes.map((playerIndex) => ({
+              playerIndex,
+              label: game.players[playerIndex]?.name || `Hero ${playerIndex + 1}`,
+            })),
+          },
         },
       },
-      message: `${actorName} rolled ${rollResult.rollTotal}. ${game.players[heroWithoutToken].name} gains Knowledge of Jack.`,
+      message: `${actorName} rolled ${rollResult.rollTotal}. Choose a hero to receive Knowledge of Jack.`,
     };
   }
 
@@ -704,8 +842,25 @@ export function resolveActionRollContinueState(game, { createDamageChoice }) {
       nextPlacements = [...nextPlacements, currentPlacement];
       tokenMessage = "Placed an Exorcism Circle token.";
     } else {
-      nextPlacements = [nextPlacements[1], currentPlacement];
-      tokenMessage = "Moved an Exorcism Circle token.";
+      return {
+        ...clearHauntActionRoll(game),
+        hauntState: {
+          ...nextHauntState,
+          scenarioState: {
+            ...scenarioState,
+            pendingChoice: {
+              type: "move-exorcism-token",
+              actorIndex: actionRoll.actorIndex,
+              targetPlacement: currentPlacement,
+              options: nextPlacements.map((placement, index) => ({
+                index,
+                label: formatTileReference(game, placement),
+              })),
+            },
+          },
+        },
+        message: `${actorName} rolled ${rollResult.rollTotal}. Choose which Exorcism Circle to move to this tile.`,
+      };
     }
 
     return {

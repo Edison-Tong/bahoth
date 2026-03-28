@@ -13,6 +13,9 @@ export default function PlayerSidebar({
   const traitorPlayerIndex = game?.hauntState?.traitorPlayerIndex;
   const scenarioState = game?.hauntState?.scenarioState || {};
   const spirit = scenarioState?.jacksSpirit || {};
+  const knowledgeHolders = Array.isArray(scenarioState?.revealedKnowledgeOfJackHolders)
+    ? scenarioState.revealedKnowledgeOfJackHolders
+    : [];
   const spiritIsActive = !!spirit?.active;
   const isMonsterTurn =
     spiritIsActive && game.currentPlayerIndex === traitorPlayerIndex && !game.players[traitorPlayerIndex]?.isAlive;
@@ -75,6 +78,7 @@ export default function PlayerSidebar({
         const isCurrent = i === game.currentPlayerIndex;
         const isExpanded = isCurrent || expandedSidebarPlayers.has(i);
         const isTraitor = traitorPlayerIndex === i;
+        const knowledgeTokenCount = knowledgeHolders.filter((holderIndex) => holderIndex === i).length;
         return (
           <div key={`sidebar-entry-${i}`} className="sidebar-entry">
             <div
@@ -195,6 +199,26 @@ export default function PlayerSidebar({
                       </div>
                     ) : (
                       <div className="sidebar-card-empty">No omens</div>
+                    )}
+                  </div>
+                  <div className="sidebar-card-group">
+                    <div className="sidebar-card-group-header">
+                      <span>Tokens</span>
+                      <span>{knowledgeTokenCount}</span>
+                    </div>
+                    {knowledgeTokenCount > 0 ? (
+                      <div className="sidebar-card-list">
+                        {Array.from({ length: knowledgeTokenCount }).map((_, tokenIndex) => (
+                          <span
+                            key={`${p.name}-knowledge-token-${tokenIndex}`}
+                            className="sidebar-card-chip sidebar-card-chip-token"
+                          >
+                            Knowledge of Jack
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="sidebar-card-empty">No tokens</div>
                     )}
                   </div>
                 </div>
