@@ -11,6 +11,7 @@ export {
   getHauntMovementOptionsState,
   getHauntTileTokenLabelsState,
   getHauntKnowledgeTokenHoldersState,
+  getHauntCanDeadPlayerTakeTurnState,
   getHauntActionAvailabilityState,
   getHauntActionButtonsState,
   resolveHauntActionState,

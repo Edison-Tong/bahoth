@@ -32,15 +32,19 @@ export function applyDamageAllocationState(players, playerIndex, allocation, adj
   });
 }
 
+import { getHauntCanDeadPlayerTakeTurnState } from "../haunts/hauntDomain";
+
 export function passTurnCoreState(g) {
   const shouldTakeExtraTurn = !!g.extraTurnAfterCurrent && !!g.players[g.currentPlayerIndex]?.isAlive;
   let next = shouldTakeExtraTurn ? g.currentPlayerIndex : (g.currentPlayerIndex + 1) % g.players.length;
 
   if (!shouldTakeExtraTurn) {
     let attempts = 0;
-    while (!g.players[next].isAlive && attempts < g.players.length) {
+    let canUseDeadTurn = getHauntCanDeadPlayerTakeTurnState(g, next);
+    while (!g.players[next].isAlive && !canUseDeadTurn && attempts < g.players.length) {
       next = (next + 1) % g.players.length;
       attempts++;
+      canUseDeadTurn = getHauntCanDeadPlayerTakeTurnState(g, next);
     }
   }
 

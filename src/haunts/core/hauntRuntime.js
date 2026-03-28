@@ -336,6 +336,14 @@ export function getHauntKnowledgeTokenHoldersState(game) {
   return [];
 }
 
+export function getHauntCanDeadPlayerTakeTurnState(game, playerIndex) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.canDeadPlayerTakeTurn) {
+    return runtimeHooks.canDeadPlayerTakeTurn(game, playerIndex);
+  }
+  return false;
+}
+
 export function getHauntActionButtonsState(game, context) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.getActionButtonsState) {

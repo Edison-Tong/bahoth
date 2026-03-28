@@ -3,7 +3,7 @@ export const OMEN_CARDS = [
     id: "book",
     name: "Book",
     passiveEffects: [
-      { 
+      {
         type: "trait-roll-bonus",
         stat: "knowledge",
         amount: 1,
@@ -24,10 +24,9 @@ export const OMEN_CARDS = [
       costAmount: 1,
       bonusDice: 2,
     },
-    activeAbility:
-      "When you attack, you may lose 1 Speed. If you do, roll 2 extra dice on that attack.",
+    activeAbility: "When you attack, you may lose 1 Speed. If you do, roll 2 extra dice on that attack.",
   },
-    {
+  {
     id: "dog",
     name: "Dog",
     passiveEffects: [
@@ -959,7 +958,7 @@ export const EVENT_CARDS = [
         outcomes: [
           createEventOutcome(
             { perRoll: { max: 1 } },
-            createEventEffect("stat-change", { mode: "lose", stat: "rolled-trait", amount: 1 })
+            createEventEffect("stat-change", { mode: "lose", stat: "rolled-trait", amount: 1 }) // DDNT LOSE ONE IN TRAIT ON FAIL
           ),
           createEventOutcome(
             { allRolls: { min: 2 } },
@@ -1379,7 +1378,7 @@ export const EVENT_CARDS = [
         id: "make-haunt-roll",
         prompt: "Make a haunt roll?",
         options: ["yes", "no"],
-        onlyIf: { hauntStarted: false },  // NOTE: CHECK TO SEE IF RESULTS ARE AUTOMATIC IF HAUNT HAS STARTED
+        onlyIf: { hauntStarted: false }, // NOTE: CHECK TO SEE IF RESULTS ARE AUTOMATIC IF HAUNT HAS STARTED
       }),
       createEventStep("effect", {
         when: {
@@ -1484,7 +1483,7 @@ export const EVENT_CARDS = [
       "If you bury an Item, gain 1 in any trait. Otherwise, make a Sanity roll: 4+ draw an Item card, 0-3 take 1 General damage.",
     steps: [
       createEventStep("choice", {
-        id: "bury-item",  
+        id: "bury-item",
         prompt: "Bury one of your Items?",
         options: ["yes", "no"],
       }),

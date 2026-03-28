@@ -12,6 +12,10 @@ function getMonsterTokenAbbreviation(label) {
   return initials || "M";
 }
 
+function getCorpseTokenAbbreviation() {
+  return "X";
+}
+
 export default function BoardCanvas({
   boardRef,
   cameraFloor,
@@ -103,6 +107,14 @@ export default function BoardCanvas({
                         >
                           {getMonsterTokenAbbreviation(token.type)}
                         </div>
+                      ) : token.variant === "corpse" ? (
+                        <div
+                          key={`${tile.id}-token-${token.type}-${tokenIndex}`}
+                          className="corpse-token"
+                          title={token.type.replace(/-/g, " ")}
+                        >
+                          {getCorpseTokenAbbreviation()}
+                        </div>
                       ) : (
                         <div
                           key={`${tile.id}-token-${token.type}-${tokenIndex}`}
@@ -124,6 +136,10 @@ export default function BoardCanvas({
                           title={token.label}
                         >
                           {getMonsterTokenAbbreviation(token.label)}
+                        </div>
+                      ) : token.variant === "corpse" ? (
+                        <div key={`haunt-token-${tile.id}-${token.label}`} className="corpse-token" title={token.label}>
+                          {getCorpseTokenAbbreviation()}
                         </div>
                       ) : (
                         <div key={`haunt-token-${tile.id}-${token.label}`} className="tile-token">

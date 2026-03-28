@@ -111,6 +111,12 @@ export function getTileTokenLabelsState(game, { floor, x, y }) {
 
   const scenarioState = getScenarioState(game.hauntState);
   const labels = [];
+  const corpse = scenarioState.traitorCorpsePosition;
+  if (corpse && corpse.floor === floor && corpse.x === x && corpse.y === y) {
+    const traitor = game.players[game.hauntState?.traitorPlayerIndex];
+    const corpseLabel = traitor?.name ? `${traitor.name} Corpse` : "Traitor Corpse";
+    labels.push({ label: corpseLabel, variant: "corpse" });
+  }
   if (
     scenarioState.exorcismTokenPlacements.some(
       (placement) => placement.floor === floor && placement.x === x && placement.y === y
@@ -143,12 +149,35 @@ export function getActionAvailabilityState(game, { hauntActionLocked }) {
   }
 
   const isTraitorTurn = game.hauntState.traitorPlayerIndex === game.currentPlayerIndex;
+  const currentPlayer = getCurrentPlayer(game);
+  const currentTile = getCurrentTile(game);
+  const scenarioState = getScenarioState(game.hauntState);
+  const spirit = scenarioState.jacksSpirit;
+  const onSpiritTile =
+    !!currentPlayer &&
+    !!spirit?.active &&
+    currentPlayer.floor === spirit.floor &&
+    currentPlayer.x === spirit.x &&
+    currentPlayer.y === spirit.y;
+  const onLibrary = !!currentTile && currentTile.id === "library";
+  const onEventTile = !!currentTile && currentTile.cardType === "event";
+  const canUseHeroAction = !isTraitorTurn && !!currentPlayer?.isAlive && !hauntActionLocked;
+
   return {
-    learnAboutJack: !isTraitorTurn && !hauntActionLocked,
-    studyExorcism: !isTraitorTurn && !hauntActionLocked,
-    exorciseJacksSpirit: !isTraitorTurn && !hauntActionLocked,
+    learnAboutJack: canUseHeroAction && onLibrary,
+    studyExorcism: canUseHeroAction && onEventTile,
+    exorciseJacksSpirit: canUseHeroAction && onSpiritTile,
     stalkPrey: isTraitorTurn && !hauntActionLocked,
   };
+}
+
+export function canDeadPlayerTakeTurn(game, playerIndex) {
+  if (game.activeHauntId !== "haunt_1" || !game.hauntState) return false;
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  if (playerIndex !== traitorIndex) return false;
+  const traitor = game.players[traitorIndex];
+  const spirit = getScenarioState(game.hauntState).jacksSpirit;
+  return !traitor?.isAlive && !!spirit?.active;
 }
 
 export function getActionButtonsState(game, context) {
