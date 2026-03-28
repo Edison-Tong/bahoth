@@ -139,8 +139,14 @@ import {
   advanceHauntRulesViewState,
   beginHauntAfterRulesViewState,
   GAME_PHASES,
+  getHauntActionButtonsState,
   getAllHauntDefinitions,
+  getHaunt1CombatKnowledgeBonus,
+  getHauntCombatActorProxyState,
   getHauntDefinitionById,
+  resolveHaunt1AfterDamageState,
+  resolveHauntActionState,
+  resolveHaunt1TurnStartState,
   startSelectedHauntState,
 } from "./haunts/hauntDomain";
 import { TILES, STARTING_TILES } from "./tiles";
@@ -219,11 +225,15 @@ function getCombatTargetsOnCurrentTile(game) {
 
   const attackerIndex = game.currentPlayerIndex;
   const attacker = game.players[attackerIndex];
-  if (!attacker?.isAlive) return [];
-
   const traitorIndex = game.hauntState.traitorPlayerIndex;
+  const attackerProxy = getHauntCombatActorProxyState(game, attackerIndex);
+  if (!attacker?.isAlive && !attackerProxy) return [];
+
+  const attackerFloor = attackerProxy?.floor ?? attacker.floor;
+  const attackerX = attackerProxy?.x ?? attacker.x;
+  const attackerY = attackerProxy?.y ?? attacker.y;
   const onSameTile = (player) =>
-    player.floor === attacker.floor && player.x === attacker.x && player.y === attacker.y && player.isAlive;
+    player.floor === attackerFloor && player.x === attackerX && player.y === attackerY && player.isAlive;
 
   if (attackerIndex === traitorIndex) {
     return game.players
@@ -234,7 +244,14 @@ function getCombatTargetsOnCurrentTile(game) {
   }
 
   const traitor = game.players[traitorIndex];
-  if (!traitor || !onSameTile(traitor)) return [];
+  const traitorProxy = getHauntCombatActorProxyState(game, traitorIndex);
+  const traitorOnSameTile = !!traitor && onSameTile(traitor);
+  const spiritOnSameTile =
+    !!traitorProxy &&
+    attacker.floor === traitorProxy.floor &&
+    attacker.x === traitorProxy.x &&
+    attacker.y === traitorProxy.y;
+  if ((!traitor || !traitorOnSameTile) && !spiritOnSameTile) return [];
   return [{ player: traitor, playerIndex: traitorIndex }];
 }
 
@@ -1233,17 +1250,31 @@ export default function GameBoard({ players, onQuit }) {
 
     const actorIndex = role === "attacker" ? combatState.attackerIndex : combatState.defenderIndex;
     const actor = game.players[actorIndex];
-    if (!actor?.isAlive) return;
+    const actorProxy = getHauntCombatActorProxyState(game, actorIndex);
+    if (!actor?.isAlive && !actorProxy) return;
 
-    const defenseBonus = role === "defender" ? getDefenseRollDiceBonus(actor) : { amount: 0, sourceNames: [] };
-    const baseDiceCount = getPlayerMightDiceCount(actor) + defenseBonus.amount;
-    const rollResult = resolveTraitRoll(actor, {
-      stat: "might",
-      baseDiceCount,
-      context: "attack",
-      board: game.board,
-      usePassives: true,
-    });
+    const defenseBonus = actorProxy
+      ? { amount: 0, sourceNames: [] }
+      : role === "defender"
+        ? getDefenseRollDiceBonus(actor)
+        : { amount: 0, sourceNames: [] };
+    const baseDiceCount = actorProxy?.usesMightDiceCount ?? getPlayerMightDiceCount(actor) + defenseBonus.amount;
+    const rollResult = actorProxy
+      ? {
+          dice: rollDice(baseDiceCount),
+          total: 0,
+          modifier: null,
+        }
+      : resolveTraitRoll(actor, {
+          stat: "might",
+          baseDiceCount,
+          context: "attack",
+          board: game.board,
+          usePassives: true,
+        });
+    if (actorProxy) {
+      rollResult.total = rollResult.dice.reduce((sum, value) => sum + value, 0);
+    }
 
     const itemMessages = [];
     if (defenseBonus.amount > 0) {
@@ -1256,6 +1287,8 @@ export default function GameBoard({ players, onQuit }) {
     const preRollItemMessages = roleState.preRollItemMessages || [];
     const preRollDice = preRollBonusDice > 0 ? rollDice(preRollBonusDice) : [];
     const preRollDiceTotal = preRollDice.reduce((sum, value) => sum + value, 0);
+    const opponentIndex = role === "attacker" ? combatState.defenderIndex : combatState.attackerIndex;
+    const hauntKnowledgeBonus = getHaunt1CombatKnowledgeBonus(game, actorIndex, opponentIndex);
     const animatedDice = [...rollResult.dice, ...preRollDice];
 
     setGame((g) => {
@@ -1264,7 +1297,7 @@ export default function GameBoard({ players, onQuit }) {
       const nextActorState = {
         ...g.combatState[role],
         dice: [...rollResult.dice, ...preRollDice],
-        total: rollResult.total + preRollDiceTotal + preRollFlatBonus,
+        total: rollResult.total + preRollDiceTotal + preRollFlatBonus + hauntKnowledgeBonus,
         itemMessages: [...itemMessages, ...preRollItemMessages],
         preRollBonusDice: 0,
         preRollFlatBonus: 0,
@@ -1576,9 +1609,10 @@ export default function GameBoard({ players, onQuit }) {
           return passTurnResult.game;
         },
       });
+      const postHauntDamageGame = resolveHaunt1AfterDamageState(g, resolved.game);
       nextCameraFloor = resolved.cameraFloor || passTurnCameraFloor;
       shouldClearDiceAnimation = resolved.clearDiceAnimation;
-      return resolved.game;
+      return postHauntDamageGame;
     });
 
     if (shouldClearDiceAnimation) {
@@ -1932,6 +1966,17 @@ export default function GameBoard({ players, onQuit }) {
     }
   }
 
+  function handleUseHauntAction(actionId) {
+    if (debugModeEnabled || game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return;
+    setGame((g) =>
+      resolveHauntActionState(g, {
+        actionId,
+        resolveTraitRoll,
+        createDamageChoice,
+      })
+    );
+  }
+
   function handleSelectRabbitFootDie(dieIndex) {
     setGame((g) => chooseRabbitFootDieState(g, dieIndex));
   }
@@ -2109,6 +2154,14 @@ export default function GameBoard({ players, onQuit }) {
       : "the traitor";
   const canOpenHauntRulesViewer = game.gamePhase === GAME_PHASES.HAUNT_ACTIVE && !!activeHauntDefinition;
   const endTurnPreviewPlayerName = getEndTurnPreviewPlayerName(game, currentPlayer);
+  const hauntActionLocked =
+    gameplayUiLocked ||
+    !!tradeState ||
+    !!game.pendingExplore ||
+    !!game.pendingSpecialPlacement ||
+    isItemAbilityTileChoiceAwaiting(eventState) ||
+    hasUnconfirmedMovePathState(game);
+  const hauntActionButtons = getHauntActionButtonsState(game, { hauntActionLocked });
   const stairTargetState = getStairTargetState({
     game,
     currentPlayer,
@@ -2118,6 +2171,10 @@ export default function GameBoard({ players, onQuit }) {
   });
   const stairTarget = stairTargetState.target;
   const stairIsBacktrack = stairTargetState.isBacktrack;
+
+  useEffect(() => {
+    setGame((g) => resolveHaunt1TurnStartState(g, { rollDice }));
+  }, [game.currentPlayerIndex, game.turnNumber]);
 
   useEffect(() => {
     if (debugHauntOptions.length === 0) {
@@ -2353,6 +2410,8 @@ export default function GameBoard({ players, onQuit }) {
         dogTradeTargetsOnTile={dogTradeTargetsOnTile}
         handleStartDogTrade={handleStartDogTrade}
         handleCancelDogTrade={handleCancelDogTrade}
+        hauntActionButtons={hauntActionButtons}
+        onUseHauntAction={handleUseHauntAction}
         controlsDisabled={gameplayUiLocked}
       />
 

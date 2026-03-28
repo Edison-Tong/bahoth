@@ -3,7 +3,7 @@ export const OMEN_CARDS = [
     id: "book",
     name: "Book",
     passiveEffects: [
-      {
+      { 
         type: "trait-roll-bonus",
         stat: "knowledge",
         amount: 1,

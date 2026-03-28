@@ -29,6 +29,8 @@ export default function GameBoardActions({
   dogTradeTargetsOnTile,
   handleStartDogTrade,
   handleCancelDogTrade,
+  hauntActionButtons,
+  onUseHauntAction,
   controlsDisabled,
 }) {
   const isPathTracking = !tradeState && game.turnPhase === "move" && game.movePath.length > 1;
@@ -158,6 +160,23 @@ export default function GameBoardActions({
           </button>
         </>
       )}
+
+      {hauntActionButtons.map((action) => (
+        <button
+          key={`haunt-action-${action.id}`}
+          className={
+            action.tone === "danger"
+              ? "btn btn-danger"
+              : action.tone === "stairs"
+                ? "btn btn-stairs"
+                : "btn btn-secondary"
+          }
+          onClick={() => onUseHauntAction(action.id)}
+          disabled={controlsDisabled}
+        >
+          {action.label}
+        </button>
+      ))}
     </div>
   );
 }

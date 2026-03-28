@@ -1,3 +1,5 @@
+import { getHauntMovementOptionsState } from "../haunts/hauntDomain";
+
 export function getValidMovesState({
   game,
   currentPlayer,
@@ -32,6 +34,15 @@ export function getValidMovesState({
 
   const path = game.movePath;
   const backtrackPos = path.length >= 2 ? path[path.length - 2] : null;
+
+  const hauntMoveOptions = getHauntMovementOptionsState({
+    game,
+    currentPlayer,
+    DIR,
+    getTileAt,
+    backtrackPos,
+  });
+  if (hauntMoveOptions) return hauntMoveOptions;
 
   const moves = [];
   const moveCost = getLeaveMoveCost(tile);

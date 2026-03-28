@@ -1,4 +1,5 @@
 import { EventTileChoiceTargets } from "../EventResolutionModal";
+import { getHauntTileTokenLabelsState } from "../../haunts/hauntDomain";
 
 export default function BoardCanvas({
   boardRef,
@@ -61,6 +62,11 @@ export default function BoardCanvas({
             const tilePlayersHere = playersOnFloor.filter((p) => p.x === tile.x && p.y === tile.y);
             const isCurrentTile =
               currentPlayer.x === tile.x && currentPlayer.y === tile.y && currentPlayer.floor === cameraFloor;
+            const hauntTokenLabels = getHauntTileTokenLabelsState(game, {
+              floor: cameraFloor,
+              x: tile.x,
+              y: tile.y,
+            });
 
             return (
               <div
@@ -80,6 +86,15 @@ export default function BoardCanvas({
                         className={`tile-token tile-token-${token.type}`}
                       >
                         {token.type.replace(/-/g, " ")}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {hauntTokenLabels.length > 0 && (
+                  <div className="tile-token-list">
+                    {hauntTokenLabels.map((label) => (
+                      <div key={`haunt-token-${tile.id}-${label}`} className="tile-token">
+                        {label}
                       </div>
                     ))}
                   </div>

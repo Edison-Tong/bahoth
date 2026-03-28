@@ -1,4 +1,18 @@
 import { GAME_PHASES, HAUNT_TEAMS } from "./hauntPhases";
+import {
+  createInitialScenarioState as createInitialHaunt1ScenarioState,
+  resolveLearnAboutJackState,
+  resolveStudyExorcismState,
+  resolveExorciseJacksSpiritState,
+  resolveStalkPreyState,
+  resolveAfterDamageState,
+  resolveTurnStartState,
+  getCombatKnowledgeBonus,
+  getCombatActorProxyState,
+  getSpecialMoveOptionsState,
+  getTileTokenLabelsState,
+  getActionAvailabilityState,
+} from "../haunt_1/runtime";
 
 function createInitialHauntState(game, hauntDefinition, traitorPlayerIndexOverride = null) {
   const defaultTraitorIndex = game.currentPlayerIndex;
@@ -7,6 +21,8 @@ function createInitialHauntState(game, hauntDefinition, traitorPlayerIndexOverri
     : defaultTraitorIndex;
   const heroPlayerIndexes = game.players.map((_, index) => index).filter((index) => index !== traitorPlayerIndex);
   const firstPlayerAfterSetup = (traitorPlayerIndex + 1) % game.players.length;
+
+  const initialScenarioState = hauntDefinition.id === "haunt_1" ? createInitialHaunt1ScenarioState() : {};
 
   return {
     id: hauntDefinition.id,
@@ -49,12 +65,7 @@ function createInitialHauntState(game, hauntDefinition, traitorPlayerIndexOverri
     monsters: hauntDefinition.monsters || [],
     oncePerTurnUsage: {},
     oncePerGameUsage: {},
-    scenarioState: {
-      traitorCorpsePosition: null,
-      jacksSpiritActorId: "jacks-spirit",
-      revealedKnowledgeOfJackHolders: [],
-      exorcismTokenPlacements: [],
-    },
+    scenarioState: initialScenarioState,
   };
 }
 
@@ -266,95 +277,116 @@ export function completeHauntSetupState(game, { getHauntDefinitionById }) {
   };
 }
 
-function markHauntActionUsed(hauntState, actionKey) {
+export function resolveHaunt1LearnAboutJackState(game, { resolveTraitRoll }) {
+  return resolveLearnAboutJackState(game, { resolveTraitRoll });
+}
+
+export function resolveHaunt1StudyExorcismState(game, { resolveTraitRoll, createDamageChoice }) {
+  return resolveStudyExorcismState(game, { resolveTraitRoll, createDamageChoice });
+}
+
+export function resolveHaunt1ExorciseJacksSpiritState(game, { resolveTraitRoll }) {
+  return resolveExorciseJacksSpiritState(game, { resolveTraitRoll });
+}
+
+export function resolveHaunt1StalkPreyState(game) {
+  return resolveStalkPreyState(game);
+}
+
+export function resolveHaunt1AfterDamageState(previousGame, nextGame) {
+  return resolveAfterDamageState(previousGame, nextGame);
+}
+
+export function resolveHaunt1TurnStartState(game, { rollDice }) {
+  return resolveTurnStartState(game, { rollDice });
+}
+
+export function getHaunt1CombatKnowledgeBonus(game, actorIndex, defenderIndex) {
+  return getCombatKnowledgeBonus(game, actorIndex, defenderIndex);
+}
+
+export function getHauntCombatActorProxyState(game, actorIndex) {
+  if (game.activeHauntId === "haunt_1") {
+    return getCombatActorProxyState(game, actorIndex);
+  }
+  return null;
+}
+
+export function getHauntMovementOptionsState(context) {
+  if (context?.game?.activeHauntId === "haunt_1") {
+    return getSpecialMoveOptionsState(context);
+  }
+  return null;
+}
+
+export function getHauntTileTokenLabelsState(game, position) {
+  if (game.activeHauntId === "haunt_1") {
+    return getTileTokenLabelsState(game, position);
+  }
+  return [];
+}
+
+export function getHauntActionAvailabilityState(game, context) {
+  if (game.activeHauntId === "haunt_1") {
+    return getActionAvailabilityState(game, context);
+  }
   return {
-    ...hauntState,
-    oncePerTurnUsage: {
-      ...(hauntState.oncePerTurnUsage || {}),
-      [actionKey]: true,
-    },
+    learnAboutJack: false,
+    studyExorcism: false,
+    exorciseJacksSpirit: false,
+    stalkPrey: false,
   };
 }
 
-export function resolveHaunt1LearnAboutJackState(game, { resolveTraitRoll }) {
-  if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return game;
-  if (game.activeHauntId !== "haunt_1") return game;
-  if (!game.hauntState) return game;
-
-  const currentPlayerIndex = game.currentPlayerIndex;
-  if (currentPlayerIndex === game.hauntState.traitorPlayerIndex) {
-    return {
-      ...game,
-      message: "Only heroes can use Learn about Jack.",
-    };
+export function getHauntActionButtonsState(game, context) {
+  if (game.activeHauntId === "haunt_1") {
+    const availability = getActionAvailabilityState(game, context);
+    return [
+      {
+        id: "learn-about-jack",
+        label: "Learn about Jack",
+        tone: "secondary",
+        enabled: availability.learnAboutJack,
+      },
+      {
+        id: "study-exorcism",
+        label: "Study Exorcism",
+        tone: "secondary",
+        enabled: availability.studyExorcism,
+      },
+      {
+        id: "exorcise-jacks-spirit",
+        label: "Exorcise Jack's Spirit",
+        tone: "danger",
+        enabled: availability.exorciseJacksSpirit,
+      },
+      {
+        id: "stalk-prey",
+        label: "Stalk Prey",
+        tone: "stairs",
+        enabled: availability.stalkPrey,
+      },
+    ].filter((action) => action.enabled);
   }
 
-  const currentPlayer = game.players[currentPlayerIndex];
-  if (!currentPlayer?.isAlive) {
-    return {
-      ...game,
-      message: "Dead heroes cannot use Learn about Jack.",
-    };
-  }
+  return [];
+}
 
-  const floorTiles = game.board[currentPlayer.floor] || [];
-  const currentTile = floorTiles.find((tile) => tile.x === currentPlayer.x && tile.y === currentPlayer.y);
-  if (!currentTile || currentTile.id !== "library") {
-    return {
-      ...game,
-      message: "Learn about Jack can only be used in the Library.",
-    };
-  }
-
-  const usageKey = `${game.turnNumber}:${currentPlayerIndex}:learn-about-jack`;
-  if (game.hauntState.oncePerTurnUsage?.[usageKey]) {
-    return {
-      ...game,
-      message: "Learn about Jack has already been used this turn.",
-    };
-  }
-
-  const knowledgeDice = currentPlayer.character.knowledge[currentPlayer.statIndex.knowledge];
-  const roll = resolveTraitRoll(currentPlayer, {
-    stat: "knowledge",
-    baseDiceCount: knowledgeDice,
-    context: "haunt",
-    board: game.board,
-  });
-
-  let nextHauntState = markHauntActionUsed(game.hauntState, usageKey);
-  if (roll.total >= 5) {
-    const existingHolders = new Set(nextHauntState.scenarioState?.revealedKnowledgeOfJackHolders || []);
-    const heroCandidates = nextHauntState.teams?.[HAUNT_TEAMS.HEROES]?.playerIndexes || [];
-    const heroWithoutToken = heroCandidates.find((playerIndex) => !existingHolders.has(playerIndex));
-
-    if (heroWithoutToken !== undefined) {
-      existingHolders.add(heroWithoutToken);
-      nextHauntState = {
-        ...nextHauntState,
-        scenarioState: {
-          ...nextHauntState.scenarioState,
-          revealedKnowledgeOfJackHolders: Array.from(existingHolders),
-        },
-      };
-
-      return {
-        ...game,
-        hauntState: nextHauntState,
-        message: `${currentPlayer.name} rolled ${roll.total} and discovered Knowledge of Jack for ${game.players[heroWithoutToken].name}.`,
-      };
+export function resolveHauntActionState(game, { actionId, resolveTraitRoll, createDamageChoice }) {
+  if (game.activeHauntId === "haunt_1") {
+    if (actionId === "learn-about-jack") {
+      return resolveLearnAboutJackState(game, { resolveTraitRoll });
     }
-
-    return {
-      ...game,
-      hauntState: nextHauntState,
-      message: `${currentPlayer.name} rolled ${roll.total}, but all heroes already have Knowledge of Jack.`,
-    };
+    if (actionId === "study-exorcism") {
+      return resolveStudyExorcismState(game, { resolveTraitRoll, createDamageChoice });
+    }
+    if (actionId === "exorcise-jacks-spirit") {
+      return resolveExorciseJacksSpiritState(game, { resolveTraitRoll });
+    }
+    if (actionId === "stalk-prey") {
+      return resolveStalkPreyState(game);
+    }
   }
 
-  return {
-    ...game,
-    hauntState: nextHauntState,
-    message: `${currentPlayer.name} rolled ${roll.total}. Learn about Jack failed.`,
-  };
+  return game;
 }

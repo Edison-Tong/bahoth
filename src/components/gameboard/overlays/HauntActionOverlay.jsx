@@ -1,3 +1,5 @@
+import { getHauntActionAvailabilityState } from "../../../haunts/hauntDomain";
+
 export default function HauntActionOverlay({ game, hauntDefinition, canUseLearnAboutJack, onUseLearnAboutJack }) {
   if (!game?.hauntState || game.gamePhase !== "hauntActive") return null;
   if (!hauntDefinition) return null;
@@ -6,6 +8,7 @@ export default function HauntActionOverlay({ game, hauntDefinition, canUseLearnA
   const currentPlayer = game.players[game.currentPlayerIndex];
   const isTraitorTurn = game.currentPlayerIndex === traitorIndex;
   const tokenHolders = game.hauntState.scenarioState?.revealedKnowledgeOfJackHolders || [];
+  const hauntActionAvailability = getHauntActionAvailabilityState(game, { hauntActionLocked: false });
 
   return (
     <div className="sidebar-card-viewer haunt-action-viewer" role="dialog" aria-label="Haunt actions">
@@ -33,7 +36,7 @@ export default function HauntActionOverlay({ game, hauntDefinition, canUseLearnA
           </p>
         </div>
 
-        {game.activeHauntId === "haunt_1" && !isTraitorTurn && (
+        {hauntActionAvailability.learnAboutJack && (
           <button className="btn btn-primary" onClick={onUseLearnAboutJack} disabled={!canUseLearnAboutJack}>
             Learn about Jack (Library)
           </button>
