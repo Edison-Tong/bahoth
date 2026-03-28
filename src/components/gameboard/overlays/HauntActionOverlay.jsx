@@ -1,4 +1,4 @@
-import { getHauntActionAvailabilityState } from "../../../haunts/hauntDomain";
+import { getHauntActionAvailabilityState, getHauntKnowledgeTokenHoldersState } from "../../../haunts/hauntDomain";
 
 export default function HauntActionOverlay({ game, hauntDefinition, canUseLearnAboutJack, onUseLearnAboutJack }) {
   if (!game?.hauntState || game.gamePhase !== "hauntActive") return null;
@@ -7,7 +7,7 @@ export default function HauntActionOverlay({ game, hauntDefinition, canUseLearnA
   const traitorIndex = game.hauntState.traitorPlayerIndex;
   const currentPlayer = game.players[game.currentPlayerIndex];
   const isTraitorTurn = game.currentPlayerIndex === traitorIndex;
-  const tokenHolders = game.hauntState.scenarioState?.revealedKnowledgeOfJackHolders || [];
+  const tokenHolders = getHauntKnowledgeTokenHoldersState(game);
   const hauntActionAvailability = getHauntActionAvailabilityState(game, { hauntActionLocked: false });
 
   return (

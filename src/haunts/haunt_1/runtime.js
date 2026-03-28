@@ -127,6 +127,11 @@ export function getTileTokenLabelsState(game, { floor, x, y }) {
   return labels;
 }
 
+export function getKnowledgeTokenHoldersState(game) {
+  if (game.activeHauntId !== "haunt_1" || !game.hauntState) return [];
+  return getScenarioState(game.hauntState).revealedKnowledgeOfJackHolders;
+}
+
 export function getActionAvailabilityState(game, { hauntActionLocked }) {
   if (game.activeHauntId !== "haunt_1" || game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || !game.hauntState) {
     return {
@@ -144,6 +149,53 @@ export function getActionAvailabilityState(game, { hauntActionLocked }) {
     exorciseJacksSpirit: !isTraitorTurn && !hauntActionLocked,
     stalkPrey: isTraitorTurn && !hauntActionLocked,
   };
+}
+
+export function getActionButtonsState(game, context) {
+  const availability = getActionAvailabilityState(game, context);
+  return [
+    {
+      id: "learn-about-jack",
+      label: "Learn about Jack",
+      tone: "secondary",
+      enabled: availability.learnAboutJack,
+    },
+    {
+      id: "study-exorcism",
+      label: "Study Exorcism",
+      tone: "secondary",
+      enabled: availability.studyExorcism,
+    },
+    {
+      id: "exorcise-jacks-spirit",
+      label: "Exorcise Jack's Spirit",
+      tone: "danger",
+      enabled: availability.exorciseJacksSpirit,
+    },
+    {
+      id: "stalk-prey",
+      label: "Stalk Prey",
+      tone: "stairs",
+      enabled: availability.stalkPrey,
+    },
+  ].filter((action) => action.enabled);
+}
+
+export function resolveActionState(game, { actionId, resolveTraitRoll, createDamageChoice }) {
+  if (actionId === "learn-about-jack") {
+    return resolveLearnAboutJackState(game, { resolveTraitRoll });
+  }
+  if (actionId === "study-exorcism") {
+    return resolveStudyExorcismState(game, { resolveTraitRoll, createDamageChoice });
+  }
+  if (actionId === "exorcise-jacks-spirit") {
+    return resolveExorciseJacksSpiritState(game, { resolveTraitRoll });
+  }
+  if (actionId === "stalk-prey") {
+    return resolveStalkPreyState(game);
+  }
+
+  return game;
 }
 
 function isHero(game, playerIndex) {

@@ -1,18 +1,5 @@
 import { GAME_PHASES, HAUNT_TEAMS } from "./hauntPhases";
-import {
-  createInitialScenarioState as createInitialHaunt1ScenarioState,
-  resolveLearnAboutJackState,
-  resolveStudyExorcismState,
-  resolveExorciseJacksSpiritState,
-  resolveStalkPreyState,
-  resolveAfterDamageState,
-  resolveTurnStartState,
-  getCombatKnowledgeBonus,
-  getCombatActorProxyState,
-  getSpecialMoveOptionsState,
-  getTileTokenLabelsState,
-  getActionAvailabilityState,
-} from "../haunt_1/runtime";
+import { getHauntRuntimeHooksById } from "../registry";
 
 function createInitialHauntState(game, hauntDefinition, traitorPlayerIndexOverride = null) {
   const defaultTraitorIndex = game.currentPlayerIndex;
@@ -22,7 +9,10 @@ function createInitialHauntState(game, hauntDefinition, traitorPlayerIndexOverri
   const heroPlayerIndexes = game.players.map((_, index) => index).filter((index) => index !== traitorPlayerIndex);
   const firstPlayerAfterSetup = (traitorPlayerIndex + 1) % game.players.length;
 
-  const initialScenarioState = hauntDefinition.id === "haunt_1" ? createInitialHaunt1ScenarioState() : {};
+  const runtimeHooks = getHauntRuntimeHooksById(hauntDefinition.id);
+  const initialScenarioState = runtimeHooks?.createInitialScenarioState
+    ? runtimeHooks.createInitialScenarioState()
+    : {};
 
   return {
     id: hauntDefinition.id,
@@ -277,58 +267,58 @@ export function completeHauntSetupState(game, { getHauntDefinitionById }) {
   };
 }
 
-export function resolveHaunt1LearnAboutJackState(game, { resolveTraitRoll }) {
-  return resolveLearnAboutJackState(game, { resolveTraitRoll });
+export function resolveHauntAfterDamageState(previousGame, nextGame) {
+  const runtimeHooks = getHauntRuntimeHooksById(nextGame.activeHauntId);
+  if (runtimeHooks?.resolveAfterDamageState) {
+    return runtimeHooks.resolveAfterDamageState(previousGame, nextGame);
+  }
+  return nextGame;
 }
 
-export function resolveHaunt1StudyExorcismState(game, { resolveTraitRoll, createDamageChoice }) {
-  return resolveStudyExorcismState(game, { resolveTraitRoll, createDamageChoice });
+export function resolveHauntTurnStartState(game, { rollDice }) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.resolveTurnStartState) {
+    return runtimeHooks.resolveTurnStartState(game, { rollDice });
+  }
+  return game;
 }
 
-export function resolveHaunt1ExorciseJacksSpiritState(game, { resolveTraitRoll }) {
-  return resolveExorciseJacksSpiritState(game, { resolveTraitRoll });
-}
-
-export function resolveHaunt1StalkPreyState(game) {
-  return resolveStalkPreyState(game);
-}
-
-export function resolveHaunt1AfterDamageState(previousGame, nextGame) {
-  return resolveAfterDamageState(previousGame, nextGame);
-}
-
-export function resolveHaunt1TurnStartState(game, { rollDice }) {
-  return resolveTurnStartState(game, { rollDice });
-}
-
-export function getHaunt1CombatKnowledgeBonus(game, actorIndex, defenderIndex) {
-  return getCombatKnowledgeBonus(game, actorIndex, defenderIndex);
+export function getHauntCombatBonus(game, actorIndex, defenderIndex) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getCombatBonus) {
+    return runtimeHooks.getCombatBonus(game, actorIndex, defenderIndex);
+  }
+  return 0;
 }
 
 export function getHauntCombatActorProxyState(game, actorIndex) {
-  if (game.activeHauntId === "haunt_1") {
-    return getCombatActorProxyState(game, actorIndex);
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getCombatActorProxyState) {
+    return runtimeHooks.getCombatActorProxyState(game, actorIndex);
   }
   return null;
 }
 
 export function getHauntMovementOptionsState(context) {
-  if (context?.game?.activeHauntId === "haunt_1") {
-    return getSpecialMoveOptionsState(context);
+  const runtimeHooks = getHauntRuntimeHooksById(context?.game?.activeHauntId);
+  if (runtimeHooks?.getSpecialMoveOptionsState) {
+    return runtimeHooks.getSpecialMoveOptionsState(context);
   }
   return null;
 }
 
 export function getHauntTileTokenLabelsState(game, position) {
-  if (game.activeHauntId === "haunt_1") {
-    return getTileTokenLabelsState(game, position);
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getTileTokenLabelsState) {
+    return runtimeHooks.getTileTokenLabelsState(game, position);
   }
   return [];
 }
 
 export function getHauntActionAvailabilityState(game, context) {
-  if (game.activeHauntId === "haunt_1") {
-    return getActionAvailabilityState(game, context);
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getActionAvailabilityState) {
+    return runtimeHooks.getActionAvailabilityState(game, context);
   }
   return {
     learnAboutJack: false,
@@ -338,54 +328,27 @@ export function getHauntActionAvailabilityState(game, context) {
   };
 }
 
+export function getHauntKnowledgeTokenHoldersState(game) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getKnowledgeTokenHoldersState) {
+    return runtimeHooks.getKnowledgeTokenHoldersState(game);
+  }
+  return [];
+}
+
 export function getHauntActionButtonsState(game, context) {
-  if (game.activeHauntId === "haunt_1") {
-    const availability = getActionAvailabilityState(game, context);
-    return [
-      {
-        id: "learn-about-jack",
-        label: "Learn about Jack",
-        tone: "secondary",
-        enabled: availability.learnAboutJack,
-      },
-      {
-        id: "study-exorcism",
-        label: "Study Exorcism",
-        tone: "secondary",
-        enabled: availability.studyExorcism,
-      },
-      {
-        id: "exorcise-jacks-spirit",
-        label: "Exorcise Jack's Spirit",
-        tone: "danger",
-        enabled: availability.exorciseJacksSpirit,
-      },
-      {
-        id: "stalk-prey",
-        label: "Stalk Prey",
-        tone: "stairs",
-        enabled: availability.stalkPrey,
-      },
-    ].filter((action) => action.enabled);
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getActionButtonsState) {
+    return runtimeHooks.getActionButtonsState(game, context);
   }
 
   return [];
 }
 
 export function resolveHauntActionState(game, { actionId, resolveTraitRoll, createDamageChoice }) {
-  if (game.activeHauntId === "haunt_1") {
-    if (actionId === "learn-about-jack") {
-      return resolveLearnAboutJackState(game, { resolveTraitRoll });
-    }
-    if (actionId === "study-exorcism") {
-      return resolveStudyExorcismState(game, { resolveTraitRoll, createDamageChoice });
-    }
-    if (actionId === "exorcise-jacks-spirit") {
-      return resolveExorciseJacksSpiritState(game, { resolveTraitRoll });
-    }
-    if (actionId === "stalk-prey") {
-      return resolveStalkPreyState(game);
-    }
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.resolveActionState) {
+    return runtimeHooks.resolveActionState(game, { actionId, resolveTraitRoll, createDamageChoice });
   }
 
   return game;

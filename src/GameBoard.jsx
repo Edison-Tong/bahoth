@@ -141,12 +141,12 @@ import {
   GAME_PHASES,
   getHauntActionButtonsState,
   getAllHauntDefinitions,
-  getHaunt1CombatKnowledgeBonus,
+  getHauntCombatBonus,
   getHauntCombatActorProxyState,
   getHauntDefinitionById,
-  resolveHaunt1AfterDamageState,
+  resolveHauntAfterDamageState,
   resolveHauntActionState,
-  resolveHaunt1TurnStartState,
+  resolveHauntTurnStartState,
   startSelectedHauntState,
 } from "./haunts/hauntDomain";
 import { TILES, STARTING_TILES } from "./tiles";
@@ -1288,7 +1288,7 @@ export default function GameBoard({ players, onQuit }) {
     const preRollDice = preRollBonusDice > 0 ? rollDice(preRollBonusDice) : [];
     const preRollDiceTotal = preRollDice.reduce((sum, value) => sum + value, 0);
     const opponentIndex = role === "attacker" ? combatState.defenderIndex : combatState.attackerIndex;
-    const hauntKnowledgeBonus = getHaunt1CombatKnowledgeBonus(game, actorIndex, opponentIndex);
+    const hauntKnowledgeBonus = getHauntCombatBonus(game, actorIndex, opponentIndex);
     const animatedDice = [...rollResult.dice, ...preRollDice];
 
     setGame((g) => {
@@ -1609,7 +1609,7 @@ export default function GameBoard({ players, onQuit }) {
           return passTurnResult.game;
         },
       });
-      const postHauntDamageGame = resolveHaunt1AfterDamageState(g, resolved.game);
+      const postHauntDamageGame = resolveHauntAfterDamageState(g, resolved.game);
       nextCameraFloor = resolved.cameraFloor || passTurnCameraFloor;
       shouldClearDiceAnimation = resolved.clearDiceAnimation;
       return postHauntDamageGame;
@@ -2173,7 +2173,7 @@ export default function GameBoard({ players, onQuit }) {
   const stairIsBacktrack = stairTargetState.isBacktrack;
 
   useEffect(() => {
-    setGame((g) => resolveHaunt1TurnStartState(g, { rollDice }));
+    setGame((g) => resolveHauntTurnStartState(g, { rollDice }));
   }, [game.currentPlayerIndex, game.turnNumber]);
 
   useEffect(() => {
