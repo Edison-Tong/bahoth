@@ -1,6 +1,17 @@
 import { EventTileChoiceTargets } from "../EventResolutionModal";
 import { getHauntTileTokenLabelsState } from "../../haunts/hauntDomain";
 
+function getMonsterTokenAbbreviation(label) {
+  const initials = label
+    .split(/\s+/)
+    .map((word) => word.replace(/[^A-Za-z0-9]/g, "").charAt(0))
+    .filter(Boolean)
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+  return initials || "M";
+}
+
 export default function BoardCanvas({
   boardRef,
   cameraFloor,
@@ -62,11 +73,14 @@ export default function BoardCanvas({
             const tilePlayersHere = playersOnFloor.filter((p) => p.x === tile.x && p.y === tile.y);
             const isCurrentTile =
               currentPlayer.x === tile.x && currentPlayer.y === tile.y && currentPlayer.floor === cameraFloor;
-            const hauntTokenLabels = getHauntTileTokenLabelsState(game, {
+            const hauntTokensRaw = getHauntTileTokenLabelsState(game, {
               floor: cameraFloor,
               x: tile.x,
               y: tile.y,
             });
+            const hauntTokens = hauntTokensRaw.map((token) =>
+              typeof token === "string" ? { label: token, variant: "token" } : token
+            );
 
             return (
               <div
@@ -80,23 +94,43 @@ export default function BoardCanvas({
                 {tile.obstacle && <div className="tile-obstacle">Obstacle</div>}
                 {tile.tokens?.length > 0 && (
                   <div className="tile-token-list">
-                    {tile.tokens.map((token, tokenIndex) => (
-                      <div
-                        key={`${tile.id}-token-${token.type}-${tokenIndex}`}
-                        className={`tile-token tile-token-${token.type}`}
-                      >
-                        {token.type.replace(/-/g, " ")}
-                      </div>
-                    ))}
+                    {tile.tokens.map((token, tokenIndex) =>
+                      token.variant === "monster" ? (
+                        <div
+                          key={`${tile.id}-token-${token.type}-${tokenIndex}`}
+                          className="monster-token"
+                          title={token.type.replace(/-/g, " ")}
+                        >
+                          {getMonsterTokenAbbreviation(token.type)}
+                        </div>
+                      ) : (
+                        <div
+                          key={`${tile.id}-token-${token.type}-${tokenIndex}`}
+                          className={`tile-token tile-token-${token.type}`}
+                        >
+                          {token.type.replace(/-/g, " ")}
+                        </div>
+                      )
+                    )}
                   </div>
                 )}
-                {hauntTokenLabels.length > 0 && (
+                {hauntTokens.length > 0 && (
                   <div className="tile-token-list">
-                    {hauntTokenLabels.map((label) => (
-                      <div key={`haunt-token-${tile.id}-${label}`} className="tile-token">
-                        {label}
-                      </div>
-                    ))}
+                    {hauntTokens.map((token) =>
+                      token.variant === "monster" ? (
+                        <div
+                          key={`haunt-token-${tile.id}-${token.label}`}
+                          className="monster-token"
+                          title={token.label}
+                        >
+                          {getMonsterTokenAbbreviation(token.label)}
+                        </div>
+                      ) : (
+                        <div key={`haunt-token-${tile.id}-${token.label}`} className="tile-token">
+                          {token.label}
+                        </div>
+                      )
+                    )}
                   </div>
                 )}
                 {/* Door indicators */}

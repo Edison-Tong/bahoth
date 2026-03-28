@@ -327,6 +327,24 @@
   color: #d2ecff;
 }
 
+.monster-token {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #fff;
+  background: radial-gradient(circle at 35% 30%, #c75a3a, #5b1c14 58%, #220b08 100%);
+  border: 2px solid rgba(255, 220, 200, 0.28);
+  box-shadow: 0 0 0 2px rgba(96, 18, 12, 0.75), 0 0 14px rgba(160, 34, 26, 0.6);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
 /* Door indicators */
 .tile-doors {
   position: absolute;

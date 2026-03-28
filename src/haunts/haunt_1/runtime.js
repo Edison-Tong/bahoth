@@ -116,12 +116,12 @@ export function getTileTokenLabelsState(game, { floor, x, y }) {
       (placement) => placement.floor === floor && placement.x === x && placement.y === y
     )
   ) {
-    labels.push("Exorcism Circle");
+    labels.push({ label: "Exorcism Circle", variant: "token" });
   }
 
   const spirit = scenarioState.jacksSpirit;
   if (spirit?.active && spirit.floor === floor && spirit.x === x && spirit.y === y) {
-    labels.push("Jack's Spirit");
+    labels.push({ label: "Jack's Spirit", variant: "monster" });
   }
 
   return labels;
