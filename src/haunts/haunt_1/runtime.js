@@ -509,11 +509,25 @@ function getFarthestOmenTileFrom(board, origin) {
   return scored[0];
 }
 
-function healAllTraits(player) {
+function _healAllTraits(player) {
   const nextStatIndex = { ...player.statIndex };
   for (const stat of ["might", "speed", "sanity", "knowledge"]) {
     nextStatIndex[stat] = player.character[stat].length - 1;
   }
+  return {
+    ...player,
+    statIndex: nextStatIndex,
+    isAlive: true,
+  };
+}
+
+function restoreStartingTraits(player) {
+  const nextStatIndex = {
+    might: player.character?.startIndex?.might ?? player.statIndex.might,
+    speed: player.character?.startIndex?.speed ?? player.statIndex.speed,
+    sanity: player.character?.startIndex?.sanity ?? player.statIndex.sanity,
+    knowledge: player.character?.startIndex?.knowledge ?? player.statIndex.knowledge,
+  };
   return {
     ...player,
     statIndex: nextStatIndex,
@@ -1084,7 +1098,7 @@ export function resolveTurnStartState(game, { rollDice }) {
   const corpse = scenarioState.traitorCorpsePosition;
   const onCorpse = corpse && spirit.floor === corpse.floor && spirit.x === corpse.x && spirit.y === corpse.y;
   if (onCorpse) {
-    const healedTraitor = healAllTraits({
+    const healedTraitor = restoreStartingTraits({
       ...traitor,
       floor: corpse.floor,
       x: corpse.x,
