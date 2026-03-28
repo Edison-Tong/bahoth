@@ -1,11 +1,12 @@
 import { backtrackPlayerState, changeFloorState, exploreState, movePlayerState } from "./playerMovementState";
+import { resolveHauntAfterMovementState } from "../haunts/hauntDomain";
 
 export function resolveMovePlayerActionState(
   g,
   { nx, ny, cost, useSkeletonKey = false, rollDice, getLeaveMoveCost, canUseArmedSkeletonKeyMovement }
 ) {
   const skeletonKeyRoll = useSkeletonKey ? rollDice(1)[0] : null;
-  const game = movePlayerState(g, {
+  const movedGame = movePlayerState(g, {
     nx,
     ny,
     cost,
@@ -14,6 +15,7 @@ export function resolveMovePlayerActionState(
     getLeaveMoveCost,
     canUseArmedSkeletonKeyMovement,
   });
+  const game = resolveHauntAfterMovementState(g, movedGame);
 
   if (useSkeletonKey && skeletonKeyRoll !== null) {
     return {
@@ -33,7 +35,7 @@ export function resolveMovePlayerActionState(
 }
 
 export function resolveBacktrackActionState(g) {
-  const game = backtrackPlayerState(g);
+  const game = resolveHauntAfterMovementState(g, backtrackPlayerState(g));
   const player = game.players[game.currentPlayerIndex];
   return {
     game,
@@ -43,15 +45,16 @@ export function resolveBacktrackActionState(g) {
 }
 
 export function resolveExploreActionState(g, { dir, nx, ny, cost, OPPOSITE, getLeaveMoveCost }) {
+  const exploredGame = exploreState(g, {
+    dir,
+    nx,
+    ny,
+    cost,
+    OPPOSITE,
+    getLeaveMoveCost,
+  });
   return {
-    game: exploreState(g, {
-      dir,
-      nx,
-      ny,
-      cost,
-      OPPOSITE,
-      getLeaveMoveCost,
-    }),
+    game: resolveHauntAfterMovementState(g, exploredGame),
     cameraFloor: null,
     diceAnimation: null,
   };
@@ -108,9 +111,10 @@ export function resolveChangeFloorActionState(g, { getConnectedMoveTarget, getLe
     getConnectedMoveTarget,
     getLeaveMoveCost,
   });
+  const nextGame = resolveHauntAfterMovementState(g, resolved.game);
 
   return {
-    game: resolved.game,
+    game: nextGame,
     cameraFloor: resolved.cameraFloor,
     diceAnimation: null,
   };

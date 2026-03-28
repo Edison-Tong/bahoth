@@ -1,6 +1,12 @@
 import { GAME_PHASES, HAUNT_TEAMS } from "../core/hauntPhases";
 
 const JACKS_SPIRIT_SPEED_DICE = 3;
+const STAT_LABELS = {
+  might: "Might",
+  speed: "Speed",
+  sanity: "Sanity",
+  knowledge: "Knowledge",
+};
 
 export function createInitialScenarioState() {
   return {
@@ -210,21 +216,183 @@ export function getActionButtonsState(game, context) {
   ].filter((action) => action.enabled);
 }
 
-export function resolveActionState(game, { actionId, resolveTraitRoll, createDamageChoice }) {
+export function resolveActionState(game, { actionId }) {
   if (actionId === "learn-about-jack") {
-    return resolveLearnAboutJackState(game, { resolveTraitRoll });
+    return resolveLearnAboutJackState(game);
   }
   if (actionId === "study-exorcism") {
-    return resolveStudyExorcismState(game, { resolveTraitRoll, createDamageChoice });
+    return resolveStudyExorcismState(game);
   }
   if (actionId === "exorcise-jacks-spirit") {
-    return resolveExorciseJacksSpiritState(game, { resolveTraitRoll });
+    return resolveExorciseJacksSpiritState(game);
   }
   if (actionId === "stalk-prey") {
     return resolveStalkPreyState(game);
   }
 
   return game;
+}
+
+function getTraitDiceCount(player, stat) {
+  return player?.character?.[stat]?.[player?.statIndex?.[stat]] ?? 0;
+}
+
+function getEmptyLastRoll(stat, total = null) {
+  return {
+    label: STAT_LABELS[stat] || "Trait",
+    stat,
+    dice: [],
+    total,
+    modifier: null,
+    outcomes: [],
+  };
+}
+
+function buildPendingActionRoll(game, actionId, stat, options = {}) {
+  const currentPlayer = getCurrentPlayer(game);
+  if (!currentPlayer) return game;
+
+  const usageKey = options.usageKey || createUsageKey(game, actionId);
+  const baseDiceCount = Number.isInteger(options.baseDiceCount)
+    ? options.baseDiceCount
+    : getTraitDiceCount(currentPlayer, stat);
+  const bonus = Number.isFinite(options.bonus) ? options.bonus : 0;
+  const threshold = Number.isFinite(options.threshold) ? options.threshold : 0;
+
+  return {
+    ...game,
+    hauntActionRoll: {
+      actionId,
+      actorIndex: game.currentPlayerIndex,
+      usageKey,
+      stat,
+      label: STAT_LABELS[stat] || "Trait",
+      baseDiceCount,
+      threshold,
+      bonus,
+      forcedTotal: null,
+      status: "awaiting-roll",
+      lastRoll: getEmptyLastRoll(stat),
+    },
+  };
+}
+
+function getActionRoll(game) {
+  return game.hauntActionRoll || null;
+}
+
+function getActionRollResult(game) {
+  const rollState = getActionRoll(game);
+  const rollTotal = Number(rollState?.lastRoll?.total);
+  if (!rollState || !Number.isFinite(rollTotal)) return null;
+
+  const bonus = Number(rollState.bonus) || 0;
+  const effectiveTotal = rollTotal + bonus;
+  return {
+    actionId: rollState.actionId,
+    stat: rollState.stat,
+    rollTotal,
+    bonus,
+    effectiveTotal,
+    threshold: Number(rollState.threshold) || 0,
+    success: effectiveTotal >= (Number(rollState.threshold) || 0),
+  };
+}
+
+export function getActionRollPreviewState(game) {
+  if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1") {
+    return null;
+  }
+  const rollResult = getActionRollResult(game);
+  if (!rollResult) return null;
+
+  if (rollResult.actionId === "learn-about-jack") {
+    return {
+      title: "Learn about Jack",
+      thresholdLabel: "Need 5+ Knowledge",
+      outcomeLabel: rollResult.success ? "Success" : "Failed",
+      outcomeDescription: rollResult.success ? "A hero gains Knowledge of Jack." : "No hero gains Knowledge of Jack.",
+      totalLabel: `${rollResult.rollTotal}`,
+    };
+  }
+
+  if (rollResult.actionId === "study-the-exorcism") {
+    return {
+      title: "Study Exorcism",
+      thresholdLabel: "Need 5+ Knowledge",
+      outcomeLabel: rollResult.success ? "Success" : "Failed",
+      outcomeDescription: rollResult.success ? "Place or move an Exorcism Circle token." : "Take 2 Mental damage.",
+      totalLabel: `${rollResult.rollTotal}`,
+    };
+  }
+
+  if (rollResult.actionId === "exorcise-jacks-spirit") {
+    return {
+      title: "Exorcise Jack's Spirit",
+      thresholdLabel: "Need 7+ (Sanity + Exorcism bonus)",
+      outcomeLabel: rollResult.success ? "Success" : "Failed",
+      outcomeDescription: rollResult.success
+        ? "Jack's Spirit is exorcised and heroes win."
+        : "Each living hero takes 1 Physical damage.",
+      totalLabel:
+        rollResult.bonus > 0
+          ? `${rollResult.rollTotal} + ${rollResult.bonus} = ${rollResult.effectiveTotal}`
+          : `${rollResult.rollTotal}`,
+    };
+  }
+
+  return null;
+}
+
+function clearHauntActionRoll(game) {
+  if (!game.hauntActionRoll) return game;
+  return {
+    ...game,
+    hauntActionRoll: null,
+  };
+}
+
+function syncSpiritWithTraitorPosition(previousGame, nextGame) {
+  if (nextGame.activeHauntId !== "haunt_1" || !nextGame.hauntState) return nextGame;
+  const traitorIndex = nextGame.hauntState.traitorPlayerIndex;
+  if (nextGame.currentPlayerIndex !== traitorIndex) return nextGame;
+
+  const previousTraitor = previousGame.players?.[traitorIndex];
+  const nextTraitor = nextGame.players?.[traitorIndex];
+  if (!previousTraitor || !nextTraitor) return nextGame;
+
+  const scenarioState = getScenarioState(nextGame.hauntState);
+  const spirit = scenarioState.jacksSpirit;
+  if (nextTraitor.isAlive || !spirit?.active) return nextGame;
+
+  const moved =
+    previousTraitor.floor !== nextTraitor.floor ||
+    previousTraitor.x !== nextTraitor.x ||
+    previousTraitor.y !== nextTraitor.y;
+  if (!moved && spirit.floor === nextTraitor.floor && spirit.x === nextTraitor.x && spirit.y === nextTraitor.y) {
+    return nextGame;
+  }
+
+  return {
+    ...nextGame,
+    hauntState: {
+      ...nextGame.hauntState,
+      scenarioState: {
+        ...scenarioState,
+        jacksSpirit: {
+          ...spirit,
+          floor: nextTraitor.floor,
+          x: nextTraitor.x,
+          y: nextTraitor.y,
+          movesLeft: nextTraitor.movesLeft,
+        },
+      },
+    },
+  };
+}
+
+export function resolveAfterMovementState(previousGame, nextGame) {
+  return syncSpiritWithTraitorPosition(previousGame, nextGame);
 }
 
 function isHero(game, playerIndex) {
@@ -297,7 +465,7 @@ function healAllTraits(player) {
   };
 }
 
-export function resolveLearnAboutJackState(game, { resolveTraitRoll }) {
+export function resolveLearnAboutJackState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
     return game;
   }
@@ -334,52 +502,16 @@ export function resolveLearnAboutJackState(game, { resolveTraitRoll }) {
     };
   }
 
-  const roll = resolveTraitRoll(currentPlayer, {
-    stat: "knowledge",
-    baseDiceCount: currentPlayer.character.knowledge[currentPlayer.statIndex.knowledge],
-    context: "haunt",
-    board: game.board,
-  });
-
-  let nextHauntState = markHauntActionUsed(game.hauntState, usageKey);
-  const scenarioState = getScenarioState(nextHauntState);
-
-  if (roll.total >= 5) {
-    const tokenHolders = new Set(scenarioState.revealedKnowledgeOfJackHolders);
-    const heroWithoutToken = getHeroIndexes(game).find((playerIndex) => !tokenHolders.has(playerIndex));
-
-    if (heroWithoutToken == null) {
-      return {
-        ...game,
-        hauntState: nextHauntState,
-        message: `${currentPlayer.name} rolled ${roll.total}, but all heroes already have Knowledge of Jack.`,
-      };
-    }
-
-    tokenHolders.add(heroWithoutToken);
-    nextHauntState = {
-      ...nextHauntState,
-      scenarioState: {
-        ...scenarioState,
-        revealedKnowledgeOfJackHolders: Array.from(tokenHolders),
-      },
-    };
-
-    return {
-      ...game,
-      hauntState: nextHauntState,
-      message: `${currentPlayer.name} rolled ${roll.total}. ${game.players[heroWithoutToken].name} gains Knowledge of Jack.`,
-    };
-  }
-
   return {
-    ...game,
-    hauntState: nextHauntState,
-    message: `${currentPlayer.name} rolled ${roll.total}. Learn about Jack failed.`,
+    ...buildPendingActionRoll(game, "learn-about-jack", "knowledge", {
+      usageKey,
+      threshold: 5,
+    }),
+    message: `${currentPlayer.name} prepares to Learn about Jack. Roll Knowledge to resolve.`,
   };
 }
 
-export function resolveStudyExorcismState(game, { resolveTraitRoll, createDamageChoice }) {
+export function resolveStudyExorcismState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
     return game;
   }
@@ -416,75 +548,16 @@ export function resolveStudyExorcismState(game, { resolveTraitRoll, createDamage
     };
   }
 
-  const roll = resolveTraitRoll(currentPlayer, {
-    stat: "knowledge",
-    baseDiceCount: currentPlayer.character.knowledge[currentPlayer.statIndex.knowledge],
-    context: "haunt",
-    board: game.board,
-  });
-
-  let nextHauntState = markHauntActionUsed(game.hauntState, usageKey);
-  const scenarioState = getScenarioState(nextHauntState);
-
-  if (roll.total >= 5) {
-    const currentPlacement = {
-      floor: currentPlayer.floor,
-      x: currentPlayer.x,
-      y: currentPlayer.y,
-    };
-    const alreadyPlacedHere = scenarioState.exorcismTokenPlacements.some(
-      (placement) =>
-        placement.floor === currentPlacement.floor &&
-        placement.x === currentPlacement.x &&
-        placement.y === currentPlacement.y
-    );
-
-    let nextPlacements = scenarioState.exorcismTokenPlacements;
-    let tokenMessage = "";
-
-    if (alreadyPlacedHere) {
-      tokenMessage = "Exorcism Circle is already on this tile.";
-    } else if (nextPlacements.length < 2) {
-      nextPlacements = [...nextPlacements, currentPlacement];
-      tokenMessage = "Placed an Exorcism Circle token.";
-    } else {
-      nextPlacements = [nextPlacements[1], currentPlacement];
-      tokenMessage = "Moved an Exorcism Circle token.";
-    }
-
-    nextHauntState = {
-      ...nextHauntState,
-      scenarioState: {
-        ...scenarioState,
-        exorcismTokenPlacements: nextPlacements,
-      },
-    };
-
-    return {
-      ...game,
-      hauntState: nextHauntState,
-      message: `${currentPlayer.name} rolled ${roll.total}. ${tokenMessage}`,
-    };
-  }
-
-  const damageChoice = createDamageChoice(
-    {
-      damage: 2,
-      damageType: "mental",
-      sourceName: "Study the Exorcism",
-    },
-    currentPlayer
-  );
-
   return {
-    ...game,
-    hauntState: nextHauntState,
-    damageChoice,
-    message: `${currentPlayer.name} rolled ${roll.total}. Study failed and takes 2 Mental damage.`,
+    ...buildPendingActionRoll(game, "study-the-exorcism", "knowledge", {
+      usageKey,
+      threshold: 5,
+    }),
+    message: `${currentPlayer.name} prepares to Study the Exorcism. Roll Knowledge to resolve.`,
   };
 }
 
-export function resolveExorciseJacksSpiritState(game, { resolveTraitRoll }) {
+export function resolveExorciseJacksSpiritState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
     return game;
   }
@@ -533,51 +606,159 @@ export function resolveExorciseJacksSpiritState(game, { resolveTraitRoll }) {
   const exorcismBonus = scenarioState.exorcismTokenPlacements.filter(
     (placement) => placement.floor === currentPlayer.floor
   ).length;
-  const roll = resolveTraitRoll(currentPlayer, {
-    stat: "sanity",
-    baseDiceCount: currentPlayer.character.sanity[currentPlayer.statIndex.sanity],
-    context: "haunt",
-    board: game.board,
-  });
-  const total = roll.total + exorcismBonus;
-
-  let nextHauntState = markHauntActionUsed(game.hauntState, usageKey);
-
-  if (total >= 7) {
-    nextHauntState = {
-      ...nextHauntState,
-      scenarioState: {
-        ...scenarioState,
-        jacksSpirit: {
-          ...spirit,
-          active: false,
-          movesLeft: 0,
-          speedRoll: [],
-          speedTotal: 0,
-        },
-      },
-    };
-
-    return {
-      ...game,
-      hauntState: nextHauntState,
-      gamePhase: GAME_PHASES.GAME_OVER,
-      message: `${currentPlayer.name} rolled ${roll.total} + ${exorcismBonus} = ${total}. Jack's Spirit is exorcised. Heroes win!`,
-    };
-  }
-
-  let nextPlayers = game.players;
-  for (const heroIndex of getHeroIndexes(game)) {
-    if (!nextPlayers[heroIndex]?.isAlive) continue;
-    nextPlayers = applyPhysicalDamageOne(nextPlayers, heroIndex);
-  }
 
   return {
-    ...game,
-    players: nextPlayers,
-    hauntState: nextHauntState,
-    message: `${currentPlayer.name} rolled ${roll.total} + ${exorcismBonus} = ${total}. Exorcism failed. Each hero takes 1 Physical damage.`,
+    ...buildPendingActionRoll(game, "exorcise-jacks-spirit", "sanity", {
+      usageKey,
+      threshold: 7,
+      bonus: exorcismBonus,
+    }),
+    message: `${currentPlayer.name} prepares to Exorcise Jack's Spirit. Roll Sanity to resolve.`,
   };
+}
+
+export function resolveActionRollContinueState(game, { createDamageChoice }) {
+  if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
+    return game;
+  }
+
+  const actionRoll = getActionRoll(game);
+  const rollResult = getActionRollResult(game);
+  if (!actionRoll || !rollResult || actionRoll.status !== "rolled-pending-continue") {
+    return game;
+  }
+
+  const actor = game.players[actionRoll.actorIndex] || getCurrentPlayer(game);
+  const actorName = actor?.name || "Explorer";
+  const scenarioState = getScenarioState(game.hauntState);
+  const nextHauntState = markHauntActionUsed(game.hauntState, actionRoll.usageKey);
+
+  if (rollResult.actionId === "learn-about-jack") {
+    if (!rollResult.success) {
+      return {
+        ...clearHauntActionRoll(game),
+        hauntState: nextHauntState,
+        message: `${actorName} rolled ${rollResult.rollTotal}. Learn about Jack failed.`,
+      };
+    }
+
+    const tokenHolders = new Set(scenarioState.revealedKnowledgeOfJackHolders);
+    const heroWithoutToken = getHeroIndexes(game).find((playerIndex) => !tokenHolders.has(playerIndex));
+    if (heroWithoutToken == null) {
+      return {
+        ...clearHauntActionRoll(game),
+        hauntState: nextHauntState,
+        message: `${actorName} rolled ${rollResult.rollTotal}, but all heroes already have Knowledge of Jack.`,
+      };
+    }
+
+    tokenHolders.add(heroWithoutToken);
+    return {
+      ...clearHauntActionRoll(game),
+      hauntState: {
+        ...nextHauntState,
+        scenarioState: {
+          ...scenarioState,
+          revealedKnowledgeOfJackHolders: Array.from(tokenHolders),
+        },
+      },
+      message: `${actorName} rolled ${rollResult.rollTotal}. ${game.players[heroWithoutToken].name} gains Knowledge of Jack.`,
+    };
+  }
+
+  if (rollResult.actionId === "study-the-exorcism") {
+    if (!rollResult.success) {
+      const damageChoice = createDamageChoice(
+        {
+          damage: 2,
+          damageType: "mental",
+          sourceName: "Study the Exorcism",
+        },
+        actor
+      );
+      return {
+        ...clearHauntActionRoll(game),
+        hauntState: nextHauntState,
+        damageChoice,
+        message: `${actorName} rolled ${rollResult.rollTotal}. Study failed and takes 2 Mental damage.`,
+      };
+    }
+
+    const currentPlacement = {
+      floor: actor.floor,
+      x: actor.x,
+      y: actor.y,
+    };
+    const alreadyPlacedHere = scenarioState.exorcismTokenPlacements.some(
+      (placement) =>
+        placement.floor === currentPlacement.floor &&
+        placement.x === currentPlacement.x &&
+        placement.y === currentPlacement.y
+    );
+
+    let nextPlacements = scenarioState.exorcismTokenPlacements;
+    let tokenMessage = "";
+    if (alreadyPlacedHere) {
+      tokenMessage = "Exorcism Circle is already on this tile.";
+    } else if (nextPlacements.length < 2) {
+      nextPlacements = [...nextPlacements, currentPlacement];
+      tokenMessage = "Placed an Exorcism Circle token.";
+    } else {
+      nextPlacements = [nextPlacements[1], currentPlacement];
+      tokenMessage = "Moved an Exorcism Circle token.";
+    }
+
+    return {
+      ...clearHauntActionRoll(game),
+      hauntState: {
+        ...nextHauntState,
+        scenarioState: {
+          ...scenarioState,
+          exorcismTokenPlacements: nextPlacements,
+        },
+      },
+      message: `${actorName} rolled ${rollResult.rollTotal}. ${tokenMessage}`,
+    };
+  }
+
+  if (rollResult.actionId === "exorcise-jacks-spirit") {
+    const spirit = scenarioState.jacksSpirit;
+    if (rollResult.success) {
+      return {
+        ...clearHauntActionRoll(game),
+        hauntState: {
+          ...nextHauntState,
+          scenarioState: {
+            ...scenarioState,
+            jacksSpirit: {
+              ...spirit,
+              active: false,
+              movesLeft: 0,
+              speedRoll: [],
+              speedTotal: 0,
+            },
+          },
+        },
+        gamePhase: GAME_PHASES.GAME_OVER,
+        message: `${actorName} rolled ${rollResult.rollTotal} + ${rollResult.bonus} = ${rollResult.effectiveTotal}. Jack's Spirit is exorcised. Heroes win!`,
+      };
+    }
+
+    let nextPlayers = game.players;
+    for (const heroIndex of getHeroIndexes(game)) {
+      if (!nextPlayers[heroIndex]?.isAlive) continue;
+      nextPlayers = applyPhysicalDamageOne(nextPlayers, heroIndex);
+    }
+
+    return {
+      ...clearHauntActionRoll(game),
+      players: nextPlayers,
+      hauntState: nextHauntState,
+      message: `${actorName} rolled ${rollResult.rollTotal} + ${rollResult.bonus} = ${rollResult.effectiveTotal}. Exorcism failed. Each hero takes 1 Physical damage.`,
+    };
+  }
+
+  return clearHauntActionRoll(game);
 }
 
 export function resolveStalkPreyState(game) {
@@ -654,12 +835,29 @@ export function resolveStalkPreyState(game) {
         }
       : player
   );
+  const scenarioState = getScenarioState(game.hauntState);
+  const spirit = scenarioState.jacksSpirit;
+  const nextScenarioState =
+    !game.players[traitorIndex]?.isAlive && spirit?.active
+      ? {
+          ...scenarioState,
+          jacksSpirit: {
+            ...spirit,
+            floor: destination.floor,
+            x: destination.x,
+            y: destination.y,
+          },
+        }
+      : scenarioState;
 
   return {
-    ...game,
+    ...clearHauntActionRoll(game),
     players: nextPlayers,
     movePath: [{ x: destination.x, y: destination.y, floor: destination.floor, cost: 0 }],
-    hauntState: markHauntActionUsed(game.hauntState, usageKey),
+    hauntState: {
+      ...markHauntActionUsed(game.hauntState, usageKey),
+      scenarioState: nextScenarioState,
+    },
     message: `${game.players[traitorIndex].name} stalks the prey to ${destination.name}.`,
   };
 }
@@ -717,16 +915,16 @@ function rollSpiritSpeed(rollDice) {
 
 export function resolveTurnStartState(game, { rollDice }) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
-    return game;
+    return { game, diceAnimation: null };
   }
 
   const traitorIndex = game.hauntState.traitorPlayerIndex;
-  if (game.currentPlayerIndex !== traitorIndex) return game;
+  if (game.currentPlayerIndex !== traitorIndex) return { game, diceAnimation: null };
 
   const traitor = game.players[traitorIndex];
   const scenarioState = getScenarioState(game.hauntState);
   const spirit = scenarioState.jacksSpirit;
-  if (traitor?.isAlive || !spirit?.active) return game;
+  if (traitor?.isAlive || !spirit?.active) return { game, diceAnimation: null };
 
   const corpse = scenarioState.traitorCorpsePosition;
   const onCorpse = corpse && spirit.floor === corpse.floor && spirit.x === corpse.x && spirit.y === corpse.y;
@@ -748,23 +946,27 @@ export function resolveTurnStartState(game, { rollDice }) {
     );
 
     return {
-      ...game,
-      players: nextPlayers,
-      movePath: [{ x: corpse.x, y: corpse.y, floor: corpse.floor, cost: 0 }],
-      hauntState: {
-        ...game.hauntState,
-        scenarioState: {
-          ...scenarioState,
-          jacksSpirit: {
-            ...spirit,
-            active: false,
-            movesLeft: 0,
-            speedRoll: [],
-            speedTotal: 0,
+      game: {
+        ...game,
+        players: nextPlayers,
+        movePath: [{ x: corpse.x, y: corpse.y, floor: corpse.floor, cost: 0 }],
+        hauntState: {
+          ...game.hauntState,
+          scenarioState: {
+            ...scenarioState,
+            traitorCorpsePosition: null,
+            jacksSpirit: {
+              ...spirit,
+              active: false,
+              movesLeft: 0,
+              speedRoll: [],
+              speedTotal: 0,
+            },
           },
         },
+        message: `${traitor.name} reforms at the corpse. Jack's Spirit is removed.`,
       },
-      message: `${traitor.name} reforms at the corpse. Jack's Spirit is removed.`,
+      diceAnimation: null,
     };
   }
 
@@ -776,30 +978,39 @@ export function resolveTurnStartState(game, { rollDice }) {
           floor: spirit.floor,
           x: spirit.x,
           y: spirit.y,
-          movesLeft: speedRoll.moves,
+          movesLeft: 0,
         }
       : player
   );
 
   return {
-    ...game,
-    players: nextPlayers,
-    movePath: [{ x: spirit.x, y: spirit.y, floor: spirit.floor, cost: 0 }],
-    hauntState: {
-      ...game.hauntState,
-      scenarioState: {
-        ...scenarioState,
-        jacksSpirit: {
-          ...spirit,
-          movesLeft: speedRoll.moves,
-          speedRoll: speedRoll.dice,
-          speedTotal: speedRoll.total,
+    game: {
+      ...game,
+      players: nextPlayers,
+      movePath: [{ x: spirit.x, y: spirit.y, floor: spirit.floor, cost: 0 }],
+      hauntState: {
+        ...game.hauntState,
+        scenarioState: {
+          ...scenarioState,
+          jacksSpirit: {
+            ...spirit,
+            movesLeft: 0,
+            speedRoll: [],
+            speedTotal: 0,
+          },
         },
       },
+      message: "Jack's Spirit is rolling for movement...",
     },
-    message: `Jack's Spirit rolls ${speedRoll.dice.join(", ")} (${speedRoll.total}) and may move ${speedRoll.moves} tile${
-      speedRoll.moves !== 1 ? "s" : ""
-    } this turn.`,
+    diceAnimation: {
+      purpose: "monster-speed-roll",
+      final: [...speedRoll.dice],
+      display: Array.from({ length: speedRoll.dice.length }, () => Math.floor(Math.random() * 3)),
+      settled: false,
+      label: "Movement",
+      total: speedRoll.total,
+      monsterName: "Jack's Spirit",
+    },
   };
 }
 

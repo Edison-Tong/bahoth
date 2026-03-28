@@ -5,6 +5,7 @@ export {
   startSelectedHauntState,
   completeHauntSetupState,
   resolveHauntAfterDamageState,
+  resolveHauntAfterMovementState,
   resolveHauntTurnStartState,
   getHauntCombatBonus,
   getHauntCombatActorProxyState,
@@ -15,6 +16,8 @@ export {
   getHauntActionAvailabilityState,
   getHauntActionButtonsState,
   resolveHauntActionState,
+  getHauntActionRollPreviewState,
+  resolveHauntActionRollContinueState,
   advanceHauntRulesViewState,
   beginHauntAfterRulesViewState,
 } from "./core/hauntRuntime";

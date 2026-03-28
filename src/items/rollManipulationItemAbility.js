@@ -4,12 +4,37 @@ function getInventoryCard(game, viewedCard) {
   return owner?.inventory?.[viewedCard.ownerCardIndex] || null;
 }
 
+function getTraitRollSource(game) {
+  const hauntRoll = game.hauntActionRoll;
+  if (hauntRoll?.status === "rolled-pending-continue" && hauntRoll.lastRoll && Array.isArray(hauntRoll.lastRoll.dice)) {
+    return {
+      sourceType: "haunt-action-roll",
+      roll: hauntRoll.lastRoll,
+    };
+  }
+
+  const eventRoll = game.eventState?.lastRoll;
+  if (eventRoll && Array.isArray(eventRoll.dice)) {
+    return {
+      sourceType: "event-last-roll",
+      roll: eventRoll,
+    };
+  }
+
+  return null;
+}
+
 export function getAngelsFeatherUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }, deps) {
   const { getTraitRollRequiredUsageState } = deps;
   const base = getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride });
+  const canApplyToHauntActionRoll =
+    game.hauntActionRoll?.status === "awaiting-roll" || game.hauntActionRoll?.status === "rolled-pending-continue";
+  const canApplyNow = base.canApplyNow || canApplyToHauntActionRoll;
   return {
     ...base,
-    canUseAngelsFeatherNow: base.canUseNow,
+    canApplyNow,
+    canUseNow: canApplyNow || base.canQueueForDrawnEvent,
+    canUseAngelsFeatherNow: canApplyNow || base.canQueueForDrawnEvent,
   };
 }
 
@@ -19,7 +44,8 @@ export function isCreepyDollAvailableThisTurn(game, viewedCard, deps) {
   if (!inventoryCard || inventoryCard.id !== "creepy-doll") return false;
   if (inventoryCard.lastActiveAbilityTurnUsed === game.turnNumber) return false;
 
-  const lastRoll = game.eventState?.lastRoll;
+  const rollSource = getTraitRollSource(game);
+  const lastRoll = rollSource?.roll;
   return !!lastRoll && Array.isArray(lastRoll.dice) && Array.isArray(lastRoll.outcomes) && isTraitRollResult(lastRoll);
 }
 
@@ -34,7 +60,8 @@ export function isLuckyCoinAvailableThisTurn(game, viewedCard, deps) {
     return awaiting.results.some((result) => Array.isArray(result?.dice) && result.dice.some((value) => value === 0));
   }
 
-  const lastRoll = game.eventState?.lastRoll;
+  const rollSource = getTraitRollSource(game);
+  const lastRoll = rollSource?.roll;
   if (!lastRoll || !Array.isArray(lastRoll.dice) || !Array.isArray(lastRoll.outcomes)) return false;
   if (!isTraitRollResult(lastRoll)) return false;
   return lastRoll.dice.some((value) => value === 0);
@@ -45,7 +72,8 @@ export function isRabbitsFootAvailableThisTurn(game, viewedCard) {
   if (!inventoryCard || inventoryCard.id !== "rabbits-foot") return false;
   if (inventoryCard.lastActiveAbilityTurnUsed === game.turnNumber) return false;
 
-  const lastRoll = game.eventState?.lastRoll;
+  const rollSource = getTraitRollSource(game);
+  const lastRoll = rollSource?.roll;
   if (!!lastRoll && Array.isArray(lastRoll.dice) && lastRoll.dice.length > 0 && Array.isArray(lastRoll.outcomes)) {
     return true;
   }
@@ -84,7 +112,9 @@ export function applyCreepyDollNowState(game, viewedCard, deps) {
 
   const owner = game.players[viewedCard.ownerIndex];
   const inventoryCard = owner?.inventory?.[viewedCard.ownerCardIndex];
-  const lastRoll = game.eventState?.lastRoll;
+  const rollSource = getTraitRollSource(game);
+  const lastRoll = rollSource?.roll;
+  const isHauntRoll = rollSource?.sourceType === "haunt-action-roll";
   if (!inventoryCard || inventoryCard.id !== "creepy-doll" || !lastRoll || !Array.isArray(lastRoll.dice)) {
     return { game, closeViewedCard: false, diceAnimation: null };
   }
@@ -123,15 +153,17 @@ export function applyCreepyDollNowState(game, viewedCard, deps) {
     game: {
       ...game,
       players: nextPlayers,
-      eventState: {
-        ...game.eventState,
-        summary: null,
-      },
+      eventState: game.eventState
+        ? {
+            ...game.eventState,
+            summary: null,
+          }
+        : game.eventState,
       message: `${owner.name} uses Creepy Doll, rerolls the trait roll, and loses 1 Sanity...`,
     },
     closeViewedCard: true,
     diceAnimation: {
-      purpose: "event-roll",
+      purpose: isHauntRoll ? "haunt-action-roll" : "event-roll",
       final: rerolledDice,
       display: Array.from({ length: rerolledDice.length }, () => Math.floor(Math.random() * 3)),
       settled: false,
@@ -167,10 +199,13 @@ export function applyLuckyCoinNowState(game, viewedCard, targetRollSelection = n
     sequenceOptions.find((option) => option.value === sequenceTargetValue) ||
     (sequenceOptions.length > 0 && awaiting?.type === "trait-roll-sequence-complete" ? sequenceOptions[0] : null);
 
+  const rollSource = getTraitRollSource(game);
+  const defaultBaseRoll = rollSource?.roll;
+  const isHauntRoll = rollSource?.sourceType === "haunt-action-roll";
   const baseRoll =
     resolvedSequenceTarget && awaiting?.type === "trait-roll-sequence-complete"
       ? awaiting.results?.[Number(String(resolvedSequenceTarget.value).replace("sequence:", ""))]
-      : game.eventState?.lastRoll;
+      : defaultBaseRoll;
   if (!baseRoll || !Array.isArray(baseRoll.dice)) {
     return { game, closeViewedCard: false, diceAnimation: null };
   }
@@ -219,7 +254,7 @@ export function applyLuckyCoinNowState(game, viewedCard, targetRollSelection = n
     },
     closeViewedCard: true,
     diceAnimation: {
-      purpose: "event-partial-reroll",
+      purpose: isHauntRoll ? "haunt-action-partial-reroll" : "event-partial-reroll",
       final: nextDice,
       display: [...baseRoll.dice],
       settled: false,
@@ -260,7 +295,9 @@ export function applyRabbitsFootNowState(game, viewedCard, deps) {
 
   const owner = game.players[viewedCard.ownerIndex];
   const inventoryCard = getInventoryCard(game, viewedCard);
-  const lastRoll = game.eventState?.lastRoll;
+  const rollSource = getTraitRollSource(game);
+  const lastRoll = rollSource?.roll;
+  const isHauntRoll = rollSource?.sourceType === "haunt-action-roll";
   const skeletonKeyRollDice =
     game.tileEffect?.type === "skeleton-key-result" && Array.isArray(game.tileEffect?.dice)
       ? game.tileEffect.dice
@@ -276,7 +313,9 @@ export function applyRabbitsFootNowState(game, viewedCard, deps) {
 
   const sourceType =
     !!lastRoll && Array.isArray(lastRoll.dice) && lastRoll.dice.length > 0 && Array.isArray(lastRoll.outcomes)
-      ? "event-last-roll"
+      ? isHauntRoll
+        ? "haunt-action-roll"
+        : "event-last-roll"
       : "skeleton-key-roll";
 
   return {
@@ -302,11 +341,11 @@ export function getMagicCameraUsageState(params, deps) {
 
   const base = getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride });
   const awaiting = game.eventState?.awaiting;
+  const hauntRoll = game.hauntActionRoll;
   const canApplyNow =
     base.canApplyNow &&
-    awaiting?.type === "roll-ready" &&
-    awaiting.rollKind === "trait-roll" &&
-    awaiting.rollStat === "knowledge";
+    ((awaiting?.type === "roll-ready" && awaiting.rollKind === "trait-roll" && awaiting.rollStat === "knowledge") ||
+      (hauntRoll?.status === "awaiting-roll" && hauntRoll.stat === "knowledge"));
   const canQueueForDrawnEvent =
     base.canQueueForDrawnEvent &&
     drawnEventPrimaryAction?.isTraitRoll &&
@@ -359,7 +398,30 @@ export function applyMagicCameraNowState(game, viewedCard, args = {}, deps) {
   }
 
   const awaiting = game.eventState?.awaiting;
-  if (!owner || !inventoryCard || !awaiting || awaiting.type !== "roll-ready") {
+  if (!owner || !inventoryCard) {
+    return { game, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
+  }
+
+  if (game.hauntActionRoll?.status === "awaiting-roll" && game.hauntActionRoll.stat === "knowledge") {
+    const sanityDiceCount = owner.character?.sanity?.[owner.statIndex?.sanity] ?? game.hauntActionRoll.baseDiceCount;
+    return {
+      game: {
+        ...game,
+        hauntActionRoll: {
+          ...game.hauntActionRoll,
+          stat: "sanity",
+          label: statLabels.sanity,
+          baseDiceCount: sanityDiceCount,
+        },
+        message: `${owner.name} uses ${inventoryCard.name} and will roll Sanity instead of Knowledge.`,
+      },
+      closeViewedCard: true,
+      diceAnimation: null,
+      queueTraitRollOverride: undefined,
+    };
+  }
+
+  if (!awaiting || awaiting.type !== "roll-ready") {
     return { game, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
   }
 
@@ -419,6 +481,42 @@ export function chooseAngelsFeatherValueState(g, total, viewedCard, deps, helper
 
   const forcedTotal = Math.max(0, Math.min(8, Number(total)));
   const awaiting = g.eventState?.awaiting;
+
+  if (canApplyNow && g.hauntActionRoll?.status === "awaiting-roll") {
+    return {
+      game: {
+        ...g,
+        players: nextPlayers,
+        hauntActionRoll: {
+          ...g.hauntActionRoll,
+          forcedTotal,
+        },
+        message: `${owner.name} buries Angel's Feather and sets this roll to ${forcedTotal}.`,
+      },
+      queueTraitRollOverride: null,
+      closeViewedCard: true,
+    };
+  }
+
+  if (canApplyNow && g.hauntActionRoll?.status === "rolled-pending-continue") {
+    return {
+      game: {
+        ...g,
+        players: nextPlayers,
+        hauntActionRoll: {
+          ...g.hauntActionRoll,
+          forcedTotal,
+          lastRoll: {
+            ...(g.hauntActionRoll.lastRoll || {}),
+            total: forcedTotal,
+          },
+        },
+        message: `${owner.name} buries Angel's Feather and sets this roll to ${forcedTotal}.`,
+      },
+      queueTraitRollOverride: null,
+      closeViewedCard: true,
+    };
+  }
 
   if (canApplyNow && awaiting?.type === "roll-ready" && awaiting.rollKind === "trait-roll") {
     const matchedOutcome = getMatchingOutcome(awaiting.outcomes || [], forcedTotal);

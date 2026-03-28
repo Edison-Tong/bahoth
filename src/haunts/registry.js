@@ -2,6 +2,7 @@ import haunt1Definition from "./haunt_1/definition";
 import {
   createInitialScenarioState,
   resolveAfterDamageState,
+  resolveAfterMovementState,
   resolveTurnStartState,
   getCombatKnowledgeBonus,
   getCombatActorProxyState,
@@ -11,7 +12,9 @@ import {
   canDeadPlayerTakeTurn,
   getActionAvailabilityState,
   getActionButtonsState,
+  getActionRollPreviewState,
   resolveActionState,
+  resolveActionRollContinueState,
 } from "./haunt_1/runtime";
 
 const HAUNT_REGISTRY = {
@@ -22,6 +25,7 @@ const HAUNT_RUNTIME_REGISTRY = {
   [haunt1Definition.id]: {
     createInitialScenarioState,
     resolveAfterDamageState,
+    resolveAfterMovementState,
     resolveTurnStartState,
     getCombatBonus: getCombatKnowledgeBonus,
     getCombatActorProxyState,
@@ -31,7 +35,9 @@ const HAUNT_RUNTIME_REGISTRY = {
     canDeadPlayerTakeTurn,
     getActionAvailabilityState,
     getActionButtonsState,
+    getActionRollPreviewState,
     resolveActionState,
+    resolveActionRollContinueState,
   },
 };
 

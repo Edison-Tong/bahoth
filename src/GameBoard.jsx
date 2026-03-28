@@ -42,6 +42,7 @@ import HauntRollOverlay from "./components/gameboard/overlays/HauntRollOverlay";
 import TileEffectOverlay from "./components/gameboard/overlays/TileEffectOverlay";
 import HauntSetupOverlay from "./components/gameboard/overlays/HauntSetupOverlay";
 import HauntRulesViewerOverlay from "./components/gameboard/overlays/HauntRulesViewerOverlay";
+import HauntActionRollOverlay from "./components/gameboard/overlays/HauntActionRollOverlay";
 import DebugModePanel from "./components/gameboard/DebugModePanel";
 import GameBoardActions from "./components/gameboard/GameBoardActions";
 import PlayerSidebar from "./components/gameboard/PlayerSidebar";
@@ -140,10 +141,12 @@ import {
   beginHauntAfterRulesViewState,
   GAME_PHASES,
   getHauntActionButtonsState,
+  getHauntActionRollPreviewState,
   getAllHauntDefinitions,
   getHauntCombatBonus,
   getHauntCombatActorProxyState,
   getHauntDefinitionById,
+  resolveHauntActionRollContinueState,
   resolveHauntAfterDamageState,
   resolveHauntActionState,
   resolveHauntTurnStartState,
@@ -339,7 +342,9 @@ export default function GameBoard({ players, onQuit }) {
   const boardRef = useRef(null);
   const gameplayLockedByHauntSetup = game.gamePhase === GAME_PHASES.HAUNT_SETUP;
   const gameplayLockedByCombat = !!game.combatState;
-  const gameplayUiLocked = debugModeEnabled || gameplayLockedByHauntSetup || gameplayLockedByCombat;
+  const gameplayLockedByHauntActionRoll = !!game.hauntActionRoll;
+  const gameplayUiLocked =
+    debugModeEnabled || gameplayLockedByHauntSetup || gameplayLockedByCombat || gameplayLockedByHauntActionRoll;
 
   useEffect(() => {
     queuedTraitRollOverrideRef.current = queuedTraitRollOverride;
@@ -426,6 +431,91 @@ export default function GameBoard({ players, onQuit }) {
             ? `THE HAUNT BEGINS! Rolled ${baseTotal} with ${da.omenCount} dice!`
             : `Safe... Rolled ${baseTotal} with ${da.omenCount} dice.`,
         }));
+      } else if (da.purpose === "haunt-action-roll" || da.purpose === "haunt-action-partial-reroll") {
+        setGame((g) => {
+          const actionRoll = g.hauntActionRoll;
+          if (!actionRoll) return g;
+          const rollTotal = Number.isFinite(da.total) ? da.total : baseTotal;
+          const actor = g.players[actionRoll.actorIndex] || g.players[g.currentPlayerIndex];
+          const sanityLoss = Math.max(0, Number(da.sanityLoss) || 0);
+          const nextPlayers =
+            sanityLoss > 0 && Number.isInteger(da.ownerIndex)
+              ? g.players.map((player, playerIndex) => {
+                  if (playerIndex !== da.ownerIndex) return player;
+                  const nextSanity = Math.max(0, (player.statIndex?.sanity ?? 0) - sanityLoss);
+                  const nextStatIndex = {
+                    ...player.statIndex,
+                    sanity: nextSanity,
+                  };
+                  return {
+                    ...player,
+                    statIndex: nextStatIndex,
+                    isAlive: Object.values(nextStatIndex).every((value) => value > 0),
+                  };
+                })
+              : g.players;
+          return {
+            ...g,
+            players: nextPlayers,
+            rabbitFootPendingReroll: null,
+            hauntActionRoll: {
+              ...actionRoll,
+              status: "rolled-pending-continue",
+              lastRoll: {
+                ...(actionRoll.lastRoll || {}),
+                label: da.label || actionRoll.label || "Trait",
+                stat: actionRoll.stat,
+                dice: [...da.final],
+                total: rollTotal,
+                modifier: da.modifier || null,
+                outcomes: Array.isArray(da.outcomes) ? [...da.outcomes] : [],
+              },
+            },
+            message: `${actor?.name || "Explorer"} rolled ${rollTotal}. Review the result and press Continue to apply it.`,
+          };
+        });
+        setDiceAnimation(null);
+      } else if (da.purpose === "monster-speed-roll") {
+        setGame((g) => {
+          const scenarioState = g.hauntState?.scenarioState;
+          const spirit = scenarioState?.jacksSpirit;
+          if (!spirit?.active) return g;
+          const total = Number.isFinite(da.total) ? da.total : baseTotal;
+          const moves = Math.max(1, total);
+          const traitorIndex = g.hauntState?.traitorPlayerIndex;
+          const nextPlayers = g.players.map((player, index) =>
+            index === traitorIndex
+              ? {
+                  ...player,
+                  floor: spirit.floor,
+                  x: spirit.x,
+                  y: spirit.y,
+                  movesLeft: moves,
+                }
+              : player
+          );
+          return {
+            ...g,
+            players: nextPlayers,
+            movePath: [{ x: spirit.x, y: spirit.y, floor: spirit.floor, cost: 0 }],
+            hauntState: {
+              ...g.hauntState,
+              scenarioState: {
+                ...scenarioState,
+                jacksSpirit: {
+                  ...spirit,
+                  movesLeft: moves,
+                  speedRoll: [...da.final],
+                  speedTotal: total,
+                },
+              },
+            },
+            message: `${da.monsterName || "Jack's Spirit"} rolls ${da.final.join(", ")} (${total}) and may move ${moves} tile${
+              moves !== 1 ? "s" : ""
+            } this turn.`,
+          };
+        });
+        setDiceAnimation(null);
       } else if (
         da.purpose === "event-roll" ||
         da.purpose === "event-partial-reroll" ||
@@ -1968,10 +2058,36 @@ export default function GameBoard({ players, onQuit }) {
 
   function handleUseHauntAction(actionId) {
     if (debugModeEnabled || game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return;
+    const nextGame = resolveHauntActionState(game, {
+      actionId,
+      resolveTraitRoll,
+      createDamageChoice,
+    });
+    setGame(nextGame);
+
+    const actionRoll = nextGame.hauntActionRoll;
+    if (!actionRoll || actionRoll.status !== "awaiting-roll") return;
+
+    const forcedTotal = Number.isFinite(actionRoll.forcedTotal) ? Number(actionRoll.forcedTotal) : null;
+    const diceCount = Math.max(0, Number(actionRoll.baseDiceCount) || 0);
+    const finalDice = forcedTotal !== null ? [forcedTotal] : rollDice(diceCount);
+    const rollTotal = forcedTotal !== null ? forcedTotal : finalDice.reduce((sum, value) => sum + value, 0);
+
+    setDiceAnimation({
+      purpose: "haunt-action-roll",
+      final: finalDice,
+      display: Array.from({ length: finalDice.length }, () => Math.floor(Math.random() * 3)),
+      settled: false,
+      label: actionRoll.label || "Trait",
+      total: rollTotal,
+      modifier: null,
+      outcomes: [],
+    });
+  }
+
+  function handleContinueHauntActionRoll() {
     setGame((g) =>
-      resolveHauntActionState(g, {
-        actionId,
-        resolveTraitRoll,
+      resolveHauntActionRollContinueState(g, {
         createDamageChoice,
       })
     );
@@ -2162,6 +2278,7 @@ export default function GameBoard({ players, onQuit }) {
     isItemAbilityTileChoiceAwaiting(eventState) ||
     hasUnconfirmedMovePathState(game);
   const hauntActionButtons = getHauntActionButtonsState(game, { hauntActionLocked });
+  const hauntActionRollPreview = getHauntActionRollPreviewState(game);
   const stairTargetState = getStairTargetState({
     game,
     currentPlayer,
@@ -2173,7 +2290,14 @@ export default function GameBoard({ players, onQuit }) {
   const stairIsBacktrack = stairTargetState.isBacktrack;
 
   useEffect(() => {
-    setGame((g) => resolveHauntTurnStartState(g, { rollDice }));
+    setGame((g) => {
+      const resolved = resolveHauntTurnStartState(g, { rollDice });
+      if (!resolved || !resolved.game) return g;
+      if (resolved.diceAnimation) {
+        setDiceAnimation(resolved.diceAnimation);
+      }
+      return resolved.game;
+    });
   }, [game.currentPlayerIndex, game.turnNumber]);
 
   useEffect(() => {
@@ -2540,6 +2664,14 @@ export default function GameBoard({ players, onQuit }) {
           renderDiceRow={(props) => <DiceRow {...props} />}
         />
       )}
+
+      <HauntActionRollOverlay
+        game={game}
+        diceAnimation={diceAnimation}
+        hauntActionRollPreview={hauntActionRollPreview}
+        onContinue={handleContinueHauntActionRoll}
+        renderDiceRow={(props) => <DiceRow {...props} />}
+      />
 
       <DiceRollOverlay diceAnimation={diceAnimation} renderDiceRow={(props) => <DiceRow {...props} />} />
 

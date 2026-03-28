@@ -225,6 +225,7 @@ function isTraitRollResult(lastRoll) {
 }
 
 function isTraitRollJustMadeContext(game) {
+  if (game.hauntActionRoll?.status === "rolled-pending-continue") return true;
   if (isTraitRollResult(game.eventState?.lastRoll)) return true;
 
   const awaiting = game.eventState?.awaiting;
@@ -267,9 +268,11 @@ function canUseNormalMovementNow(game, viewedCard) {
 
 function getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }) {
   const awaiting = game.eventState?.awaiting;
+  const hauntActionRoll = game.hauntActionRoll;
   const canApplyNow =
     (awaiting?.type === "roll-ready" && awaiting.rollKind === "trait-roll" && awaiting.overrideTotal === undefined) ||
-    (awaiting?.type === "trait-roll-sequence-ready" && awaiting.overrideTotal === undefined);
+    (awaiting?.type === "trait-roll-sequence-ready" && awaiting.overrideTotal === undefined) ||
+    (hauntActionRoll?.status === "awaiting-roll" && hauntActionRoll.forcedTotal === null);
   const canQueueForDrawnEvent =
     game.drawnCard?.type === "event" &&
     drawnEventPrimaryAction?.type === "roll" &&
@@ -1008,7 +1011,11 @@ export function applySkeletonKeyNowState(g, viewedCard) {
 export function chooseRabbitFootDieState(g, dieIndex) {
   const pending = g.rabbitFootPendingReroll;
   const dice =
-    pending?.sourceType === "skeleton-key-roll" ? getSkeletonKeyResultDice(g.tileEffect) : g.eventState?.lastRoll?.dice;
+    pending?.sourceType === "skeleton-key-roll"
+      ? getSkeletonKeyResultDice(g.tileEffect)
+      : pending?.sourceType === "haunt-action-roll"
+        ? g.hauntActionRoll?.lastRoll?.dice
+        : g.eventState?.lastRoll?.dice;
   const selectedIndex = Number(dieIndex);
   if (!pending || !Array.isArray(dice)) return g;
   if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= dice.length) return g;
@@ -1025,18 +1032,24 @@ export function chooseRabbitFootDieState(g, dieIndex) {
 export function applyRabbitFootRerollState(g) {
   const pending = g.rabbitFootPendingReroll;
   const isSkeletonKeyRoll = pending?.sourceType === "skeleton-key-roll";
+  const isHauntActionRoll = pending?.sourceType === "haunt-action-roll";
   const lastRoll = g.eventState?.lastRoll;
+  const hauntLastRoll = g.hauntActionRoll?.lastRoll;
   const skeletonKeyRollDice = getSkeletonKeyResultDice(g.tileEffect);
 
   if (
     !pending ||
-    (!isSkeletonKeyRoll && (!lastRoll || !Array.isArray(lastRoll.dice) || !Array.isArray(lastRoll.outcomes))) ||
+    (!isSkeletonKeyRoll &&
+      !isHauntActionRoll &&
+      (!lastRoll || !Array.isArray(lastRoll.dice) || !Array.isArray(lastRoll.outcomes))) ||
+    (isHauntActionRoll &&
+      (!hauntLastRoll || !Array.isArray(hauntLastRoll.dice) || !Array.isArray(hauntLastRoll.outcomes))) ||
     (isSkeletonKeyRoll && (!skeletonKeyRollDice || skeletonKeyRollDice.length === 0))
   ) {
     return { game: g, diceAnimation: null };
   }
 
-  const sourceDice = isSkeletonKeyRoll ? skeletonKeyRollDice : lastRoll.dice;
+  const sourceDice = isSkeletonKeyRoll ? skeletonKeyRollDice : isHauntActionRoll ? hauntLastRoll.dice : lastRoll.dice;
 
   const selectedIndex = Number(pending.selectedDieIndex);
   if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= sourceDice.length) {
@@ -1053,7 +1066,9 @@ export function applyRabbitFootRerollState(g) {
   nextDice[selectedIndex] = rerolledValue;
 
   const previousDiceTotal = (sourceDice || []).reduce((sum, value) => sum + value, 0);
-  const staticBonus = isSkeletonKeyRoll ? 0 : (lastRoll.total || 0) - previousDiceTotal;
+  const staticBonus = isSkeletonKeyRoll
+    ? 0
+    : ((isHauntActionRoll ? hauntLastRoll?.total : lastRoll.total) || 0) - previousDiceTotal;
   const nextTotal = nextDice.reduce((sum, value) => sum + value, 0) + staticBonus;
 
   const nextPlayers = g.players.map((player, index) => {
@@ -1089,6 +1104,32 @@ export function applyRabbitFootRerollState(g) {
         settled: false,
         tileName: "Skeleton Key",
         rerollIndexes: [selectedIndex],
+      },
+    };
+  }
+
+  if (isHauntActionRoll) {
+    return {
+      game: {
+        ...g,
+        players: nextPlayers,
+        rabbitFootPendingReroll: null,
+        message: `${ownerName} uses ${pending.sourceName || "Rabbit's Foot"} and rerolls one die...`,
+      },
+      diceAnimation: {
+        purpose: "haunt-action-partial-reroll",
+        final: nextDice,
+        display: [...sourceDice],
+        settled: false,
+        label: hauntLastRoll.label || "Trait",
+        total: nextTotal,
+        modifier: hauntLastRoll.modifier || null,
+        outcomes: [...(hauntLastRoll.outcomes || [])],
+        rerollIndexes: [selectedIndex],
+        rerollDescription: "one die",
+        ownerIndex,
+        sanityLoss: 0,
+        sourceName: pending.sourceName || "Rabbit's Foot",
       },
     };
   }

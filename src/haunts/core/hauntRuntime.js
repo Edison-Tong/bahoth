@@ -275,12 +275,33 @@ export function resolveHauntAfterDamageState(previousGame, nextGame) {
   return nextGame;
 }
 
+export function resolveHauntAfterMovementState(previousGame, nextGame) {
+  const runtimeHooks = getHauntRuntimeHooksById(nextGame.activeHauntId);
+  if (runtimeHooks?.resolveAfterMovementState) {
+    return runtimeHooks.resolveAfterMovementState(previousGame, nextGame);
+  }
+  return nextGame;
+}
+
 export function resolveHauntTurnStartState(game, { rollDice }) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.resolveTurnStartState) {
-    return runtimeHooks.resolveTurnStartState(game, { rollDice });
+    const result = runtimeHooks.resolveTurnStartState(game, { rollDice });
+    if (result && typeof result === "object" && Object.prototype.hasOwnProperty.call(result, "game")) {
+      return {
+        game: result.game,
+        diceAnimation: result.diceAnimation || null,
+      };
+    }
+    return {
+      game: result || game,
+      diceAnimation: null,
+    };
   }
-  return game;
+  return {
+    game,
+    diceAnimation: null,
+  };
 }
 
 export function getHauntCombatBonus(game, actorIndex, defenderIndex) {
@@ -359,5 +380,21 @@ export function resolveHauntActionState(game, { actionId, resolveTraitRoll, crea
     return runtimeHooks.resolveActionState(game, { actionId, resolveTraitRoll, createDamageChoice });
   }
 
+  return game;
+}
+
+export function getHauntActionRollPreviewState(game) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getActionRollPreviewState) {
+    return runtimeHooks.getActionRollPreviewState(game);
+  }
+  return null;
+}
+
+export function resolveHauntActionRollContinueState(game, { createDamageChoice }) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.resolveActionRollContinueState) {
+    return runtimeHooks.resolveActionRollContinueState(game, { createDamageChoice });
+  }
   return game;
 }

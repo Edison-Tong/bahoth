@@ -1,3 +1,5 @@
+import { getHauntCanDeadPlayerTakeTurnState } from "../haunts/hauntDomain";
+
 export function getEndTurnPreviewPlayerName(game, currentPlayer) {
   if (game.extraTurnAfterCurrent && currentPlayer.isAlive) {
     return `${currentPlayer.name} (extra turn)`;
@@ -5,9 +7,15 @@ export function getEndTurnPreviewPlayerName(game, currentPlayer) {
 
   let next = (game.currentPlayerIndex + 1) % game.players.length;
   let attempts = 0;
-  while (!game.players[next].isAlive && attempts < game.players.length) {
+  let canUseDeadTurn = getHauntCanDeadPlayerTakeTurnState(game, next);
+  while (!game.players[next].isAlive && !canUseDeadTurn && attempts < game.players.length) {
     next = (next + 1) % game.players.length;
     attempts++;
+    canUseDeadTurn = getHauntCanDeadPlayerTakeTurnState(game, next);
+  }
+
+  if (!game.players[next]?.isAlive && canUseDeadTurn) {
+    return "Monster";
   }
 
   return game.players[next]?.name || currentPlayer.name;
