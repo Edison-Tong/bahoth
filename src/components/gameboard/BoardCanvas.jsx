@@ -49,8 +49,9 @@ export default function BoardCanvas({
   const traitorPlayerIndex = game?.hauntState?.traitorPlayerIndex;
 
   return (
-    <div className="board-container" ref={boardRef}>
-      <div className="board-scroll">
+    <div className="board-container">
+      <div className="board-scroll" ref={boardRef}>
+        <div className="board-scroll-inner">
         <div className="board-grid" style={{ width: gridWidth, height: gridHeight }}>
           {/* Movement path line */}
           {game.movePath.filter((p) => p.floor === cameraFloor).length >= 2 && (
@@ -369,6 +370,7 @@ export default function BoardCanvas({
                 />
               );
             })}
+        </div>
         </div>
       </div>
     </div>

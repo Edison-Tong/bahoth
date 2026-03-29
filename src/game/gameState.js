@@ -33,7 +33,7 @@ export const STAT_ICONS = {
 
 export const PLAYER_STAT_ORDER = ["might", "speed", "sanity", "knowledge"];
 export const CRITICAL_STAT_INDEX = 1;
-export const TILE_SIZE = 100;
+export const TILE_SIZE = 150;
 export const GAP = 4;
 
 export function initGameState(players) {

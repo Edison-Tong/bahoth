@@ -145,9 +145,22 @@
   height: 100%;
   overflow: auto;
   display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 40px;
+  justify-content: flex-start;
+  align-items: flex-start;
+  justify-content: safe center;
+  align-items: safe center;
+  padding: 56px;
+  box-sizing: border-box;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
+}
+
+.board-scroll-inner {
+  min-width: 100%;
+  min-height: 100%;
+  display: flex;
+  justify-content: inherit;
+  align-items: inherit;
 }
 
 .board-grid {

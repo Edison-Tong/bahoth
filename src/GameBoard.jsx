@@ -2432,6 +2432,43 @@ export default function GameBoard({ players, onQuit }) {
   // Players on current floor
   const playersOnFloor = getPlayersOnFloor(game.players, cameraFloor);
 
+  useEffect(() => {
+    const scrollEl = boardRef.current;
+    if (!scrollEl || currentPlayer.floor !== cameraFloor) return;
+    const gridEl = scrollEl.querySelector(".board-grid");
+    if (!gridEl) return;
+
+    const tileCenterX =
+      gridEl.offsetLeft + (currentPlayer.x - minX) * (TILE_SIZE + GAP) + TILE_SIZE / 2;
+    const tileCenterY =
+      gridEl.offsetTop + (currentPlayer.y - minY) * (TILE_SIZE + GAP) + TILE_SIZE / 2;
+
+    const viewLeft = scrollEl.scrollLeft;
+    const viewTop = scrollEl.scrollTop;
+    const viewRight = viewLeft + scrollEl.clientWidth;
+    const viewBottom = viewTop + scrollEl.clientHeight;
+    const safeInset = Math.max(96, Math.round(TILE_SIZE * 0.7));
+
+    const insideSafeZone =
+      tileCenterX >= viewLeft + safeInset &&
+      tileCenterX <= viewRight - safeInset &&
+      tileCenterY >= viewTop + safeInset &&
+      tileCenterY <= viewBottom - safeInset;
+
+    if (insideSafeZone) return;
+
+    const maxLeft = Math.max(0, scrollEl.scrollWidth - scrollEl.clientWidth);
+    const maxTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+    const targetLeft = Math.min(Math.max(tileCenterX - scrollEl.clientWidth / 2, 0), maxLeft);
+    const targetTop = Math.min(Math.max(tileCenterY - scrollEl.clientHeight / 2, 0), maxTop);
+
+    scrollEl.scrollTo({
+      left: targetLeft,
+      top: targetTop,
+      behavior: "smooth",
+    });
+  }, [cameraFloor, currentPlayer.floor, currentPlayer.x, currentPlayer.y, minX, minY]);
+
   return (
     <div className="game-screen">
       {/* Header bar */}
