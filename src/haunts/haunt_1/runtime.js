@@ -107,19 +107,26 @@ export function getSpecialMoveOptionsState({ game, currentPlayer, DIR, getTileAt
   const proxy = getCombatActorProxyState(game, traitorIndex);
   if (!proxy) return null;
 
+  const origin = {
+    floor: proxy.floor,
+    x: proxy.x,
+    y: proxy.y,
+  };
+  const movesLeft = Number(currentPlayer?.movesLeft) || 0;
+
   const spiritMoves = [];
   for (const dir of ["N", "S", "E", "W"]) {
     const { dx, dy } = DIR[dir];
-    const nx = currentPlayer.x + dx;
-    const ny = currentPlayer.y + dy;
-    const neighbor = getTileAt(nx, ny, currentPlayer.floor);
+    const nx = origin.x + dx;
+    const ny = origin.y + dy;
+    const neighbor = getTileAt(nx, ny, origin.floor);
     if (!neighbor) continue;
 
     const isBacktrack =
-      backtrackPos && backtrackPos.x === nx && backtrackPos.y === ny && backtrackPos.floor === currentPlayer.floor;
+      backtrackPos && backtrackPos.x === nx && backtrackPos.y === ny && backtrackPos.floor === origin.floor;
     if (isBacktrack) {
       spiritMoves.push({ dir, x: nx, y: ny, type: "backtrack" });
-    } else if (currentPlayer.movesLeft >= 1) {
+    } else if (movesLeft >= 1) {
       spiritMoves.push({ dir, x: nx, y: ny, type: "move", cost: 1 });
     }
   }

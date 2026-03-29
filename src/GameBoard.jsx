@@ -606,6 +606,7 @@ export default function GameBoard({ players, onQuit }) {
         OPPOSITE,
         getTileAt,
         getLeaveMoveCost,
+        canUseArmedSkeletonKeyMovement,
         isItemAbilityTileChoiceAwaiting,
         dogTradeState: tradeState,
       });
@@ -621,7 +622,7 @@ export default function GameBoard({ players, onQuit }) {
       } else if (action.type === "backtrack") {
         handleBacktrack();
       } else if (action.type === "move") {
-        handleMove(action.nx, action.ny, action.cost);
+        handleMove(action.nx, action.ny, action.cost, { useSkeletonKey: action.useSkeletonKey });
       } else if (action.type === "explore") {
         handleExplore(action.dir, action.nx, action.ny, action.cost);
       }

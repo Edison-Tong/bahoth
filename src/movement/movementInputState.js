@@ -1,3 +1,5 @@
+import { getValidMovesState } from "./playerMovementState";
+
 export function resolveKeyboardMoveAction({
   game,
   cameraFloor,
@@ -7,6 +9,7 @@ export function resolveKeyboardMoveAction({
   OPPOSITE,
   getTileAt,
   getLeaveMoveCost,
+  canUseArmedSkeletonKeyMovement,
   isItemAbilityTileChoiceAwaiting,
   dogTradeState,
 }) {
@@ -40,44 +43,41 @@ export function resolveKeyboardMoveAction({
   const dir = keyToDir[key];
   if (!dir) return null;
 
-  if (game.pendingExplore) {
-    const path = game.movePath;
-    if (path.length >= 2) {
-      const prev = path[path.length - 2];
-      const { dx, dy } = DIR[dir];
-      const nx = currentPlayer.x + dx;
-      const ny = currentPlayer.y + dy;
-      if (prev.x === nx && prev.y === ny && prev.floor === currentPlayer.floor) {
-        return { type: "backtrack" };
-      }
-    }
-    return null;
+  const validMoves = getValidMovesState({
+    game,
+    currentPlayer,
+    DIR,
+    OPPOSITE,
+    getTileAt,
+    getLeaveMoveCost,
+    canUseArmedSkeletonKeyMovement,
+    isItemAbilityTileChoiceAwaiting,
+  });
+  const move = validMoves.find((candidate) => candidate.dir === dir);
+  if (!move) return null;
+
+  if (move.type === "backtrack") {
+    return { type: "backtrack" };
   }
 
-  const tile = getTileAt(currentPlayer.x, currentPlayer.y, currentPlayer.floor);
-  if (!tile || !tile.doors.includes(dir)) return null;
-
-  const { dx, dy } = DIR[dir];
-  const nx = currentPlayer.x + dx;
-  const ny = currentPlayer.y + dy;
-
-  const path = game.movePath;
-  if (path.length >= 2) {
-    const prev = path[path.length - 2];
-    if (prev.x === nx && prev.y === ny && prev.floor === currentPlayer.floor) {
-      return { type: "backtrack" };
-    }
+  if (move.type === "move" || move.type === "wall-move") {
+    return {
+      type: "move",
+      nx: move.x,
+      ny: move.y,
+      cost: move.cost,
+      useSkeletonKey: move.type === "wall-move",
+    };
   }
 
-  const moveCost = getLeaveMoveCost(tile);
-  if (currentPlayer.movesLeft < moveCost) return null;
-
-  const neighbor = getTileAt(nx, ny, currentPlayer.floor);
-  if (neighbor && neighbor.doors.includes(OPPOSITE[dir])) {
-    return { type: "move", nx, ny, cost: moveCost };
-  }
-  if (!neighbor) {
-    return { type: "explore", dir, nx, ny, cost: moveCost };
+  if (move.type === "explore") {
+    return {
+      type: "explore",
+      dir: move.dir,
+      nx: move.x,
+      ny: move.y,
+      cost: move.cost,
+    };
   }
 
   return null;
