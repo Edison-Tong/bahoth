@@ -2068,11 +2068,25 @@ export default function GameBoard({ players, onQuit }) {
 
     const actionRoll = nextGame.hauntActionRoll;
     if (!actionRoll || actionRoll.status !== "awaiting-roll") return;
+    const actionRollOwner = nextGame.players[actionRoll.actorIndex] || nextGame.players[nextGame.currentPlayerIndex];
 
     const forcedTotal = Number.isFinite(actionRoll.forcedTotal) ? Number(actionRoll.forcedTotal) : null;
-    const diceCount = Math.max(0, Number(actionRoll.baseDiceCount) || 0);
-    const finalDice = forcedTotal !== null ? [forcedTotal] : rollDice(diceCount);
-    const rollTotal = forcedTotal !== null ? forcedTotal : finalDice.reduce((sum, value) => sum + value, 0);
+    const rollResult =
+      forcedTotal !== null
+        ? {
+            dice: [forcedTotal],
+            total: forcedTotal,
+            modifier: null,
+          }
+        : resolveTraitRoll(actionRollOwner, {
+            stat: actionRoll.stat,
+            baseDiceCount: Math.max(0, Number(actionRoll.baseDiceCount) || 0),
+            context: "haunt-action",
+            board: nextGame.board,
+            usePassives: true,
+          });
+    const finalDice = rollResult.dice;
+    const rollTotal = rollResult.total;
 
     setDiceAnimation({
       purpose: "haunt-action-roll",
@@ -2081,7 +2095,7 @@ export default function GameBoard({ players, onQuit }) {
       settled: false,
       label: actionRoll.label || "Trait",
       total: rollTotal,
-      modifier: null,
+      modifier: rollResult.modifier || null,
       outcomes: [],
     });
   }
