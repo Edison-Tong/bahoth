@@ -1,8 +1,5 @@
 import { formatEventResultLines, getEventRollButtonLabel } from "../events/eventUtils";
 
-const TILE_SIZE = 100;
-const GAP = 4;
-
 function EventCardContent({ card }) {
   const resultLines = formatEventResultLines(card.result);
 
@@ -113,18 +110,20 @@ export function EventTileChoiceTargets({
   cameraFloor,
   minX,
   minY,
+  tileSize,
+  gap,
   onSelectOption,
 }) {
   return eventTileChoiceOptions
     .filter((option) => option.floor === cameraFloor)
     .map((option) => {
-      const left = (option.x - minX) * (TILE_SIZE + GAP);
-      const top = (option.y - minY) * (TILE_SIZE + GAP);
+      const left = (option.x - minX) * (tileSize + gap);
+      const top = (option.y - minY) * (tileSize + gap);
       return (
         <button
           key={`event-target-${option.id}`}
           className={`event-target-overlay ${selectedEventTileChoiceId === option.id ? "event-target-overlay-selected" : ""}`}
-          style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
+          style={{ left, top, width: tileSize, height: tileSize }}
           onClick={() => onSelectOption(option)}
           title={option.label}
         >

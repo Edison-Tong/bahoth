@@ -925,7 +925,7 @@ export const EVENT_CARDS = [
       "4+: Gain 1 Sanity. 2-3: Lose 1 Sanity. 0-1: Lose 1 Sanity and 1 Might. If the Graveyard or Catacombs tiles have been discovered, place your explorer on one of those tiles.",
     steps: [
       createEventStep("effect", {
-        when: { discoveredAny: ["graveyard", "catacombs"] }, // NOTE: TEST TO SEE IF ALLOWS CHOICE TO PLACE ON GRAVEYARD OR CATACOMBS IF BOTH ARE DISCOVERED
+        when: { discoveredAny: ["graveyard", "catacombs"] }, // NOTE: MOVED CHARACTER BEFORE THE DICE ROLL
         effects: [createEventEffect("move", { destination: "graveyard-or-catacombs" })],
       }),
       createEventStep("trait-roll", {

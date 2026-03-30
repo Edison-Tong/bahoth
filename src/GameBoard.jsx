@@ -2438,10 +2438,8 @@ export default function GameBoard({ players, onQuit }) {
     const gridEl = scrollEl.querySelector(".board-grid");
     if (!gridEl) return;
 
-    const tileCenterX =
-      gridEl.offsetLeft + (currentPlayer.x - minX) * (TILE_SIZE + GAP) + TILE_SIZE / 2;
-    const tileCenterY =
-      gridEl.offsetTop + (currentPlayer.y - minY) * (TILE_SIZE + GAP) + TILE_SIZE / 2;
+    const tileCenterX = gridEl.offsetLeft + (currentPlayer.x - minX) * (TILE_SIZE + GAP) + TILE_SIZE / 2;
+    const tileCenterY = gridEl.offsetTop + (currentPlayer.y - minY) * (TILE_SIZE + GAP) + TILE_SIZE / 2;
 
     const viewLeft = scrollEl.scrollLeft;
     const viewTop = scrollEl.scrollTop;

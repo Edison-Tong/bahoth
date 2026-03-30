@@ -1,5 +1,7 @@
 /* ========== GAME SCREEN LAYOUT ========== */
 .game-screen {
+  --sidebar-width: min(320px, 34vw);
+  --sidebar-board-bg: #0e0806;
   display: flex;
   flex-direction: column;
   height: 100vh;
@@ -138,6 +140,16 @@
   flex: 1;
   overflow: hidden;
   position: relative;
+  padding-right: var(--sidebar-width);
+  box-sizing: border-box;
+  background:
+    linear-gradient(
+      to right,
+      transparent 0,
+      transparent calc(100% - var(--sidebar-width)),
+      var(--sidebar-board-bg) calc(100% - var(--sidebar-width)),
+      var(--sidebar-board-bg) 100%
+    );
 }
 
 .board-scroll {
@@ -694,7 +706,7 @@
   z-index: 1101;
   max-height: 80vh;
   overflow-y: auto;
-  width: min(320px, 34vw);
+  width: var(--sidebar-width);
 }
 
 .sidebar-entry {
@@ -2241,6 +2253,10 @@
 }
 
 @media (max-width: 700px) {
+  .game-screen {
+    --sidebar-width: min(360px, 42vw);
+  }
+
   .debug-panel {
     left: 8px;
     right: 8px;
@@ -2254,7 +2270,7 @@
   }
 
   .player-sidebar {
-    width: min(360px, 42vw);
+    width: var(--sidebar-width);
   }
 
   .sidebar-card-viewer {
