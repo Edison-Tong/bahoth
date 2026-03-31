@@ -1,7 +1,8 @@
 export default function GameBoardActions({
   eventState,
-  selectedEventTileChoiceId,
-  handleConfirmEventTileChoice,
+  isBoardTileChoiceActive,
+  selectedBoardTileChoiceId,
+  handleConfirmBoardTileChoice,
   tradeState,
   game,
   handleConfirmMove,
@@ -37,11 +38,11 @@ export default function GameBoardActions({
 
   return (
     <div className="game-actions">
-      {eventState?.awaiting?.type === "tile-choice" && (
+      {isBoardTileChoiceActive && (
         <button
           className="btn btn-confirm"
-          onClick={handleConfirmEventTileChoice}
-          disabled={controlsDisabled || !selectedEventTileChoiceId}
+          onClick={handleConfirmBoardTileChoice}
+          disabled={controlsDisabled || !selectedBoardTileChoiceId}
         >
           Confirm Placement
         </button>
@@ -91,6 +92,7 @@ export default function GameBoardActions({
         !game.pendingExplore &&
         !tradeState &&
         !isPathTracking &&
+        !isBoardTileChoiceActive &&
         !isItemAbilityTileChoiceAwaiting(eventState) && (
           <button className="btn btn-primary" onClick={handleEndTurn} disabled={controlsDisabled}>
             End Turn — Pass to {endTurnPreviewPlayerName}
@@ -101,6 +103,7 @@ export default function GameBoardActions({
         game.turnPhase === "move" &&
         !game.pendingExplore &&
         !isPathTracking &&
+        !isBoardTileChoiceActive &&
         !isItemAbilityTileChoiceAwaiting(eventState) &&
         combatTargetsOnTile.length > 0 &&
         combatTargetsOnTile.map(({ player, playerIndex }) => (
@@ -118,6 +121,7 @@ export default function GameBoardActions({
         game.turnPhase === "move" &&
         !game.pendingExplore &&
         !isPathTracking &&
+        !isBoardTileChoiceActive &&
         !isItemAbilityTileChoiceAwaiting(eventState) &&
         playerTradeTargetsOnTile.length > 0 &&
         playerTradeTargetsOnTile.map(({ player, playerIndex }) => (

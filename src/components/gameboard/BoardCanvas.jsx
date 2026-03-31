@@ -340,7 +340,7 @@ export default function BoardCanvas({
               minY={minY}
               tileSize={TILE_SIZE}
               gap={GAP}
-              onSelectOption={interactionLocked ? () => {} : handleEventTileChoice}
+              onSelectOption={handleEventTileChoice}
             />
 
             {/* Clickable overlay on existing tiles for movement/backtrack */}

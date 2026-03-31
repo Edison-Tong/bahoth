@@ -1,6 +1,7 @@
 import { GAME_PHASES, HAUNT_TEAMS } from "../core/hauntPhases";
 
 const JACKS_SPIRIT_SPEED_DICE = 3;
+const OPPOSITE_DIR = { N: "S", S: "N", E: "W", W: "E" };
 const STAT_LABELS = {
   might: "Might",
   speed: "Speed",
@@ -279,6 +280,13 @@ export function resolveActionState(game, { actionId }) {
     const placementIndex = Number(actionId.replace("pending-move-exorcism:", ""));
     return resolvePendingMoveExorcismState(game, placementIndex);
   }
+  if (typeof actionId === "string" && actionId.startsWith("pending-select-stalk-prey:")) {
+    const optionId = actionId.replace("pending-select-stalk-prey:", "");
+    return resolvePendingSelectStalkPreyState(game, optionId);
+  }
+  if (actionId === "confirm-stalk-prey-placement") {
+    return resolveConfirmStalkPreyPlacementState(game);
+  }
 
   if (actionId === "learn-about-jack") {
     return resolveLearnAboutJackState(game);
@@ -482,12 +490,73 @@ function applyPhysicalDamageOne(players, playerIndex) {
   });
 }
 
+function getTileAt(board, floor, x, y) {
+  return (board?.[floor] || []).find((tile) => tile.x === x && tile.y === y) || null;
+}
+
+function getAxisTravel(from, target) {
+  if (!from || !target) return null;
+  if (from.floor !== target.floor) return null;
+
+  if (from.x === target.x) {
+    const steps = Math.abs(target.y - from.y);
+    if (steps === 0) return null;
+    return {
+      dir: target.y > from.y ? "S" : "N",
+      dx: 0,
+      dy: target.y > from.y ? 1 : -1,
+      steps,
+    };
+  }
+
+  if (from.y === target.y) {
+    const steps = Math.abs(target.x - from.x);
+    if (steps === 0) return null;
+    return {
+      dir: target.x > from.x ? "E" : "W",
+      dx: target.x > from.x ? 1 : -1,
+      dy: 0,
+      steps,
+    };
+  }
+
+  return null;
+}
+
+function hasDoorwayLineOfSight(board, from, target) {
+  const travel = getAxisTravel(from, target);
+  if (!travel) return false;
+
+  let x = from.x;
+  let y = from.y;
+  const floor = from.floor;
+
+  for (let step = 0; step < travel.steps; step += 1) {
+    const currentTile = getTileAt(board, floor, x, y);
+    const nextX = x + travel.dx;
+    const nextY = y + travel.dy;
+    const nextTile = getTileAt(board, floor, nextX, nextY);
+
+    if (!currentTile || !nextTile) return false;
+
+    const currentDoors = currentTile.doors || [];
+    const nextDoors = nextTile.doors || [];
+    if (!currentDoors.includes(travel.dir) || !nextDoors.includes(OPPOSITE_DIR[travel.dir])) {
+      return false;
+    }
+
+    x = nextX;
+    y = nextY;
+  }
+
+  return true;
+}
+
 function hasLineOfSightSimple(game, fromIndex, targetIndex) {
   const from = game.players[fromIndex];
   const target = game.players[targetIndex];
   if (!from || !target || !target.isAlive) return false;
-  if (from.floor !== target.floor) return false;
-  return from.x === target.x || from.y === target.y;
+  return hasDoorwayLineOfSight(game.board, from, target);
 }
 
 function getFarthestOmenTileFrom(board, origin) {
@@ -615,6 +684,117 @@ function resolvePendingMoveExorcismState(game, placementIndex) {
       },
     },
     message: `${actor?.name || "Explorer"} moves an Exorcism Circle token.`,
+  };
+}
+
+function resolvePendingSelectStalkPreyState(game, optionId) {
+  if (game.activeHauntId !== "haunt_1" || !game.hauntState) return game;
+  const scenarioState = getScenarioState(game.hauntState);
+  const pendingChoice = scenarioState.pendingChoice;
+  if (pendingChoice?.type !== "stalk-prey-placement") return game;
+  if (pendingChoice.actorIndex !== game.currentPlayerIndex) return game;
+
+  const selectedOption = (pendingChoice.options || []).find((option) => option.id === optionId);
+  if (!selectedOption) return game;
+
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  const nextPlayers = game.players.map((player, index) =>
+    index === traitorIndex
+      ? {
+          ...player,
+          floor: selectedOption.floor,
+          x: selectedOption.x,
+          y: selectedOption.y,
+        }
+      : player
+  );
+
+  const spirit = scenarioState.jacksSpirit;
+  const nextScenarioState =
+    !game.players[traitorIndex]?.isAlive && spirit?.active
+      ? {
+          ...scenarioState,
+          jacksSpirit: {
+            ...spirit,
+            floor: selectedOption.floor,
+            x: selectedOption.x,
+            y: selectedOption.y,
+          },
+        }
+      : scenarioState;
+
+  return {
+    ...game,
+    players: nextPlayers,
+    hauntState: {
+      ...game.hauntState,
+      scenarioState: {
+        ...nextScenarioState,
+        pendingChoice: {
+          ...pendingChoice,
+          selectedOptionId: optionId,
+        },
+      },
+    },
+    message: "Select Confirm Placement to stalk to the chosen tile.",
+  };
+}
+
+function resolveConfirmStalkPreyPlacementState(game) {
+  if (game.activeHauntId !== "haunt_1" || !game.hauntState) return game;
+  const scenarioState = getScenarioState(game.hauntState);
+  const pendingChoice = scenarioState.pendingChoice;
+  if (pendingChoice?.type !== "stalk-prey-placement") return game;
+  if (pendingChoice.actorIndex !== game.currentPlayerIndex) return game;
+
+  const selectedOption = (pendingChoice.options || []).find((option) => option.id === pendingChoice.selectedOptionId);
+  if (!selectedOption) {
+    return {
+      ...game,
+      message: "Choose a highlighted tile before confirming Stalk Prey.",
+    };
+  }
+
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  const usageKey = pendingChoice.usageKey;
+  const nextPlayers = game.players.map((player, index) =>
+    index === traitorIndex
+      ? {
+          ...player,
+          floor: selectedOption.floor,
+          x: selectedOption.x,
+          y: selectedOption.y,
+        }
+      : player
+  );
+
+  const spirit = scenarioState.jacksSpirit;
+  const nextScenarioState =
+    !game.players[traitorIndex]?.isAlive && spirit?.active
+      ? {
+          ...scenarioState,
+          pendingChoice: null,
+          jacksSpirit: {
+            ...spirit,
+            floor: selectedOption.floor,
+            x: selectedOption.x,
+            y: selectedOption.y,
+          },
+        }
+      : {
+          ...scenarioState,
+          pendingChoice: null,
+        };
+
+  return {
+    ...clearHauntActionRoll(game),
+    players: nextPlayers,
+    movePath: [{ x: selectedOption.x, y: selectedOption.y, floor: selectedOption.floor, cost: 0 }],
+    hauntState: {
+      ...markHauntActionUsed(game.hauntState, usageKey),
+      scenarioState: nextScenarioState,
+    },
+    message: `${game.players[traitorIndex].name} stalks the prey to ${selectedOption.name}.`,
   };
 }
 
@@ -988,8 +1168,8 @@ export function resolveStalkPreyState(game) {
         !heroIndexes.some((heroIndex) => {
           const hero = game.players[heroIndex];
           if (!hero || !hero.isAlive) return false;
-          if (hero.floor !== tile.floor) return false;
-          return hero.x === tile.x || hero.y === tile.y;
+          if (hero.floor === tile.floor && hero.x === tile.x && hero.y === tile.y) return true;
+          return hasDoorwayLineOfSight(game.board, tile, hero);
         })
     );
 
@@ -1000,41 +1180,32 @@ export function resolveStalkPreyState(game) {
     };
   }
 
-  const destination = candidateTiles[0];
-  const nextPlayers = game.players.map((player, index) =>
-    index === traitorIndex
-      ? {
-          ...player,
-          floor: destination.floor,
-          x: destination.x,
-          y: destination.y,
-        }
-      : player
-  );
   const scenarioState = getScenarioState(game.hauntState);
-  const spirit = scenarioState.jacksSpirit;
-  const nextScenarioState =
-    !game.players[traitorIndex]?.isAlive && spirit?.active
-      ? {
-          ...scenarioState,
-          jacksSpirit: {
-            ...spirit,
-            floor: destination.floor,
-            x: destination.x,
-            y: destination.y,
-          },
-        }
-      : scenarioState;
+  const options = candidateTiles.map((tile) => ({
+    id: `${tile.floor}:${tile.x}:${tile.y}`,
+    floor: tile.floor,
+    x: tile.x,
+    y: tile.y,
+    name: tile.name,
+    label: `${tile.name} (${tile.floor})`,
+  }));
 
   return {
     ...clearHauntActionRoll(game),
-    players: nextPlayers,
-    movePath: [{ x: destination.x, y: destination.y, floor: destination.floor, cost: 0 }],
     hauntState: {
-      ...markHauntActionUsed(game.hauntState, usageKey),
-      scenarioState: nextScenarioState,
+      ...game.hauntState,
+      scenarioState: {
+        ...scenarioState,
+        pendingChoice: {
+          type: "stalk-prey-placement",
+          actorIndex: traitorIndex,
+          usageKey,
+          options,
+          selectedOptionId: null,
+        },
+      },
     },
-    message: `${game.players[traitorIndex].name} stalks the prey to ${destination.name}.`,
+    message: "Choose any highlighted tile on the Upper or Ground floor, then Confirm Placement.",
   };
 }
 

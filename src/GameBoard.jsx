@@ -340,11 +340,17 @@ export default function GameBoard({ players, onQuit }) {
   const queuedTraitRollOverrideRef = useRef(null);
   const messageBubbleTimeoutRef = useRef(null);
   const boardRef = useRef(null);
+  const hauntPendingChoiceType = game?.hauntState?.scenarioState?.pendingChoice?.type;
   const gameplayLockedByHauntSetup = game.gamePhase === GAME_PHASES.HAUNT_SETUP;
   const gameplayLockedByCombat = !!game.combatState;
   const gameplayLockedByHauntActionRoll = !!game.hauntActionRoll;
+  const gameplayLockedByStalkPreyPlacement = hauntPendingChoiceType === "stalk-prey-placement";
   const gameplayUiLocked =
-    debugModeEnabled || gameplayLockedByHauntSetup || gameplayLockedByCombat || gameplayLockedByHauntActionRoll;
+    debugModeEnabled ||
+    gameplayLockedByHauntSetup ||
+    gameplayLockedByCombat ||
+    gameplayLockedByHauntActionRoll ||
+    gameplayLockedByStalkPreyPlacement;
 
   useEffect(() => {
     queuedTraitRollOverrideRef.current = queuedTraitRollOverride;
@@ -593,7 +599,13 @@ export default function GameBoard({ players, onQuit }) {
         return;
       }
 
-      if (debugModeEnabled || gameplayLockedByHauntSetup || gameplayLockedByCombat || isInputFocused) {
+      if (
+        debugModeEnabled ||
+        gameplayLockedByHauntSetup ||
+        gameplayLockedByCombat ||
+        gameplayLockedByStalkPreyPlacement ||
+        isInputFocused
+      ) {
         return;
       }
 
@@ -2243,6 +2255,36 @@ export default function GameBoard({ players, onQuit }) {
   const isItemAbilityTileChoiceActive = isItemAbilityTileChoiceAwaiting(eventState);
   const { drawnEventPrimaryAction, eventTileChoiceOptions, selectedEventTileChoiceId, showEventResolutionModal } =
     getEventUiState(game, eventEngineDeps, queuedTraitRollOverride);
+  const hauntPendingChoice = game.hauntState?.scenarioState?.pendingChoice;
+  const isStalkPreyTileChoiceActive = hauntPendingChoice?.type === "stalk-prey-placement";
+  const stalkPreyTileChoiceOptions = isStalkPreyTileChoiceActive ? hauntPendingChoice.options || [] : [];
+  const selectedStalkPreyTileChoiceId = isStalkPreyTileChoiceActive
+    ? hauntPendingChoice.selectedOptionId || null
+    : null;
+  const isEventTileChoiceActive = eventState?.awaiting?.type === "tile-choice";
+  const boardTileChoiceOptions = isEventTileChoiceActive ? eventTileChoiceOptions : stalkPreyTileChoiceOptions;
+  const selectedBoardTileChoiceId = isEventTileChoiceActive ? selectedEventTileChoiceId : selectedStalkPreyTileChoiceId;
+  const isBoardTileChoiceActive = isEventTileChoiceActive || isStalkPreyTileChoiceActive;
+
+  function handleBoardTileChoice(option) {
+    if (isEventTileChoiceActive) {
+      handleEventTileChoice(option);
+      return;
+    }
+    if (isStalkPreyTileChoiceActive && option?.id) {
+      handleUseHauntAction(`pending-select-stalk-prey:${option.id}`);
+    }
+  }
+
+  function handleConfirmBoardTileChoice() {
+    if (isEventTileChoiceActive) {
+      handleConfirmEventTileChoice();
+      return;
+    }
+    if (isStalkPreyTileChoiceActive) {
+      handleUseHauntAction("confirm-stalk-prey-placement");
+    }
+  }
   const viewedCardActiveAbilityState = viewedCard
     ? getCardActiveAbilityState({
         game,
@@ -2538,9 +2580,9 @@ export default function GameBoard({ players, onQuit }) {
         gridHeight={gridHeight}
         TILE_SIZE={TILE_SIZE}
         GAP={GAP}
-        eventTileChoiceOptions={eventTileChoiceOptions}
-        selectedEventTileChoiceId={selectedEventTileChoiceId}
-        handleEventTileChoice={handleEventTileChoice}
+        eventTileChoiceOptions={boardTileChoiceOptions}
+        selectedEventTileChoiceId={selectedBoardTileChoiceId}
+        handleEventTileChoice={handleBoardTileChoice}
         handleAction={handleAction}
         handlePlacePendingSpecialTile={handlePlacePendingSpecialTile}
         handleMoveDogToken={handleMoveDogToken}
@@ -2555,8 +2597,9 @@ export default function GameBoard({ players, onQuit }) {
 
       <GameBoardActions
         eventState={eventState}
-        selectedEventTileChoiceId={selectedEventTileChoiceId}
-        handleConfirmEventTileChoice={handleConfirmEventTileChoice}
+        isBoardTileChoiceActive={isBoardTileChoiceActive}
+        selectedBoardTileChoiceId={selectedBoardTileChoiceId}
+        handleConfirmBoardTileChoice={handleConfirmBoardTileChoice}
         tradeState={tradeState}
         game={game}
         handleConfirmMove={handleConfirmMove}
@@ -2586,7 +2629,7 @@ export default function GameBoard({ players, onQuit }) {
         handleCancelDogTrade={handleCancelDogTrade}
         hauntActionButtons={hauntActionButtons}
         onUseHauntAction={handleUseHauntAction}
-        controlsDisabled={gameplayUiLocked}
+        controlsDisabled={gameplayUiLocked && !isBoardTileChoiceActive}
       />
 
       <PlayerSidebar
