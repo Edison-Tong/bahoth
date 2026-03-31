@@ -53,7 +53,7 @@ export function CardAbilityContent({ card }) {
   );
 }
 
-export function DrawnCardModal({ drawnCard, drawnEventPrimaryAction, onDismissCard }) {
+export function DrawnCardModal({ drawnCard, drawnEventPrimaryAction, onDismissCard, hauntStarted = false }) {
   if (!drawnCard) return null;
 
   return (
@@ -93,7 +93,9 @@ export function DrawnCardModal({ drawnCard, drawnEventPrimaryAction, onDismissCa
             }
           >
             {drawnCard.type === "omen"
-              ? "Roll for Haunt"
+              ? hauntStarted
+                ? "Continue"
+                : "Roll for Haunt"
               : drawnCard.type === "event"
                 ? drawnEventPrimaryAction?.label || "Continue"
                 : "Continue"}

@@ -2605,6 +2605,7 @@ export default function GameBoard({ players, onQuit }) {
       <DrawnCardModal
         drawnCard={game.drawnCard}
         drawnEventPrimaryAction={drawnEventPrimaryAction}
+        hauntStarted={game.gamePhase !== GAME_PHASES.PRE_HAUNT}
         onDismissCard={handleDismissCard}
       />
 

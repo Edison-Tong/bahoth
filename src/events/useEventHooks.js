@@ -11,7 +11,7 @@ import {
   startEventFromDrawnCardState,
 } from "./eventActions";
 import { advanceEventResolution, applyResolvedEventEffect, finalizeEventState } from "./eventEngine";
-import { dismissHauntRollState, selectTriggeredHauntDefinition } from "../haunts/hauntDomain";
+import { dismissHauntRollState, selectTriggeredHauntDefinition, GAME_PHASES } from "../haunts/hauntDomain";
 
 function isEventStateInert(eventState) {
   if (!eventState) return false;
@@ -367,11 +367,23 @@ export function useDrawnCardHandlers({
     const card = game.drawnCard;
 
     if (card?.type === "omen") {
-      const numDice = game.omenCount;
-      const finalDice = rollDice(numDice);
       const updatedPlayers = game.players.map((pl, i) =>
         i === game.currentPlayerIndex ? { ...pl, omens: [...pl.omens, card] } : pl
       );
+
+      if (game.gamePhase !== GAME_PHASES.PRE_HAUNT) {
+        setGame({
+          ...game,
+          players: updatedPlayers,
+          drawnCard: null,
+          turnPhase: "endTurn",
+          message: `${game.players[game.currentPlayerIndex].name} collected ${card.name}!`,
+        });
+        return;
+      }
+
+      const numDice = game.omenCount;
+      const finalDice = rollDice(numDice);
 
       setGame({
         ...game,
