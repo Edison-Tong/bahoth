@@ -67,6 +67,8 @@ export function resolveMysticElevatorResultState({ game, animation, total, getPl
         mode: "move-existing",
         tile: elevatorTile,
         placements,
+        selectedPlacementId: null,
+        rotationIndex: 0,
         nextTurnPhase: "move",
         nextMessage:
           player.movesLeft > 0

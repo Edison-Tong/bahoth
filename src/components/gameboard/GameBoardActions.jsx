@@ -1,5 +1,10 @@
 export default function GameBoardActions({
   eventState,
+  isSpecialPlacementActive,
+  canRotateSpecialPlacement,
+  canConfirmSpecialPlacement,
+  handleRotateSpecialPlacement,
+  handleConfirmSpecialPlacement,
   isBoardTileChoiceActive,
   selectedBoardTileChoiceId,
   handleConfirmBoardTileChoice,
@@ -36,9 +41,41 @@ export default function GameBoardActions({
 }) {
   const isPathTracking = !tradeState && game.turnPhase === "move" && game.movePath.length > 1;
 
-  return (
-    <div className="game-actions">
-      {isBoardTileChoiceActive && (
+  if (isSpecialPlacementActive) {
+    return (
+      <div className="game-actions">
+        {canRotateSpecialPlacement && (
+          <button
+            className="btn btn-rotate"
+            onClick={() => handleRotateSpecialPlacement(-1)}
+            disabled={controlsDisabled}
+          >
+            ↺ Rotate Left
+          </button>
+        )}
+        <button
+          className="btn btn-confirm"
+          onClick={handleConfirmSpecialPlacement}
+          disabled={controlsDisabled || !canConfirmSpecialPlacement}
+        >
+          Confirm Placement
+        </button>
+        {canRotateSpecialPlacement && (
+          <button
+            className="btn btn-rotate"
+            onClick={() => handleRotateSpecialPlacement(1)}
+            disabled={controlsDisabled}
+          >
+            Rotate Right ↻
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  if (isBoardTileChoiceActive) {
+    return (
+      <div className="game-actions">
         <button
           className="btn btn-confirm"
           onClick={handleConfirmBoardTileChoice}
@@ -46,7 +83,12 @@ export default function GameBoardActions({
         >
           Confirm Placement
         </button>
-      )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="game-actions">
       {!tradeState && game.turnPhase === "move" && game.movePath.length > 1 && (
         <button className="btn btn-confirm" onClick={handleConfirmMove} disabled={controlsDisabled}>
           Move Here

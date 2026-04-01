@@ -1,6 +1,6 @@
 export function getPlacementOptionsState(board, tile, DIR, OPPOSITE) {
   const allDirs = ["N", "E", "S", "W"];
-  const placements = [];
+  const placementsByCoord = new Map();
 
   for (const floor of tile.floors || []) {
     for (const baseTile of board[floor] || []) {
@@ -25,15 +25,28 @@ export function getPlacementOptionsState(board, tile, DIR, OPPOSITE) {
 
         if (validRotations.length === 0) continue;
 
-        placements.push({
-          floor,
-          x,
-          y,
-          validRotations,
-        });
+        const key = `${floor}:${x}:${y}`;
+        const existing = placementsByCoord.get(key);
+        if (!existing) {
+          placementsByCoord.set(key, {
+            floor,
+            x,
+            y,
+            validRotations,
+          });
+          continue;
+        }
+
+        const seen = new Set(existing.validRotations.map((rotation) => rotation.join("")));
+        for (const rotation of validRotations) {
+          const rotationKey = rotation.join("");
+          if (seen.has(rotationKey)) continue;
+          seen.add(rotationKey);
+          existing.validRotations.push(rotation);
+        }
       }
     }
   }
 
-  return placements;
+  return Array.from(placementsByCoord.values());
 }

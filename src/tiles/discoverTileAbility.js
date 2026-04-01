@@ -98,6 +98,8 @@ export function applyPlacedTileDiscoverEffects({
           pendingSpecialPlacement: {
             tile: secretTile,
             placements,
+            selectedPlacementId: null,
+            rotationIndex: 0,
             queuedCard: nextDrawnCard,
             nextTurnPhase: nextDrawnCard ? "card" : "move",
             nextMessage: nextDrawnCard

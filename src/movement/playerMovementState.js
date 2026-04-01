@@ -281,13 +281,31 @@ export function placePendingSpecialTileState(g, placement, { getIdolChoiceStateF
   const pendingPlacement = g.pendingSpecialPlacement;
   if (!pendingPlacement) return { game: g, cameraFloor: null };
 
+  const resolvePlacementId = (candidate) => `${candidate.floor}:${candidate.x}:${candidate.y}`;
+  const selectedPlacement =
+    placement ||
+    (pendingPlacement.placements || []).find(
+      (candidate) => resolvePlacementId(candidate) === pendingPlacement.selectedPlacementId
+    );
+  if (!selectedPlacement) {
+    return {
+      game: {
+        ...g,
+        message: "Choose a placement target first.",
+      },
+      cameraFloor: null,
+    };
+  }
+
   const currentPlayer = g.players[g.currentPlayerIndex];
-  const chosenDoors = placement.validRotations[0];
+  const validRotations = selectedPlacement.validRotations || [];
+  const rotationIndex = Math.max(0, Math.min(validRotations.length - 1, pendingPlacement.rotationIndex || 0));
+  const chosenDoors = validRotations[rotationIndex] || validRotations[0] || pendingPlacement.tile.doors;
   const placedTile = {
     ...pendingPlacement.tile,
-    x: placement.x,
-    y: placement.y,
-    floor: placement.floor,
+    x: selectedPlacement.x,
+    y: selectedPlacement.y,
+    floor: selectedPlacement.floor,
     doors: chosenDoors,
   };
 
@@ -302,7 +320,7 @@ export function placePendingSpecialTileState(g, placement, { getIdolChoiceStateF
       tile.y === pendingPlacement.tile.y;
     const oldFloorWithoutTile = (g.board[oldFloor] || []).filter((tile) => !isOldTile(tile));
     const updatedBoard =
-      oldFloor === placement.floor
+      oldFloor === selectedPlacement.floor
         ? {
             ...g.board,
             [oldFloor]: [...oldFloorWithoutTile, placedTile],
@@ -310,11 +328,11 @@ export function placePendingSpecialTileState(g, placement, { getIdolChoiceStateF
         : {
             ...g.board,
             [oldFloor]: oldFloorWithoutTile,
-            [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
+            [selectedPlacement.floor]: [...(g.board[selectedPlacement.floor] || []), placedTile],
           };
     const updatedPlayers = g.players.map((player) =>
       player.floor === oldFloor && player.x === oldX && player.y === oldY
-        ? { ...player, x: placement.x, y: placement.y, floor: placement.floor }
+        ? { ...player, x: selectedPlacement.x, y: selectedPlacement.y, floor: selectedPlacement.floor }
         : player
     );
 
@@ -332,14 +350,14 @@ export function placePendingSpecialTileState(g, placement, { getIdolChoiceStateF
           ...g,
           board: updatedBoard,
           players: updatedPlayers,
-          movePath: [{ x: placement.x, y: placement.y, floor: placement.floor, cost: 0 }],
+          movePath: [{ x: selectedPlacement.x, y: selectedPlacement.y, floor: selectedPlacement.floor, cost: 0 }],
           pendingSpecialPlacement: null,
           drawnCard: idolOfferState.drawnCard,
           tileEffect: idolOfferState.tileEffect,
           turnPhase: idolOfferState.turnPhase,
           message: idolOfferState.message,
         },
-        cameraFloor: placement.floor,
+        cameraFloor: selectedPlacement.floor,
       };
     }
 
@@ -348,13 +366,13 @@ export function placePendingSpecialTileState(g, placement, { getIdolChoiceStateF
         ...g,
         board: updatedBoard,
         players: updatedPlayers,
-        movePath: [{ x: placement.x, y: placement.y, floor: placement.floor, cost: 0 }],
+        movePath: [{ x: selectedPlacement.x, y: selectedPlacement.y, floor: selectedPlacement.floor, cost: 0 }],
         pendingSpecialPlacement: null,
         drawnCard: pendingPlacement.queuedCard || null,
         turnPhase: pendingPlacement.nextTurnPhase,
         message: pendingPlacement.nextMessage,
       },
-      cameraFloor: placement.floor,
+      cameraFloor: selectedPlacement.floor,
     };
   }
 
@@ -372,7 +390,7 @@ export function placePendingSpecialTileState(g, placement, { getIdolChoiceStateF
         ...g,
         board: {
           ...g.board,
-          [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
+          [selectedPlacement.floor]: [...(g.board[selectedPlacement.floor] || []), placedTile],
         },
         pendingSpecialPlacement: null,
         drawnCard: idolOfferState.drawnCard,
@@ -389,7 +407,7 @@ export function placePendingSpecialTileState(g, placement, { getIdolChoiceStateF
       ...g,
       board: {
         ...g.board,
-        [placement.floor]: [...(g.board[placement.floor] || []), placedTile],
+        [selectedPlacement.floor]: [...(g.board[selectedPlacement.floor] || []), placedTile],
       },
       pendingSpecialPlacement: null,
       drawnCard: pendingPlacement.queuedCard || null,

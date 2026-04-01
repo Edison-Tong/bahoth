@@ -26,6 +26,8 @@ export default function BoardCanvas({
   tradeState,
   validMoves,
   pendingSpecialPlacementTargets,
+  selectedPendingSpecialPlacementId,
+  selectedPendingSpecialPlacement,
   minX,
   minY,
   gridWidth,
@@ -301,10 +303,12 @@ export default function BoardCanvas({
               pendingSpecialPlacementTargets.map((placement) => {
                 const left = (placement.x - minX) * (TILE_SIZE + GAP);
                 const top = (placement.y - minY) * (TILE_SIZE + GAP);
+                const placementId = `${placement.floor}:${placement.x}:${placement.y}`;
+                const isSelected = selectedPendingSpecialPlacementId === placementId;
                 return (
                   <button
                     key={`special-placement-${placement.floor}-${placement.x}-${placement.y}`}
-                    className="explore-target"
+                    className={`explore-target ${isSelected ? "event-target-overlay-selected" : ""}`}
                     style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
                     onClick={() => handlePlacePendingSpecialTile(placement)}
                   >
@@ -312,6 +316,40 @@ export default function BoardCanvas({
                   </button>
                 );
               })}
+
+            {game.pendingSpecialPlacement &&
+              selectedPendingSpecialPlacement &&
+              selectedPendingSpecialPlacement.floor === cameraFloor &&
+              (() => {
+                const left = (selectedPendingSpecialPlacement.x - minX) * (TILE_SIZE + GAP);
+                const top = (selectedPendingSpecialPlacement.y - minY) * (TILE_SIZE + GAP);
+                const previewDoors =
+                  selectedPendingSpecialPlacement.validRotations?.[
+                    selectedPendingSpecialPlacement.rotationIndex || 0
+                  ] ||
+                  selectedPendingSpecialPlacement.validRotations?.[0] ||
+                  game.pendingSpecialPlacement.tile?.doors ||
+                  [];
+                return (
+                  <div
+                    key={`pending-special-preview-${selectedPendingSpecialPlacement.floor}-${selectedPendingSpecialPlacement.x}-${selectedPendingSpecialPlacement.y}`}
+                    className={`board-tile board-tile-rotate ${game.pendingSpecialPlacement.tile?.cardType ? "board-tile-" + game.pendingSpecialPlacement.tile.cardType : ""}`}
+                    style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
+                  >
+                    <div className="tile-name">{game.pendingSpecialPlacement.tile?.name || "Pending Tile"}</div>
+                    {game.pendingSpecialPlacement.tile?.cardType && (
+                      <div className={`tile-type tile-type-${game.pendingSpecialPlacement.tile.cardType}`}>
+                        {game.pendingSpecialPlacement.tile.cardType}
+                      </div>
+                    )}
+                    <div className="tile-doors">
+                      {previewDoors.map((d) => (
+                        <div key={`pending-special-door-${d}`} className={`door door-${d}`} />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
 
             {debugPlacementModeActive &&
               !game.pendingSpecialPlacement &&

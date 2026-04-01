@@ -1868,10 +1868,51 @@ export default function GameBoard({ players, onQuit }) {
   }
 
   function handlePlacePendingSpecialTile(placement) {
+    if (!placement) return;
+    const placementId = `${placement.floor}:${placement.x}:${placement.y}`;
+    setGame((g) => {
+      const pendingPlacement = g.pendingSpecialPlacement;
+      if (!pendingPlacement) return g;
+      return {
+        ...g,
+        pendingSpecialPlacement: {
+          ...pendingPlacement,
+          selectedPlacementId: placementId,
+          rotationIndex: 0,
+        },
+        message: "Choose an orientation, then confirm placement.",
+      };
+    });
+  }
+
+  function handleRotatePendingSpecialPlacement(direction) {
+    setGame((g) => {
+      const pendingPlacement = g.pendingSpecialPlacement;
+      if (!pendingPlacement?.selectedPlacementId) return g;
+
+      const selected = (pendingPlacement.placements || []).find(
+        (candidate) => `${candidate.floor}:${candidate.x}:${candidate.y}` === pendingPlacement.selectedPlacementId
+      );
+      const count = selected?.validRotations?.length || 0;
+      if (count <= 1) return g;
+
+      const currentIndex = pendingPlacement.rotationIndex || 0;
+      const rotationIndex = direction === 1 ? (currentIndex + 1) % count : (currentIndex - 1 + count) % count;
+      return {
+        ...g,
+        pendingSpecialPlacement: {
+          ...pendingPlacement,
+          rotationIndex,
+        },
+      };
+    });
+  }
+
+  function handleConfirmPendingSpecialPlacement() {
     let nextCameraFloor = null;
 
     setGame((g) => {
-      const resolved = placePendingSpecialTileState(g, placement, {
+      const resolved = placePendingSpecialTileState(g, null, {
         getIdolChoiceStateForQueuedEvent,
       });
       nextCameraFloor = resolved.cameraFloor;
@@ -2234,6 +2275,18 @@ export default function GameBoard({ players, onQuit }) {
   const pendingSpecialPlacementTargets = (game.pendingSpecialPlacement?.placements || []).filter(
     (placement) => placement.floor === cameraFloor
   );
+  const selectedPendingSpecialPlacementId = game.pendingSpecialPlacement?.selectedPlacementId || null;
+  const selectedPendingSpecialPlacementBase = (game.pendingSpecialPlacement?.placements || []).find(
+    (placement) => `${placement.floor}:${placement.x}:${placement.y}` === selectedPendingSpecialPlacementId
+  );
+  const selectedPendingSpecialPlacement = selectedPendingSpecialPlacementBase
+    ? {
+        ...selectedPendingSpecialPlacementBase,
+        rotationIndex: game.pendingSpecialPlacement?.rotationIndex || 0,
+      }
+    : null;
+  const canConfirmPendingSpecialPlacement = !!selectedPendingSpecialPlacement;
+  const canRotatePendingSpecialPlacement = (selectedPendingSpecialPlacement?.validRotations?.length || 0) > 1;
   const damageChoice = game.damageChoice;
   const damageChoicePlayerIndex = Number.isInteger(damageChoice?.playerIndex)
     ? damageChoice.playerIndex
@@ -2574,6 +2627,8 @@ export default function GameBoard({ players, onQuit }) {
         tradeState={tradeState}
         validMoves={validMoves}
         pendingSpecialPlacementTargets={pendingSpecialPlacementTargets}
+        selectedPendingSpecialPlacementId={selectedPendingSpecialPlacementId}
+        selectedPendingSpecialPlacement={selectedPendingSpecialPlacement}
         minX={minX}
         minY={minY}
         gridWidth={gridWidth}
@@ -2597,6 +2652,11 @@ export default function GameBoard({ players, onQuit }) {
 
       <GameBoardActions
         eventState={eventState}
+        isSpecialPlacementActive={!!game.pendingSpecialPlacement}
+        canRotateSpecialPlacement={canRotatePendingSpecialPlacement}
+        canConfirmSpecialPlacement={canConfirmPendingSpecialPlacement}
+        handleRotateSpecialPlacement={handleRotatePendingSpecialPlacement}
+        handleConfirmSpecialPlacement={handleConfirmPendingSpecialPlacement}
         isBoardTileChoiceActive={isBoardTileChoiceActive}
         selectedBoardTileChoiceId={selectedBoardTileChoiceId}
         handleConfirmBoardTileChoice={handleConfirmBoardTileChoice}
