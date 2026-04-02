@@ -16,6 +16,7 @@ export function createInitialScenarioState() {
     revealedKnowledgeOfJackHolders: [],
     exorcismTokenPlacements: [],
     pendingChoice: null,
+    pendingExorcismFailureQueue: [],
     jacksSpirit: {
       active: false,
       floor: null,
@@ -62,6 +63,7 @@ function getScenarioState(hauntState) {
       scenarioState.revealedKnowledgeOfJackHolders || defaults.revealedKnowledgeOfJackHolders,
     exorcismTokenPlacements: scenarioState.exorcismTokenPlacements || defaults.exorcismTokenPlacements,
     pendingChoice: scenarioState.pendingChoice || defaults.pendingChoice,
+    pendingExorcismFailureQueue: scenarioState.pendingExorcismFailureQueue || defaults.pendingExorcismFailureQueue,
     jacksSpirit: scenarioState.jacksSpirit || defaults.jacksSpirit,
   };
 }
@@ -474,20 +476,33 @@ function getHeroIndexes(game) {
   return game.hauntState?.teams?.[HAUNT_TEAMS.HEROES]?.playerIndexes || [];
 }
 
-function applyPhysicalDamageOne(players, playerIndex) {
-  return players.map((player, index) => {
-    if (index !== playerIndex) return player;
-    const nextMight = Math.max(0, player.statIndex.might - 1);
-    const nextStatIndex = {
-      ...player.statIndex,
-      might: nextMight,
-    };
-    return {
-      ...player,
-      statIndex: nextStatIndex,
-      isAlive: Object.values(nextStatIndex).every((value) => value > 0),
-    };
-  });
+function createHauntPhysicalDamageChoice(game, playerIndex, sourceName) {
+  const player = game.players[playerIndex];
+  const allocation = {
+    might: 0,
+    speed: 0,
+  };
+
+  return {
+    source: "haunt-exorcise-failure",
+    effect: null,
+    playerIndex,
+    playerName: player?.name || "Explorer",
+    originalDamageType: "physical",
+    damageType: "physical",
+    adjustmentMode: "decrease",
+    amount: 1,
+    allowedStats: ["might", "speed"],
+    allocation,
+    canConvertToGeneral: false,
+    conversionSourceNames: [],
+    postDamageEffects: [],
+    sourceName,
+  };
+}
+
+function getLivingHeroIndexes(game) {
+  return getHeroIndexes(game).filter((index) => game.players[index]?.isAlive);
 }
 
 function getTileAt(board, floor, x, y) {
@@ -1096,21 +1111,40 @@ export function resolveActionRollContinueState(game, { createDamageChoice }) {
           },
         },
         gamePhase: GAME_PHASES.GAME_OVER,
+        turnPhase: "game-over",
+        winnerTeam: HAUNT_TEAMS.HEROES,
         message: `${actorName} rolled ${rollResult.rollTotal} + ${rollResult.bonus} = ${rollResult.effectiveTotal}. Jack's Spirit is exorcised. Heroes win!`,
       };
     }
 
-    let nextPlayers = game.players;
-    for (const heroIndex of getHeroIndexes(game)) {
-      if (!nextPlayers[heroIndex]?.isAlive) continue;
-      nextPlayers = applyPhysicalDamageOne(nextPlayers, heroIndex);
+    const actorIndex = Number.isInteger(actionRoll.actorIndex) ? actionRoll.actorIndex : game.currentPlayerIndex;
+    const heroIndexes = getLivingHeroIndexes(game);
+    const orderedHeroIndexes = [
+      ...(heroIndexes.includes(actorIndex) ? [actorIndex] : []),
+      ...heroIndexes.filter((heroIndex) => heroIndex !== actorIndex),
+    ];
+    const [firstTargetIndex, ...remainingTargetIndexes] = orderedHeroIndexes;
+
+    if (!Number.isInteger(firstTargetIndex)) {
+      return {
+        ...clearHauntActionRoll(game),
+        hauntState: nextHauntState,
+        message: `${actorName} rolled ${rollResult.rollTotal} + ${rollResult.bonus} = ${rollResult.effectiveTotal}. No living heroes remain.`,
+      };
     }
 
     return {
       ...clearHauntActionRoll(game),
-      players: nextPlayers,
-      hauntState: nextHauntState,
-      message: `${actorName} rolled ${rollResult.rollTotal} + ${rollResult.bonus} = ${rollResult.effectiveTotal}. Exorcism failed. Each hero takes 1 Physical damage.`,
+      damageChoice: createHauntPhysicalDamageChoice(game, firstTargetIndex, "Exorcise Jack's Spirit"),
+      hauntState: {
+        ...nextHauntState,
+        scenarioState: {
+          ...scenarioState,
+          pendingChoice: null,
+          pendingExorcismFailureQueue: remainingTargetIndexes,
+        },
+      },
+      message: `${actorName} rolled ${rollResult.rollTotal} + ${rollResult.bonus} = ${rollResult.effectiveTotal}. Exorcism failed. Resolve 1 Physical damage for each hero.`,
     };
   }
 
@@ -1212,6 +1246,55 @@ export function resolveStalkPreyState(game) {
 export function resolveAfterDamageState(previousGame, nextGame) {
   if (nextGame.activeHauntId !== "haunt_1" || !nextGame.hauntState) return nextGame;
 
+  const scenarioState = getScenarioState(nextGame.hauntState);
+
+  if (
+    previousGame.damageChoice?.source === "haunt-exorcise-failure" &&
+    !nextGame.damageChoice &&
+    Array.isArray(scenarioState.pendingExorcismFailureQueue)
+  ) {
+    const remainingQueue = [...scenarioState.pendingExorcismFailureQueue];
+    while (remainingQueue.length > 0) {
+      const nextTargetIndex = remainingQueue.shift();
+      if (!nextGame.players[nextTargetIndex]?.isAlive) continue;
+
+      return {
+        ...nextGame,
+        damageChoice: createHauntPhysicalDamageChoice(nextGame, nextTargetIndex, "Exorcise Jack's Spirit"),
+        hauntState: {
+          ...nextGame.hauntState,
+          scenarioState: {
+            ...scenarioState,
+            pendingExorcismFailureQueue: remainingQueue,
+          },
+        },
+        message: `Resolve 1 Physical damage for ${nextGame.players[nextTargetIndex].name}.`,
+      };
+    }
+
+    return {
+      ...nextGame,
+      hauntState: {
+        ...nextGame.hauntState,
+        scenarioState: {
+          ...scenarioState,
+          pendingExorcismFailureQueue: [],
+        },
+      },
+    };
+  }
+
+  const livingHeroes = getLivingHeroIndexes(nextGame);
+  if (livingHeroes.length === 0) {
+    return {
+      ...nextGame,
+      gamePhase: GAME_PHASES.GAME_OVER,
+      turnPhase: "game-over",
+      winnerTeam: HAUNT_TEAMS.TRAITOR,
+      message: "All heroes are dead. Traitor wins!",
+    };
+  }
+
   const traitorIndex = nextGame.hauntState.traitorPlayerIndex;
   const previousTraitor = previousGame.players[traitorIndex];
   const nextTraitor = nextGame.players[traitorIndex];
@@ -1226,7 +1309,6 @@ export function resolveAfterDamageState(previousGame, nextGame) {
   const spawnTile = getFarthestOmenTileFrom(nextGame.board, corpse);
   if (!spawnTile) return nextGame;
 
-  const scenarioState = getScenarioState(nextGame.hauntState);
   return {
     ...nextGame,
     hauntState: {

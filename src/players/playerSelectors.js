@@ -21,7 +21,19 @@ export function getEndTurnPreviewPlayerName(game, currentPlayer) {
   return game.players[next]?.name || currentPlayer.name;
 }
 
-export function getDamageChoiceSummary(damageChoice) {
+export function getDamageChoiceSummary(damageChoice, currentPlayer = null) {
+  const isLethalAllocation = (player, choice) => {
+    if (!player || !choice || choice.adjustmentMode === "increase") return false;
+
+    const previewStatIndex = { ...player.statIndex };
+    for (const [stat, amount] of Object.entries(choice.allocation || {})) {
+      if (!amount || !Object.prototype.hasOwnProperty.call(previewStatIndex, stat)) continue;
+      previewStatIndex[stat] = Math.max(0, previewStatIndex[stat] - amount);
+    }
+
+    return Object.values(previewStatIndex).some((value) => value <= 0);
+  };
+
   const damageAllocated = damageChoice
     ? Object.values(damageChoice.allocation).reduce((sum, value) => sum + value, 0)
     : 0;
@@ -29,7 +41,9 @@ export function getDamageChoiceSummary(damageChoice) {
   const canConfirmDamageChoice = damageChoice
     ? damageChoice.allowPartial
       ? damageAllocated <= damageChoice.amount
-      : damageRemaining === 0
+      : damageAllocated > damageChoice.amount
+        ? false
+        : damageRemaining === 0 || isLethalAllocation(currentPlayer, damageChoice)
     : false;
 
   return {

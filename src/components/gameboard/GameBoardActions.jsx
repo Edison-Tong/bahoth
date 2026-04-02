@@ -39,6 +39,10 @@ export default function GameBoardActions({
   onUseHauntAction,
   controlsDisabled,
 }) {
+  if (game.gamePhase === "game-over") {
+    return null;
+  }
+
   const isPathTracking = !tradeState && game.turnPhase === "move" && game.movePath.length > 1;
 
   if (isSpecialPlacementActive) {

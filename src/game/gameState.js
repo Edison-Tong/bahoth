@@ -83,6 +83,7 @@ export function initGameState(players) {
     omenCount: 0,
     hauntTriggered: false,
     gamePhase: GAME_PHASES.PRE_HAUNT,
+    winnerTeam: null,
     activeHauntId: null,
     hauntState: null,
     hasAttackedThisTurn: false,

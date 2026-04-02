@@ -34,6 +34,18 @@ export function applyDamageAllocationState(players, playerIndex, allocation, adj
 
 import { getHauntCanDeadPlayerTakeTurnState } from "../haunts/hauntDomain";
 
+function isLethalDamageAllocation(player, choice) {
+  if (!player || !choice || choice.adjustmentMode === "increase") return false;
+
+  const previewStatIndex = { ...player.statIndex };
+  for (const [stat, amount] of Object.entries(choice.allocation || {})) {
+    if (!amount || !Object.prototype.hasOwnProperty.call(previewStatIndex, stat)) continue;
+    previewStatIndex[stat] = Math.max(0, previewStatIndex[stat] - amount);
+  }
+
+  return Object.values(previewStatIndex).some((value) => value <= 0);
+}
+
 export function passTurnCoreState(g) {
   const shouldTakeExtraTurn = !!g.extraTurnAfterCurrent && !!g.players[g.currentPlayerIndex]?.isAlive;
   let next = shouldTakeExtraTurn ? g.currentPlayerIndex : (g.currentPlayerIndex + 1) % g.players.length;
@@ -199,11 +211,18 @@ export function confirmDamageChoiceState(
   const choice = g.damageChoice;
   if (!choice) return { game: g, cameraFloor: null, clearDiceAnimation: false };
   const choicePlayerIndex = Number.isInteger(choice.playerIndex) ? choice.playerIndex : g.currentPlayerIndex;
+  const choicePlayer = g.players[choicePlayerIndex];
 
   const selectedTotal = Object.values(choice.allocation).reduce((sum, value) => sum + value, 0);
   if (choice.allowPartial) {
     if (selectedTotal > choice.amount) return { game: g, cameraFloor: null, clearDiceAnimation: false };
   } else if (selectedTotal !== choice.amount) {
+    if (!isLethalDamageAllocation(choicePlayer, choice)) {
+      return { game: g, cameraFloor: null, clearDiceAnimation: false };
+    }
+  }
+
+  if (!choice.allowPartial && selectedTotal > choice.amount) {
     return { game: g, cameraFloor: null, clearDiceAnimation: false };
   }
 
@@ -221,12 +240,42 @@ export function confirmDamageChoiceState(
     const combatMessage = choice.combatSummaryMessage || "";
     const postDamageMessage = postDamageResult.message || "";
     const combinedMessage = [combatMessage, postDamageMessage].filter(Boolean).join(" ");
+    const damagedPlayer = resolvedPlayers[choicePlayerIndex];
+    const activePlayerDied = choicePlayerIndex === g.currentPlayerIndex && damagedPlayer && !damagedPlayer.isAlive;
+
+    if (activePlayerDied) {
+      const passedState = passTurn({
+        ...baseState,
+        combatState: null,
+        message: combinedMessage || g.message,
+      });
+
+      return {
+        game: {
+          ...passedState,
+          message: combinedMessage ? `${combinedMessage} ${passedState.message}` : passedState.message,
+        },
+        cameraFloor: null,
+        clearDiceAnimation: true,
+      };
+    }
 
     return {
       game: {
         ...baseState,
         combatState: null,
         message: combinedMessage || g.message,
+      },
+      cameraFloor: null,
+      clearDiceAnimation: true,
+    };
+  }
+
+  if (choice.source === "haunt-exorcise-failure") {
+    return {
+      game: {
+        ...baseState,
+        message: postDamageResult.message || g.message,
       },
       cameraFloor: null,
       clearDiceAnimation: true,

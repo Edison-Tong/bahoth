@@ -345,12 +345,14 @@ export default function GameBoard({ players, onQuit }) {
   const gameplayLockedByCombat = !!game.combatState;
   const gameplayLockedByHauntActionRoll = !!game.hauntActionRoll;
   const gameplayLockedByStalkPreyPlacement = hauntPendingChoiceType === "stalk-prey-placement";
+  const gameIsOver = game.gamePhase === GAME_PHASES.GAME_OVER;
   const gameplayUiLocked =
     debugModeEnabled ||
     gameplayLockedByHauntSetup ||
     gameplayLockedByCombat ||
     gameplayLockedByHauntActionRoll ||
-    gameplayLockedByStalkPreyPlacement;
+    gameplayLockedByStalkPreyPlacement ||
+    gameIsOver;
 
   useEffect(() => {
     queuedTraitRollOverrideRef.current = queuedTraitRollOverride;
@@ -604,6 +606,7 @@ export default function GameBoard({ players, onQuit }) {
         gameplayLockedByHauntSetup ||
         gameplayLockedByCombat ||
         gameplayLockedByStalkPreyPlacement ||
+        gameIsOver ||
         isInputFocused
       ) {
         return;
@@ -953,7 +956,8 @@ export default function GameBoard({ players, onQuit }) {
 
   // Move player to an existing tile and extend the current path.
   function handleMove(nx, ny, cost, options = {}) {
-    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP || game.gamePhase === GAME_PHASES.GAME_OVER)
+      return;
     let nextDiceAnimation = null;
     setGame((g) => {
       const resolved = resolveMovePlayerActionState(g, {
@@ -976,7 +980,8 @@ export default function GameBoard({ players, onQuit }) {
 
   // Backtrack to previous tile in path and refund the cost of the undone step.
   function handleBacktrack() {
-    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP || game.gamePhase === GAME_PHASES.GAME_OVER)
+      return;
     let nextCameraFloor = null;
     setGame((g) => {
       const resolved = resolveBacktrackActionState(g);
@@ -991,7 +996,8 @@ export default function GameBoard({ players, onQuit }) {
 
   // Explore — move player onto placeholder, don't reveal tile yet.
   function handleExplore(dir, nx, ny, cost) {
-    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP || game.gamePhase === GAME_PHASES.GAME_OVER)
+      return;
     setGame((g) => {
       const resolved = resolveExploreActionState(g, {
         dir,
@@ -1007,7 +1013,8 @@ export default function GameBoard({ players, onQuit }) {
 
   // Handle clicking a move/explore/backtrack target
   function handleAction(move) {
-    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP || game.gamePhase === GAME_PHASES.GAME_OVER)
+      return;
     let nextCameraFloor = null;
     let nextDiceAnimation = null;
 
@@ -1034,13 +1041,15 @@ export default function GameBoard({ players, onQuit }) {
   // Confirm move — commit current position, reset path
   // If on a pending explore, enter rotate phase to choose orientation
   function handleConfirmMove() {
-    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP || game.gamePhase === GAME_PHASES.GAME_OVER)
+      return;
     setGame((g) => confirmMoveState(g));
   }
 
   // Rotate the pending tile to the next valid orientation
   function handleRotateTile(direction) {
-    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP || game.gamePhase === GAME_PHASES.GAME_OVER)
+      return;
     setGame((g) => {
       if (!g.pendingExplore) return g;
       const pe = g.pendingExplore;
@@ -1055,7 +1064,8 @@ export default function GameBoard({ players, onQuit }) {
 
   // Place the tile with the chosen rotation
   function handlePlaceTile() {
-    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP || game.gamePhase === GAME_PHASES.GAME_OVER)
+      return;
     setGame((g) => {
       const p = g.players[g.currentPlayerIndex];
       const pe = g.pendingExplore;
@@ -1203,7 +1213,8 @@ export default function GameBoard({ players, onQuit }) {
 
   // Change floor via staircase
   function handleChangeFloor() {
-    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP || game.gamePhase === GAME_PHASES.GAME_OVER)
+      return;
     let nextCameraFloor = null;
     setGame((g) => {
       const resolved = resolveChangeFloorActionState(g, {
@@ -1220,7 +1231,8 @@ export default function GameBoard({ players, onQuit }) {
 
   function handleUseSecretPassage(target) {
     if (hasUnconfirmedMovePathState(game)) return;
-    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP || game.gamePhase === GAME_PHASES.GAME_OVER)
+      return;
     setGame((g) => resolveSecretPassageMoveState({ game: g, target, getTileAtPosition }));
     setCameraFloor(target.floor);
   }
@@ -1228,7 +1240,8 @@ export default function GameBoard({ players, onQuit }) {
   // End turn
   function handleEndTurn() {
     if (hasUnconfirmedMovePathState(game)) return;
-    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP || game.gamePhase === GAME_PHASES.GAME_OVER)
+      return;
     let nextCameraFloor = null;
     let nextDiceAnimation = null;
 
@@ -2356,7 +2369,10 @@ export default function GameBoard({ players, onQuit }) {
     !isItemAbilityTileChoiceAwaiting(eventState) &&
     !isUnconfirmedMovePath &&
     !gameplayUiLocked;
-  const { damageAllocated, damageRemaining, canConfirmDamageChoice } = getDamageChoiceSummary(damageChoice);
+  const { damageAllocated, damageRemaining, canConfirmDamageChoice } = getDamageChoiceSummary(
+    damageChoice,
+    damageChoicePlayer
+  );
   const damagePreview = damageChoice ? getDamagePreview(damageChoicePlayer, damageChoice) : null;
 
   // Check if current player is on a staircase tile
@@ -2614,7 +2630,14 @@ export default function GameBoard({ players, onQuit }) {
         </div>
       </div>
 
-      {messageBubble && <div className="game-message-bubble">{messageBubble}</div>}
+      {gameIsOver && (
+        <div className="game-over-banner">
+          <div className="game-over-banner-title">{game.winnerTeam === "traitor" ? "Traitor Wins" : "Heroes Win"}</div>
+          <div className="game-over-banner-subtitle">{game.message || "The haunt has ended."}</div>
+        </div>
+      )}
+
+      {messageBubble && !gameIsOver && <div className="game-message-bubble">{messageBubble}</div>}
 
       {/* Board */}
       <BoardCanvas
