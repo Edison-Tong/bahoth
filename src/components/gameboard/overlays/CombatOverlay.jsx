@@ -77,7 +77,9 @@ export default function CombatOverlay({
 
         {phase === "attacker-roll" && (
           <div className="combat-controls">
-            <p className="card-description">Attacker rolls Might first.</p>
+            <p className="card-description">
+              Attacker rolls {combatState.rollStat === "sanity" ? "Sanity" : "Might"} first.
+            </p>
             <button className="btn btn-primary" onClick={onRollAttacker}>
               Roll Attacker
             </button>
@@ -107,7 +109,7 @@ export default function CombatOverlay({
 
         {phase === "defender-roll" && (
           <div className="combat-controls">
-            <p className="card-description">Defender rolls Might.</p>
+            <p className="card-description">Defender rolls {combatState.rollStat === "sanity" ? "Sanity" : "Might"}.</p>
             <button className="btn btn-primary" onClick={onRollDefender}>
               Roll Defender
             </button>
@@ -140,7 +142,7 @@ export default function CombatOverlay({
             <p className="card-description">
               {outcome.tie
                 ? `Tie at ${outcome.attackerTotal}. No damage dealt.`
-                : `${outcome.winnerName} wins. ${outcome.loserName} takes ${outcome.damage} Physical damage.`}
+                : `${outcome.winnerName} wins. ${outcome.loserName} takes ${outcome.damage} damage.`}
             </p>
             <button className="btn btn-primary" onClick={onAdvanceResolution}>
               {outcome.tie ? "Continue" : "Allocate Damage"}

@@ -213,6 +213,10 @@ function getPlayerMightDiceCount(player) {
   return player.character.might[player.statIndex.might] || 0;
 }
 
+function getPlayerSanityDiceCount(player) {
+  return player.character.sanity[player.statIndex.sanity] || 0;
+}
+
 function getDefenseRollDiceBonus(player) {
   const effects = getPassiveEffects(player).filter((effect) => effect.type === "defense-roll-dice-bonus");
   return {
@@ -1295,6 +1299,8 @@ export default function GameBoard({ players, onQuit }) {
       let nextPlayers = g.players;
       let preRollBonusDice = 0;
       let preRollFlatBonus = 0;
+      let rollStat = "might";
+      let combatDamageType = "physical";
       const preRollItemMessages = [];
       const usedItemKeys = [];
 
@@ -1322,6 +1328,12 @@ export default function GameBoard({ players, onQuit }) {
           if (sourceCard.ownerCollection != null && sourceCard.ownerCardIndex != null) {
             usedItemKeys.push(`${sourceCard.ownerCollection}:${sourceCard.ownerCardIndex}:${sourceCard.id}`);
           }
+        } else if (sourceRule.action === "sanity-combat") {
+          rollStat = "sanity";
+          combatDamageType = "mental";
+          if (sourceCard.ownerCollection != null && sourceCard.ownerCardIndex != null) {
+            usedItemKeys.push(`${sourceCard.ownerCollection}:${sourceCard.ownerCardIndex}:${sourceCard.id}`);
+          }
         }
       }
 
@@ -1333,6 +1345,8 @@ export default function GameBoard({ players, onQuit }) {
           phase: "attacker-roll",
           attackerIndex: g.currentPlayerIndex,
           defenderIndex,
+          rollStat,
+          combatDamageType,
           attacker: {
             dice: [],
             total: null,
@@ -1369,12 +1383,15 @@ export default function GameBoard({ players, onQuit }) {
     const actorProxy = getHauntCombatActorProxyState(game, actorIndex);
     if (!actor?.isAlive && !actorProxy) return;
 
-    const defenseBonus = actorProxy
-      ? { amount: 0, sourceNames: [] }
-      : role === "defender"
-        ? getDefenseRollDiceBonus(actor)
-        : { amount: 0, sourceNames: [] };
-    const baseDiceCount = actorProxy?.usesMightDiceCount ?? getPlayerMightDiceCount(actor) + defenseBonus.amount;
+    const rollStat = combatState.rollStat || "might";
+    const defenseBonus =
+      actorProxy || rollStat !== "might"
+        ? { amount: 0, sourceNames: [] }
+        : role === "defender"
+          ? getDefenseRollDiceBonus(actor)
+          : { amount: 0, sourceNames: [] };
+    const baseStatDiceCount = rollStat === "sanity" ? getPlayerSanityDiceCount(actor) : getPlayerMightDiceCount(actor);
+    const baseDiceCount = actorProxy?.usesMightDiceCount ?? baseStatDiceCount + defenseBonus.amount;
     const rollResult = actorProxy
       ? {
           dice: rollDice(baseDiceCount),
@@ -1382,7 +1399,7 @@ export default function GameBoard({ players, onQuit }) {
           modifier: null,
         }
       : resolveTraitRoll(actor, {
-          stat: "might",
+          stat: rollStat,
           baseDiceCount,
           context: "attack",
           board: game.board,
@@ -1578,36 +1595,37 @@ export default function GameBoard({ players, onQuit }) {
       }
 
       const loser = g.players[outcome.loserIndex];
-      const allocation = Object.fromEntries(DAMAGE_STATS.physical.map((stat) => [stat, 0]));
-      const conversionOptions = getDamageConversionOptions(loser, "physical");
+      const combatDamageType = combatState.combatDamageType || "physical";
+      const allocation = Object.fromEntries(DAMAGE_STATS[combatDamageType].map((stat) => [stat, 0]));
+      const conversionOptions = getDamageConversionOptions(loser, combatDamageType);
 
       const damageChoice = {
         source: "combat",
         effect: null,
         playerIndex: outcome.loserIndex,
         playerName: loser.name,
-        originalDamageType: "physical",
-        damageType: "physical",
+        originalDamageType: combatDamageType,
+        damageType: combatDamageType,
         adjustmentMode: "decrease",
         amount: outcome.damage,
-        allowedStats: DAMAGE_STATS.physical,
+        allowedStats: DAMAGE_STATS[combatDamageType],
         allocation,
         canConvertToGeneral: conversionOptions.canConvertToGeneral,
         conversionSourceNames: conversionOptions.sourceNames,
         postDamageEffects: getPostDamageEffectsForChoice(loser, {
-          damageType: "physical",
-          originalDamageType: "physical",
+          damageType: combatDamageType,
+          originalDamageType: combatDamageType,
           allocation,
           amount: outcome.damage,
         }),
-        combatSummaryMessage: `${outcome.winnerName} wins combat (${outcome.attackerTotal} vs ${outcome.defenderTotal}). ${outcome.loserName} takes ${outcome.damage} Physical damage.`,
+        combatSummaryMessage: `${outcome.winnerName} wins combat (${outcome.attackerTotal} vs ${outcome.defenderTotal}). ${outcome.loserName} takes ${outcome.damage} damage.`,
       };
 
       return {
         ...g,
         combatState: null,
         damageChoice,
-        message: `${outcome.loserName} must allocate ${outcome.damage} Physical damage.`,
+        message: `${outcome.loserName} must allocate ${outcome.damage} damage.`,
       };
     });
   }

@@ -95,8 +95,12 @@ export const OMEN_CARDS = [
       },
     ],
     passiveAbility: "Add 1 to the result of your Sanity rolls",
+    activeAbilityRule: {
+      trigger: "attack",
+      action: "sanity-combat",
+    },
     activeAbility:
-      "When you use the ring to attack, you and the defender each roll Sanity instead of might. The loser takes Mental damage.", // NOTE: HAVE NOT WORKED OUT ATTACKS YET
+      "When you use the ring to attack, you and the defender each roll Sanity instead of Might. The loser takes Mental damage.",
   },
   {
     id: "skull",
@@ -924,10 +928,6 @@ export const EVENT_CARDS = [
     result:
       "4+: Gain 1 Sanity. 2-3: Lose 1 Sanity. 0-1: Lose 1 Sanity and 1 Might. If the Graveyard or Catacombs tiles have been discovered, place your explorer on one of those tiles.",
     steps: [
-      createEventStep("effect", {
-        when: { discoveredAny: ["graveyard", "catacombs"] }, // NOTE: MOVED CHARACTER BEFORE THE DICE ROLL
-        effects: [createEventEffect("move", { destination: "graveyard-or-catacombs" })],
-      }),
       createEventStep("trait-roll", {
         stat: "sanity",
         outcomes: [
@@ -945,6 +945,10 @@ export const EVENT_CARDS = [
           ]),
         ],
       }),
+      createEventStep("effect", {
+        when: { discoveredAny: ["graveyard", "catacombs"] },
+        effects: [createEventEffect("move", { destination: "graveyard-or-catacombs" })],
+      }),
     ],
   }),
   createEventCard({
@@ -958,7 +962,7 @@ export const EVENT_CARDS = [
         outcomes: [
           createEventOutcome(
             { perRoll: { max: 1 } },
-            createEventEffect("stat-change", { mode: "lose", stat: "rolled-trait", amount: 1 }) // DDNT LOSE ONE IN TRAIT ON FAIL
+            createEventEffect("stat-change", { mode: "lose", stat: "rolled-trait", amount: 1 })
           ),
           createEventOutcome(
             { allRolls: { min: 2 } },
