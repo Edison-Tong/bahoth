@@ -1,0 +1,1 @@
+hanged man event has issue whn on trait rolls 2 or less

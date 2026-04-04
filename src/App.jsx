@@ -61,7 +61,11 @@ function App() {
 
   function renderBackendStatus() {
     const statusLabel =
-      backendStatus === "connected" ? "Backend: Connected" : backendStatus === "offline" ? "Backend: Offline" : "Backend: Checking...";
+      backendStatus === "connected"
+        ? "Backend: Connected"
+        : backendStatus === "offline"
+          ? "Backend: Offline"
+          : "Backend: Checking...";
     const statusClass =
       backendStatus === "connected"
         ? "backend-status backend-status-connected"

@@ -72,7 +72,12 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
   } = deps;
 
   function applyEventStatChange(players, playerIndex, statEffect, chosenStat = null) {
-    const targetStat = statEffect.stat === "chosen" ? chosenStat : statEffect.stat;
+    const targetStat =
+      statEffect.stat === "chosen"
+        ? chosenStat
+        : statEffect.stat === "rolled-trait"
+          ? statEffect.rolledStat
+          : statEffect.stat;
     if (!targetStat) return players;
 
     if (targetStat === "all") {

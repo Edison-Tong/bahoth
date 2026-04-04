@@ -321,16 +321,32 @@ function getHealTargetOptions(game, viewedCard, healRule) {
   return getHealTargetOptionsFromTurnStateAbility(game, viewedCard, healRule);
 }
 
+function matchesSequenceRollCondition(condition, total) {
+  if (!condition) return false;
+  if (condition.exact !== undefined) return total === condition.exact;
+  if (condition.min !== undefined && total < condition.min) return false;
+  if (condition.max !== undefined && total > condition.max) return false;
+  return true;
+}
+
 export function continueEventState(g, deps) {
   const { runAdvanceEventResolution, finalizeEventState } = deps;
   if (!g.eventState) return { game: g, cameraFloor: null };
 
   if (g.eventState.awaiting?.type === "trait-roll-sequence-complete") {
     const results = g.eventState.awaiting.results || [];
+    const outcomes = g.eventState.awaiting.outcomes || [];
     const allSucceeded = results.every((entry) => !entry.failed);
-    const rewardOutcome = allSucceeded
-      ? (g.eventState.awaiting.outcomes || []).find((outcome) => outcome.when?.allRolls?.min !== undefined)
-      : null;
+
+    const perRollEffects = results.flatMap((result) => {
+      const matchingOutcome = outcomes.find(
+        (outcome) => outcome.when?.perRoll && matchesSequenceRollCondition(outcome.when.perRoll, result.total)
+      );
+      if (!matchingOutcome) return [];
+      return (matchingOutcome.effects || []).map((effect) => ({ ...effect, rolledStat: result.stat }));
+    });
+
+    const rewardOutcome = allSucceeded ? outcomes.find((outcome) => outcome.when?.allRolls?.min !== undefined) : null;
 
     const resumed = runAdvanceEventResolution({
       ...g,
@@ -338,7 +354,7 @@ export function continueEventState(g, deps) {
         ...g.eventState,
         awaiting: null,
         summary: null,
-        pendingEffects: [...(rewardOutcome?.effects || [])],
+        pendingEffects: [...perRollEffects, ...(rewardOutcome?.effects || [])],
       },
     });
     return { game: resumed.game, cameraFloor: resumed.cameraFloor || null };
