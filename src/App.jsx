@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 import { CHARACTERS } from "./characters";
 import GameBoard from "./GameBoard";
+import { API_BASE_URL } from "./config/api";
 
 const PLAYER_COLORS = ["#c0392b", "#2980b9", "#27ae60", "#f39c12", "#8e44ad", "#e67e22"];
 
@@ -34,6 +35,42 @@ function App() {
   // Character select state
   const [pickingPlayerIndex, setPickingPlayerIndex] = useState(0);
   const [characterChoices, setCharacterChoices] = useState({}); // { playerIndex: character }
+  const [backendStatus, setBackendStatus] = useState("checking");
+
+  useEffect(() => {
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => abortController.abort(), 4500);
+
+    fetch(`${API_BASE_URL}/health`, { signal: abortController.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`Health check failed: ${response.status}`);
+        setBackendStatus("connected");
+      })
+      .catch(() => {
+        setBackendStatus("offline");
+      })
+      .finally(() => {
+        clearTimeout(timeoutId);
+      });
+
+    return () => {
+      clearTimeout(timeoutId);
+      abortController.abort();
+    };
+  }, []);
+
+  function renderBackendStatus() {
+    const statusLabel =
+      backendStatus === "connected" ? "Backend: Connected" : backendStatus === "offline" ? "Backend: Offline" : "Backend: Checking...";
+    const statusClass =
+      backendStatus === "connected"
+        ? "backend-status backend-status-connected"
+        : backendStatus === "offline"
+          ? "backend-status backend-status-offline"
+          : "backend-status backend-status-checking";
+
+    return <div className={statusClass}>{statusLabel}</div>;
+  }
   // --- Online handlers ---
 
   function handleNameSubmit(e) {
@@ -149,6 +186,7 @@ function App() {
   if (screen === "mode") {
     return (
       <div className="app">
+        {renderBackendStatus()}
         <h1 className="title">Betrayal at House on the Hill</h1>
         <p className="subtitle">A web adaptation for remote play</p>
 
@@ -173,6 +211,7 @@ function App() {
   if (screen === "online-name") {
     return (
       <div className="app">
+        {renderBackendStatus()}
         <h1 className="title">Online Play</h1>
         <p className="subtitle">Enter your name to get started</p>
 
@@ -203,6 +242,7 @@ function App() {
   if (screen === "online-menu") {
     return (
       <div className="app">
+        {renderBackendStatus()}
         <h1 className="title">Online Play</h1>
         <p className="subtitle">Host a new game or join an existing one</p>
 
@@ -248,6 +288,7 @@ function App() {
   if (screen === "online-lobby") {
     return (
       <div className="app">
+        {renderBackendStatus()}
         <h1 className="title">Game Lobby</h1>
 
         <div className="lobby-screen">
@@ -288,6 +329,7 @@ function App() {
   if (screen === "local-count") {
     return (
       <div className="app">
+        {renderBackendStatus()}
         <h1 className="title">Pass & Play</h1>
         <p className="subtitle">How many players?</p>
 
@@ -311,6 +353,7 @@ function App() {
   if (screen === "local-names") {
     return (
       <div className="app">
+        {renderBackendStatus()}
         <h1 className="title">Pass & Play</h1>
         <p className="subtitle">
           Enter name for Player {currentNameIndex + 1} of {localPlayerCount}
@@ -374,6 +417,7 @@ function App() {
 
     return (
       <div className="app app-wide">
+        {renderBackendStatus()}
         <h1 className="title">Choose Your Character</h1>
         <p className="subtitle">
           <span className="picker-name" style={{ color: currentPicker.color }}>
@@ -458,6 +502,7 @@ function App() {
   // --- Pass & Play: Lobby ---
   return (
     <div className="app">
+      {renderBackendStatus()}
       <h1 className="title">Ready to Play</h1>
 
       <div className="lobby-screen">

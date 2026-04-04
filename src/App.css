@@ -21,6 +21,35 @@
   font-style: italic;
 }
 
+.backend-status {
+  position: fixed;
+  top: 12px;
+  right: 14px;
+  z-index: 1200;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid transparent;
+  background: rgba(22, 18, 14, 0.92);
+}
+
+.backend-status-checking {
+  color: #f5e7be;
+  border-color: rgba(245, 231, 190, 0.35);
+}
+
+.backend-status-connected {
+  color: #c9ffd8;
+  border-color: rgba(104, 205, 138, 0.5);
+}
+
+.backend-status-offline {
+  color: #ffd0cc;
+  border-color: rgba(211, 92, 92, 0.52);
+}
+
 /* Forms */
 
 .input {
