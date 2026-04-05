@@ -1,4 +1,4 @@
-const UNSUPPORTED_ITEM_ACTIONS = new Set(["attack-bonus-die", "ranged-attack-speed", "attack-bonus-total"]);
+const UNSUPPORTED_ITEM_ACTIONS = new Set(["attack-bonus-die", "ranged-attack-speed"]);
 
 const UNSUPPORTED_ITEM_PASSIVE_EFFECT_TYPES = new Set(["defense-roll-dice-bonus"]);
 

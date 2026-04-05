@@ -248,7 +248,7 @@ export const ITEM_CARDS = [
     id: "machete",
     name: "Machete",
     isWeapon: true,
-    activeAbilityRule: { trigger: "attack", action: "attack-bonus-total" }, // NOTE: HAVE NOT TESTED ATTACKS YET
+    activeAbilityRule: { trigger: "attack", action: "attack-bonus-total" },
     activeAbility: "When you use the Machete to attack, add 1 to the result of your roll.",
   },
   {
@@ -278,7 +278,7 @@ export const ITEM_CARDS = [
     isWeapon: false,
     activeAbilityRule: { trigger: "on-your-turn", action: "extra-turn-after-current" },
     activeAbility:
-      "On your turn, you may bury the Mystical Stopwatch. If you do, take another turn after this one. You may only use this ability after the haunt has started.", // NOTE: SHOULD ONLY BE USABLE AFTER THE HAUNT STARTS
+      "On your turn, you may bury the Mystical Stopwatch. If you do, take another turn after this one. You may only use this ability after the haunt has started.",
   },
   {
     id: "necklace-of-teeth",

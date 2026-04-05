@@ -1,5 +1,6 @@
 import { advanceEventResolution, getMatchingOutcome } from "./eventEngine";
 import { appendEventSummary, describeEventEffects, getEventRollButtonLabel } from "./eventUtils";
+import { GAME_PHASES } from "../haunts/hauntDomain";
 import {
   applyMaskNowState as applyMaskNowStateFromAbility,
   confirmMaskTileChoiceState,
@@ -890,8 +891,17 @@ const ACTIVE_ABILITY_TRIGGER_HANDLERS = {
 
     return getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }).canUseNow;
   },
-  "on-your-turn": ({ game, viewedCard }) =>
-    viewedCard.ownerIndex === game.currentPlayerIndex && game.turnPhase !== "card" && !game.drawnCard,
+  "on-your-turn": ({ game, viewedCard }) => {
+    if (viewedCard?.activeAbilityRule?.action === "extra-turn-after-current") {
+      return (
+        viewedCard.ownerIndex === game.currentPlayerIndex &&
+        game.turnPhase !== "card" &&
+        !game.drawnCard &&
+        game.gamePhase === GAME_PHASES.HAUNT_ACTIVE
+      );
+    }
+    return viewedCard.ownerIndex === game.currentPlayerIndex && game.turnPhase !== "card" && !game.drawnCard;
+  },
   "trait-roll-just-made": ({ game, viewedCard }) =>
     viewedCard.ownerIndex === game.currentPlayerIndex && isTraitRollJustMadeContext(game),
   "die-just-rolled": ({ game, viewedCard }) => {

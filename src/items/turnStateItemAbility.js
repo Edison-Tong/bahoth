@@ -310,6 +310,7 @@ export function applyMysticalStopwatchNowState(game, viewedCard) {
   }
   if (viewedCard.ownerCollection !== "inventory") return { game, closeViewedCard: false, diceAnimation: null };
   if (viewedCard.ownerIndex !== game.currentPlayerIndex) return { game, closeViewedCard: false, diceAnimation: null };
+  if (game.gamePhase !== "hauntActive") return { game, closeViewedCard: false, diceAnimation: null };
 
   const owner = game.players[viewedCard.ownerIndex];
   const inventoryCard = getInventoryCard(game, viewedCard);
