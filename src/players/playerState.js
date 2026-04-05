@@ -1,3 +1,5 @@
+import { buildDynamiteRollReadyEventState } from "../items/dynamiteAbility";
+
 export function applyStatChangeState(players, playerIndex, stat, amount) {
   if (!amount) return players;
 
@@ -309,9 +311,17 @@ export function confirmDamageChoiceState(
     const damagedPlayer = resolvedPlayers[choicePlayerIndex];
     const remainingQueue = g.dynamiteState?.queue?.length || 0;
     const nextDynamiteState = remainingQueue === 0 ? null : g.dynamiteState;
+    const nextEventState =
+      remainingQueue > 0
+        ? buildDynamiteRollReadyEventState({ ...g, players: resolvedPlayers }, g.dynamiteState.queue[0])
+        : null;
     // If the current player died (e.g. threw dynamite at own tile and was caught), pass their turn
     if (!damagedPlayer.isAlive && choicePlayerIndex === g.currentPlayerIndex) {
-      const passedState = passTurn({ ...baseState, dynamiteState: nextDynamiteState });
+      const passedState = passTurn({
+        ...baseState,
+        dynamiteState: nextDynamiteState,
+        eventState: nextEventState,
+      });
       return {
         game: {
           ...passedState,
@@ -325,6 +335,7 @@ export function confirmDamageChoiceState(
       game: {
         ...baseState,
         dynamiteState: nextDynamiteState,
+        eventState: nextEventState,
         message: postDamageResult.message || g.message,
       },
       cameraFloor: null,

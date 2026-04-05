@@ -667,12 +667,17 @@ export function confirmEventTileChoiceState(g, deps) {
   }
 
   if (awaiting.effect.type === "dynamite-throw" && awaiting.source === "item-active-ability") {
-    const dynamiteState = buildDynamiteThrowState(g, selectedOption.floor, selectedOption.x, selectedOption.y);
-    const clearedGame = { ...g, eventState: null };
+    const { dynamiteState, rollReadyEventState } = buildDynamiteThrowState(
+      g,
+      selectedOption.floor,
+      selectedOption.x,
+      selectedOption.y
+    );
     if (dynamiteState.queue.length === 0) {
       return {
         game: {
-          ...clearedGame,
+          ...g,
+          eventState: null,
           message: "Dynamite lands on an empty tile — no one is hurt!",
         },
         cameraFloor: selectedOption.floor,
@@ -681,7 +686,8 @@ export function confirmEventTileChoiceState(g, deps) {
     const firstRollerName = g.players[dynamiteState.queue[0]]?.name || "Someone";
     return {
       game: {
-        ...clearedGame,
+        ...g,
+        eventState: rollReadyEventState,
         dynamiteState,
         message: `Dynamite lands! ${firstRollerName} must roll Speed first.`,
       },
@@ -1368,7 +1374,7 @@ export function getEventUiState(game, eventEngineDeps, queuedTraitRollOverride =
   const eventTileChoiceOptions = eventState?.awaiting?.type === "tile-choice" ? eventState.awaiting.options || [] : [];
   const selectedEventTileChoiceId =
     eventState?.awaiting?.type === "tile-choice" ? eventState.awaiting.selectedOptionId || null : null;
-  const showEventResolutionModal = !!eventState && eventState.awaiting?.type !== "tile-choice";
+  const showEventResolutionModal = !!eventState && !game.dynamiteState && eventState.awaiting?.type !== "tile-choice";
   const angelsFeatherUsageState = getAngelsFeatherUsageState({
     game,
     drawnEventPrimaryAction,
@@ -1448,12 +1454,19 @@ export function createTraitRollModifier(traitBonus, diceBonus) {
   };
 }
 
-export function resolveTraitRoll(player, { stat, baseDiceCount, context, board = null, usePassives = true }) {
+export function resolveTraitRoll(
+  player,
+  { stat, baseDiceCount, context, board = null, usePassives = true, extraDiceBonus = null }
+) {
   const passiveDiceBonus = usePassives ? getTraitRollDiceBonus(player, context) : { amount: 0, sourceNames: [] };
   const boardDiceBonus = board ? getBoardTraitRollDiceBonus(board, player) : { amount: 0, sourceNames: [] };
   const diceBonus = {
-    amount: passiveDiceBonus.amount + boardDiceBonus.amount,
-    sourceNames: [...passiveDiceBonus.sourceNames, ...boardDiceBonus.sourceNames],
+    amount: passiveDiceBonus.amount + boardDiceBonus.amount + (extraDiceBonus?.amount || 0),
+    sourceNames: [
+      ...passiveDiceBonus.sourceNames,
+      ...boardDiceBonus.sourceNames,
+      ...(extraDiceBonus?.sourceNames || []),
+    ],
   };
   const traitBonus = usePassives ? getTraitRollBonus(player, stat) : { amount: 0, sourceNames: [] };
   const dice = rollDice(baseDiceCount + diceBonus.amount);

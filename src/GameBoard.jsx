@@ -545,7 +545,41 @@ export default function GameBoard({ players, onQuit }) {
         setDiceAnimation(null);
       } else if (da.purpose === "dynamite-roll") {
         const rollingPlayerIndex = da.playerIndex;
-        setGame((g) => advanceDynamiteRollState(g, rollingPlayerIndex, da.final));
+        const total = da.total != null ? da.total : da.final.reduce((s, d) => s + d, 0);
+        setGame((g) => {
+          if (!g.dynamiteState) return g;
+          const lastRoll = {
+            label: "Speed",
+            dice: da.final,
+            total,
+            modifier: da.modifier || null,
+            bonusDiceIndexes: da.bonusDiceIndexes || [],
+            outcomes: [],
+          };
+          return {
+            ...g,
+            dynamiteState: {
+              ...g.dynamiteState,
+              pendingRoll: {
+                playerIndex: rollingPlayerIndex,
+                dice: da.final,
+                total,
+                bonusDiceIndexes: da.bonusDiceIndexes || [],
+              },
+            },
+            eventState: g.eventState
+              ? { ...g.eventState, awaiting: null, lastRoll }
+              : {
+                  card: { name: "Dynamite", id: "dynamite" },
+                  stepIndex: 0,
+                  context: {},
+                  pendingEffects: [],
+                  summary: null,
+                  awaiting: null,
+                  lastRoll,
+                },
+          };
+        });
         setDiceAnimation(null);
       }
     }, 2000);
@@ -1795,16 +1829,60 @@ export default function GameBoard({ players, onQuit }) {
     const playerIndex = game.dynamiteState.queue[0];
     const player = game.players[playerIndex];
     if (!player) return;
+    // Check for Angel's Feather override already applied via eventState
+    if (game.eventState?.awaiting?.overrideTotal !== undefined) {
+      // Angel's Feather was used — no dice animation needed, advance directly
+      handleConfirmDynamiteRoll();
+      return;
+    }
     const speedStat = player.statIndex?.speed ?? 0;
-    const numDice = Math.max(player.character?.speed?.[speedStat] || 0, 1);
-    const dice = rollDice(numDice);
+    const baseSpeedDice = Math.max(player.character?.speed?.[speedStat] || 0, 1);
+    // Include defense-roll-dice-bonus (e.g. Leather Jacket) since dodging dynamite is a defense roll.
+    // Pass as extraDiceBonus so it appears in the modifier display and is tracked for visual highlighting.
+    const defenseBonus = getDefenseRollDiceBonus(player);
+    const rollResult = resolveTraitRoll(player, {
+      stat: "speed",
+      baseDiceCount: baseSpeedDice,
+      context: { isDefenseRoll: true },
+      board: game.board,
+      extraDiceBonus: defenseBonus,
+    });
+    // Bonus dice are the ones beyond the base speed dice count (defense bonus + any omen dice)
+    const bonusDiceIndexes = Array.from(
+      { length: rollResult.dice.length - baseSpeedDice },
+      (_, i) => baseSpeedDice + i
+    );
     setDiceAnimation({
       purpose: "dynamite-roll",
-      final: dice,
-      display: Array.from({ length: dice.length }, () => Math.floor(Math.random() * 3)),
+      final: rollResult.dice,
+      display: Array.from({ length: rollResult.dice.length }, () => Math.floor(Math.random() * 3)),
       settled: false,
-      modifier: null,
+      modifier: rollResult.modifier,
+      total: rollResult.total,
+      bonusDiceIndexes,
       playerIndex,
+    });
+  }
+
+  function handleConfirmDynamiteRoll() {
+    setGame((g) => {
+      const ds = g.dynamiteState;
+      if (!ds) return g;
+      const pendingRoll = ds.pendingRoll;
+      // Player index: from pendingRoll (normal roll) or queue[0] (Angel's Feather set total directly)
+      const playerIndex = pendingRoll?.playerIndex ?? ds.queue[0];
+      // Dice/total: prefer eventState.lastRoll (may reflect rerolls by Lucky Coin etc.) over pendingRoll
+      const lastRoll = g.eventState?.lastRoll;
+      const dice = lastRoll?.dice ?? pendingRoll?.dice;
+      // Use precomputed total so flat bonuses (trait stat modifiers) are respected
+      const total = lastRoll?.total ?? pendingRoll?.total ?? null;
+      if (playerIndex == null || !dice) return g;
+      return advanceDynamiteRollState(
+        { ...g, dynamiteState: { ...ds, pendingRoll: null }, eventState: null },
+        playerIndex,
+        dice,
+        total
+      );
     });
   }
 
@@ -3036,9 +3114,30 @@ export default function GameBoard({ players, onQuit }) {
         !(diceAnimation && diceAnimation.purpose === "dynamite-roll" && !diceAnimation.settled) &&
         (() => {
           const ds = game.dynamiteState;
-          const currentRollerIndex = ds.queue[0];
+          const pendingRoll = ds.pendingRoll ?? null;
+          // eventState.lastRoll may be updated by Lucky Coin / Creepy Doll rerolls
+          // or set directly by Angel's Feather (no pendingRoll in that case)
+          const eventLastRoll = game.eventState?.lastRoll ?? null;
+          const displayDice = eventLastRoll?.dice ?? pendingRoll?.dice ?? null;
+          const displayTotal = eventLastRoll?.total ?? pendingRoll?.total ?? null;
+          const displayModifier = eventLastRoll?.modifier ?? pendingRoll?.modifier ?? null;
+          const displayBonusDiceIndexes = eventLastRoll?.bonusDiceIndexes ?? pendingRoll?.bonusDiceIndexes ?? [];
+          const hasConfirmedRoll = !!displayDice;
+          const allDone = ds.queue.length === 0 && !hasConfirmedRoll;
+          const currentRollerIndex = pendingRoll?.playerIndex ?? ds.queue[0];
           const currentRoller = currentRollerIndex != null ? game.players[currentRollerIndex] : null;
-          const allDone = ds.queue.length === 0;
+
+          // Rabbit's Foot die selection active during dynamite
+          const rabbitFoot = game.rabbitFootPendingReroll;
+          const isRabbitFootSelectionActive =
+            !!rabbitFoot && hasConfirmedRoll && !!displayDice && diceAnimation?.purpose !== "event-partial-reroll";
+          const selectedRabbitFootDieIndex = rabbitFoot?.selectedDieIndex;
+          const canConfirmRabbitFootReroll =
+            isRabbitFootSelectionActive &&
+            Number.isInteger(selectedRabbitFootDieIndex) &&
+            selectedRabbitFootDieIndex >= 0 &&
+            selectedRabbitFootDieIndex < (displayDice?.length || 0);
+
           return (
             <div className="dynamite-overlay">
               <div className="dynamite-modal">
@@ -3047,12 +3146,77 @@ export default function GameBoard({ players, onQuit }) {
                   <div className="dynamite-results">
                     {ds.results.map((r) => (
                       <p key={r.playerIndex} className={`dynamite-result ${r.safe ? "safe" : "hit"}`}>
-                        {r.name}: rolled {r.total} — {r.safe ? "✓ Escaped" : "✗ Hit!"}
+                        {r.name}: {r.total} — {r.safe ? "✓ Escaped" : "✗ Hit!"}
                       </p>
                     ))}
                   </div>
                 )}
-                {allDone ? (
+                {hasConfirmedRoll ? (
+                  <>
+                    <p className="dynamite-description">
+                      <strong>{currentRoller?.name}</strong> rolled Speed:
+                    </p>
+                    {isRabbitFootSelectionActive ? (
+                      <div className="dice-container dynamite-dice">
+                        {displayDice.map((d, i) => {
+                          const isSelected = i === selectedRabbitFootDieIndex;
+                          const isBonus = displayBonusDiceIndexes.includes(i);
+                          return (
+                            <button
+                              key={i}
+                              type="button"
+                              className={`die die-selectable${isSelected ? " die-selected" : ""}${isBonus ? " dynamite-die-bonus" : ""}`}
+                              onClick={() => handleSelectRabbitFootDie(i)}
+                              aria-label={`Select die ${i + 1}`}
+                              aria-pressed={isSelected}
+                            >
+                              {d}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="dice-container dynamite-dice">
+                        {displayDice.map((d, i) => (
+                          <div
+                            key={i}
+                            className={`die${displayBonusDiceIndexes.includes(i) ? " dynamite-die-bonus" : ""}`}
+                          >
+                            {d}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {displayModifier && (
+                      <div className={`dice-modifier dice-modifier-${displayModifier.tone}`}>
+                        <div className="dice-modifier-value">{displayModifier.value}</div>
+                        <div className="dice-modifier-label">{displayModifier.label}</div>
+                      </div>
+                    )}
+                    <p className="dynamite-roll-total">Total: {displayTotal}</p>
+                    <p className={`dynamite-roll-outcome ${displayTotal >= 4 ? "safe" : "hit"}`}>
+                      {displayTotal >= 4 ? "✓ Escaped the blast!" : "✗ Caught in the blast — takes 4 physical damage"}
+                    </p>
+                    {isRabbitFootSelectionActive ? (
+                      <button
+                        className="btn btn-primary"
+                        onClick={handleConfirmRabbitFootReroll}
+                        disabled={!canConfirmRabbitFootReroll}
+                      >
+                        Reroll Selected Die
+                      </button>
+                    ) : (
+                      <>
+                        <p className="dynamite-description" style={{ fontSize: "0.8em", opacity: 0.8 }}>
+                          Items in your inventory can still be used.
+                        </p>
+                        <button className="btn btn-primary" onClick={handleConfirmDynamiteRoll}>
+                          Confirm
+                        </button>
+                      </>
+                    )}
+                  </>
+                ) : allDone ? (
                   <>
                     <p className="dynamite-description">Dynamite resolved!</p>
                     <button className="btn btn-primary" onClick={handleClearDynamiteState}>
@@ -3065,6 +3229,9 @@ export default function GameBoard({ players, onQuit }) {
                       <strong>{currentRoller?.name}</strong> must roll Speed.
                     </p>
                     <p className="dynamite-description">Roll 4+ to escape, 0–3 takes 4 physical damage.</p>
+                    <p className="dynamite-description" style={{ fontSize: "0.8em", opacity: 0.8 }}>
+                      Angel's Feather can be used before rolling.
+                    </p>
                     <button className="btn btn-danger" onClick={handleDynamiteRoll}>
                       Roll Speed ({currentRoller?.name})
                     </button>

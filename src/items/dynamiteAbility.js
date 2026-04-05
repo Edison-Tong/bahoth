@@ -92,8 +92,38 @@ export function applyDynamiteNowState(g, viewedCard, deps = {}) {
 }
 
 /**
+ * Builds an event state that signals "Speed roll required" for a given player.
+ * Used to make pre-roll items (Angel's Feather) and post-roll items
+ * (Lucky Coin, Creepy Doll, Rabbit's Foot) available during dynamite rolls.
+ */
+export function buildDynamiteRollReadyEventState(g, playerIndex) {
+  const player = g.players[playerIndex];
+  if (!player) return null;
+  const speedStat = player.statIndex?.speed ?? 0;
+  const baseDiceCount = Math.max(player.character?.speed?.[speedStat] || 0, 1);
+  return {
+    card: { name: "Dynamite", id: "dynamite" },
+    stepIndex: 0,
+    context: {},
+    pendingEffects: [],
+    awaiting: {
+      type: "roll-ready",
+      rollKind: "trait-roll",
+      rollStat: "speed",
+      baseDiceCount,
+      outcomes: [],
+      source: "dynamite",
+    },
+    summary: null,
+    lastRoll: null,
+  };
+}
+
+/**
  * Called after the player picks a tile. Builds the dynamite roll queue
  * (attacker first if on tile, then others in turn order).
+ * Returns { dynamiteState, rollReadyEventState } where rollReadyEventState
+ * enables pre-roll and post-roll items for the first player in the queue.
  */
 export function buildDynamiteThrowState(g, floor, x, y) {
   const attackerPlayerIndex = g.currentPlayerIndex;
@@ -108,7 +138,7 @@ export function buildDynamiteThrowState(g, floor, x, y) {
     }
   }
 
-  return {
+  const dynamiteState = {
     targetFloor: floor,
     targetX: x,
     targetY: y,
@@ -116,6 +146,8 @@ export function buildDynamiteThrowState(g, floor, x, y) {
     queue,
     results: [],
   };
+  const rollReadyEventState = queue.length > 0 ? buildDynamiteRollReadyEventState(g, queue[0]) : null;
+  return { dynamiteState, rollReadyEventState };
 }
 
 /**
@@ -124,12 +156,12 @@ export function buildDynamiteThrowState(g, floor, x, y) {
  * the queue advanced for a safe roll). Clears dynamiteState if queue
  * becomes empty after a safe roll.
  */
-export function advanceDynamiteRollState(g, playerIndex, rollArray) {
+export function advanceDynamiteRollState(g, playerIndex, rollArray, precomputedTotal = null) {
   const dynamiteState = g.dynamiteState;
   if (!dynamiteState) return g;
 
   const player = g.players[playerIndex];
-  const total = rollArray.reduce((sum, d) => sum + d, 0);
+  const total = precomputedTotal != null ? precomputedTotal : rollArray.reduce((sum, d) => sum + d, 0);
   const safe = total >= DYNAMITE_SAFE_THRESHOLD;
 
   const newResult = { playerIndex, name: player?.name || "Unknown", total, safe };
@@ -146,9 +178,11 @@ export function advanceDynamiteRollState(g, playerIndex, rollArray) {
       newQueue.length === 0
         ? `${player?.name} rolls ${total} — escapes! Dynamite resolved.`
         : `${player?.name} rolls ${total} — escapes the blast!`;
+    const nextEventState = newQueue.length > 0 ? buildDynamiteRollReadyEventState(g, newQueue[0]) : null;
     return {
       ...g,
       dynamiteState: nextDynamiteState,
+      eventState: nextEventState,
       message: safeMessage,
     };
   }
@@ -184,6 +218,7 @@ export function advanceDynamiteRollState(g, playerIndex, rollArray) {
     ...g,
     dynamiteState: { ...dynamiteState, queue: newQueue, results: newResults },
     damageChoice,
+    eventState: null,
     message: `${player?.name} rolls ${total} — caught in the blast! Take ${DYNAMITE_DAMAGE} physical damage.`,
   };
 }

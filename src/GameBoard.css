@@ -2562,6 +2562,7 @@
   align-items: center;
   justify-content: center;
   z-index: 1100;
+  pointer-events: none;
 }
 
 .dynamite-modal {
@@ -2573,6 +2574,7 @@
   border: 3px solid #c0740a;
   font-family: Georgia, serif;
   color: #f0d9a0;
+  pointer-events: all;
 }
 
 .dynamite-title {
@@ -2605,6 +2607,41 @@
 }
 
 .dynamite-result.hit {
+  background: rgba(192, 57, 43, 0.15);
+  color: #e74c3c;
+}
+
+.dynamite-dice {
+  justify-content: center;
+  margin: 0.5rem 0;
+}
+
+.dynamite-die-bonus {
+  border-color: rgba(135, 205, 255, 0.95);
+  background: linear-gradient(180deg, rgba(142, 209, 255, 0.32), rgba(70, 136, 186, 0.24));
+  box-shadow: 0 0 0 1px rgba(135, 205, 255, 0.4), 0 0 10px rgba(65, 158, 222, 0.45);
+}
+
+.dynamite-roll-total {
+  font-size: 1.25rem;
+  font-weight: bold;
+  margin: 0.25rem 0 0.5rem;
+}
+
+.dynamite-roll-outcome {
+  font-size: 1rem;
+  font-weight: bold;
+  margin-bottom: 0.75rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+}
+
+.dynamite-roll-outcome.safe {
+  background: rgba(39, 174, 96, 0.15);
+  color: #2ecc71;
+}
+
+.dynamite-roll-outcome.hit {
   background: rgba(192, 57, 43, 0.15);
   color: #e74c3c;
 }
