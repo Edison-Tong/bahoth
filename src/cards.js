@@ -164,7 +164,7 @@ export const ITEM_CARDS = [
     id: "crossbow",
     name: "Crossbow",
     isWeapon: true,
-    activeAbilityRule: { trigger: "attack", action: "ranged-attack-speed" }, // NOTE: HAVE NOT TESTED ATTACKS YET
+    activeAbilityRule: { trigger: "attack", action: "ranged-attack-speed" }, 
     activeAbility:
       "When you use the Crossbow to attack, you may attack any character on your tile or an adjacent tile. You and the defender each roll Speed. Roll 1 extra die on the attack. If you lose, you take no damage.",
   },
@@ -172,7 +172,7 @@ export const ITEM_CARDS = [
     id: "dynamite",
     name: "Dynamite",
     isWeapon: true,
-    activeAbilityRule: { trigger: "attack", action: "dynamite-aoe-attack" }, // NOTE: HAVE NOT TESTED ATTACKS YET
+    activeAbilityRule: { trigger: "on-your-turn", action: "dynamite-aoe-attack" },
     activeAbility:
       "You may use Dynamite in place of a regular attack. To do so, bury it and then choose your tile or an adjacent one. Everyone on the chosen tile must make a Speed roll. 4+: Nothing happens. 0-3: Take 4 Physical damage.",
   },

@@ -154,6 +154,7 @@ import {
 } from "./haunts/hauntDomain";
 import { TILES, STARTING_TILES } from "./tiles";
 import { getDamageConversionOptions, getPassiveEffects } from "./items/passiveItemEffectAbility";
+import { advanceDynamiteRollState } from "./items/dynamiteAbility";
 import "./GameBoard.css";
 
 function formatStatTrackValue(value) {
@@ -623,6 +624,10 @@ export default function GameBoard({ players, onQuit }) {
           if (!g.skullChallenge) return g;
           return { ...g, skullChallenge: { ...g.skullChallenge, roll: da.final, total } };
         });
+        setDiceAnimation(null);
+      } else if (da.purpose === "dynamite-roll") {
+        const rollingPlayerIndex = da.playerIndex;
+        setGame((g) => advanceDynamiteRollState(g, rollingPlayerIndex, da.final));
         setDiceAnimation(null);
       }
     }, 2000);
@@ -1907,6 +1912,28 @@ export default function GameBoard({ players, onQuit }) {
     return getStatTrackCellClassState(index, currentIndex, previewIndex, adjustmentMode);
   }
 
+  function handleDynamiteRoll() {
+    if (!game.dynamiteState || game.dynamiteState.queue.length === 0) return;
+    const playerIndex = game.dynamiteState.queue[0];
+    const player = game.players[playerIndex];
+    if (!player) return;
+    const speedStat = player.statIndex?.speed ?? 0;
+    const numDice = Math.max(player.character?.speed?.[speedStat] || 0, 1);
+    const dice = rollDice(numDice);
+    setDiceAnimation({
+      purpose: "dynamite-roll",
+      final: dice,
+      display: Array.from({ length: dice.length }, () => Math.floor(Math.random() * 3)),
+      settled: false,
+      modifier: null,
+      playerIndex,
+    });
+  }
+
+  function handleClearDynamiteState() {
+    setGame((g) => ({ ...g, dynamiteState: null }));
+  }
+
   function handleDismissTileEffect() {
     let nextCameraFloor = null;
     let shouldClearDiceAnimation = false;
@@ -3118,6 +3145,50 @@ export default function GameBoard({ players, onQuit }) {
                       onClick={survived ? handleSkullRevive : handleSkullFinalizeDeath}
                     >
                       Continue
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+      {game.dynamiteState &&
+        !game.damageChoice &&
+        !(diceAnimation && diceAnimation.purpose === "dynamite-roll" && !diceAnimation.settled) &&
+        (() => {
+          const ds = game.dynamiteState;
+          const currentRollerIndex = ds.queue[0];
+          const currentRoller = currentRollerIndex != null ? game.players[currentRollerIndex] : null;
+          const allDone = ds.queue.length === 0;
+          return (
+            <div className="dynamite-overlay">
+              <div className="dynamite-modal">
+                <h2 className="dynamite-title">💥 Dynamite!</h2>
+                {ds.results.length > 0 && (
+                  <div className="dynamite-results">
+                    {ds.results.map((r) => (
+                      <p key={r.playerIndex} className={`dynamite-result ${r.safe ? "safe" : "hit"}`}>
+                        {r.name}: rolled {r.total} — {r.safe ? "✓ Escaped" : "✗ Hit!"}
+                      </p>
+                    ))}
+                  </div>
+                )}
+                {allDone ? (
+                  <>
+                    <p className="dynamite-description">Dynamite resolved!</p>
+                    <button className="btn btn-primary" onClick={handleClearDynamiteState}>
+                      Continue
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="dynamite-description">
+                      <strong>{currentRoller?.name}</strong> must roll Speed.
+                    </p>
+                    <p className="dynamite-description">Roll 4+ to escape, 0–3 takes 4 physical damage.</p>
+                    <button className="btn btn-danger" onClick={handleDynamiteRoll}>
+                      Roll Speed ({currentRoller?.name})
                     </button>
                   </>
                 )}

@@ -17,6 +17,7 @@ export function chooseItemAbilityNowState(g, viewedCard, deps = {}, handlers = {
     "heal-stats": () => handlers.applyFirstAidKitNowState?.(g, viewedCard, null),
     "heal-knowledge-sanity": () => handlers.applyFirstAidKitNowState?.(g, viewedCard, null),
     "heal-might-speed": () => handlers.applyFirstAidKitNowState?.(g, viewedCard, null),
+    "dynamite-aoe-attack": () => handlers.applyDynamiteNowState?.(g, viewedCard),
   };
 
   const result = nowHandlers[action]?.();

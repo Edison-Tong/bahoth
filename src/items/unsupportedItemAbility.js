@@ -1,7 +1,6 @@
 const UNSUPPORTED_ITEM_ACTIONS = new Set([
   "attack-bonus-die",
   "ranged-attack-speed",
-  "dynamite-aoe-attack",
   "attack-bonus-total",
 ]);
 

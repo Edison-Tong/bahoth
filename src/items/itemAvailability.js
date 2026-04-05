@@ -78,7 +78,9 @@ export function getItemAbilitySelectionState({
                   ? isDogTradeAvailableThisTurn(game, viewedCard)
                   : rule.action === "move-through-walls"
                     ? canUseNormalMovementNow(game, viewedCard) && hasSkeletonKeyWallMoveAvailable(game, viewedCard)
-                    : rule.action === "substitute-sanity-for-knowledge"
+                    : rule.action === "dynamite-aoe-attack"
+                      ? game.gamePhase === "hauntActive" && !game.hasAttackedThisTurn && !!game.hauntState
+                      : rule.action === "substitute-sanity-for-knowledge"
                       ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
                           .canUseMagicCameraNow
                       : rule.action === "substitute-knowledge-for-trait"

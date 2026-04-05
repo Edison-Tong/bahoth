@@ -51,6 +51,10 @@ import {
 import { getItemAbilitySelectionState } from "../items/itemAvailability";
 import { chooseItemAbilityNowState, chooseItemAbilityValueState } from "../items/itemActionRegistry";
 import { isUnsupportedItemAction } from "../items/unsupportedItemAbility";
+import {
+  applyDynamiteNowState as applyDynamiteNowStateFromAbility,
+  buildDynamiteThrowState,
+} from "../items/dynamiteAbility";
 
 const DAMAGE_STATS = {
   physical: ["might", "speed"],
@@ -662,6 +666,29 @@ export function confirmEventTileChoiceState(g, deps) {
     return { game: resumed.game, cameraFloor: selectedOption.floor };
   }
 
+  if (awaiting.effect.type === "dynamite-throw" && awaiting.source === "item-active-ability") {
+    const dynamiteState = buildDynamiteThrowState(g, selectedOption.floor, selectedOption.x, selectedOption.y);
+    const clearedGame = { ...g, eventState: null };
+    if (dynamiteState.queue.length === 0) {
+      return {
+        game: {
+          ...clearedGame,
+          message: "Dynamite lands on an empty tile — no one is hurt!",
+        },
+        cameraFloor: selectedOption.floor,
+      };
+    }
+    const firstRollerName = g.players[dynamiteState.queue[0]]?.name || "Someone";
+    return {
+      game: {
+        ...clearedGame,
+        dynamiteState,
+        message: `Dynamite lands! ${firstRollerName} must roll Speed first.`,
+      },
+      cameraFloor: selectedOption.floor,
+    };
+  }
+
   return { game: g, cameraFloor: null };
 }
 
@@ -914,7 +941,8 @@ export function getCardActiveAbilityState({
     rule.action === "heal-critical-traits" ||
     rule.action === "heal-stats" ||
     rule.action === "heal-knowledge-sanity" ||
-    rule.action === "heal-might-speed";
+    rule.action === "heal-might-speed" ||
+    rule.action === "dynamite-aoe-attack";
   const hasSupportedAction = hasSupportedItemAction || isSupportedOmenAction(rule.action);
   const isSupportedInventoryAction =
     viewedCard.ownerCollection !== "inventory" || !isUnsupportedItemAction(rule.action);
@@ -957,6 +985,13 @@ export function applyFirstAidKitNowState(g, viewedCard, targetPlayerIndex = null
 
 export function applyMapNowState(g, viewedCard) {
   return applyMapNowStateFromMovementAbility(g, viewedCard);
+}
+
+export function applyDynamiteNowState(g, viewedCard) {
+  return applyDynamiteNowStateFromAbility(g, viewedCard, {
+    getMovementNeighbors,
+    getTileByPosition,
+  });
 }
 
 export function applyMaskNowState(g, viewedCard) {
@@ -1215,6 +1250,7 @@ export function chooseCardActiveAbilityNowState(g, viewedCard, deps = {}) {
     applyMaskNowState,
     applyMysticalStopwatchNowState,
     applyFirstAidKitNowState,
+    applyDynamiteNowState,
   });
 }
 

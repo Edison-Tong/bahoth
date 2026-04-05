@@ -305,6 +305,33 @@ export function confirmDamageChoiceState(
     };
   }
 
+  if (choice.source === "dynamite") {
+    const damagedPlayer = resolvedPlayers[choicePlayerIndex];
+    const remainingQueue = g.dynamiteState?.queue?.length || 0;
+    const nextDynamiteState = remainingQueue === 0 ? null : g.dynamiteState;
+    // If the current player died (e.g. threw dynamite at own tile and was caught), pass their turn
+    if (!damagedPlayer.isAlive && choicePlayerIndex === g.currentPlayerIndex) {
+      const passedState = passTurn({ ...baseState, dynamiteState: nextDynamiteState });
+      return {
+        game: {
+          ...passedState,
+          message: postDamageResult.message || g.message,
+        },
+        cameraFloor: null,
+        clearDiceAnimation: false,
+      };
+    }
+    return {
+      game: {
+        ...baseState,
+        dynamiteState: nextDynamiteState,
+        message: postDamageResult.message || g.message,
+      },
+      cameraFloor: null,
+      clearDiceAnimation: false,
+    };
+  }
+
   const eventDamageResult = resolveEventDamageChoiceState(g, choice, baseState, postDamageResult.message, {
     runAdvanceEventResolution,
   });
