@@ -81,12 +81,12 @@ export function getItemAbilitySelectionState({
                     : rule.action === "dynamite-aoe-attack"
                       ? game.gamePhase === "hauntActive" && !game.hasAttackedThisTurn && !!game.hauntState
                       : rule.action === "substitute-sanity-for-knowledge"
-                      ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
-                          .canUseMagicCameraNow
-                      : rule.action === "substitute-knowledge-for-trait"
-                        ? getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride })
-                            .canUseBookNow
-                        : true;
+                        ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
+                            .canUseMagicCameraNow
+                        : rule.action === "substitute-knowledge-for-trait"
+                          ? getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride })
+                              .canUseBookNow
+                          : true;
 
   return {
     actionSatisfied,

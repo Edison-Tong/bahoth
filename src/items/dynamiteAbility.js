@@ -44,9 +44,7 @@ export function applyDynamiteNowState(g, viewedCard, deps = {}) {
   const ownerPos = { floor: owner.floor, x: owner.x, y: owner.y };
   const ownKey = `${owner.floor}:${owner.x}:${owner.y}`;
 
-  const options = [
-    { id: ownKey, floor: owner.floor, x: owner.x, y: owner.y, label: "Your tile" },
-  ];
+  const options = [{ id: ownKey, floor: owner.floor, x: owner.x, y: owner.y, label: "Your tile" }];
 
   if (getMovementNeighbors && getTileByPosition) {
     const neighbors = getMovementNeighbors(g.board, ownerPos, { ignoreObstacles: true });
