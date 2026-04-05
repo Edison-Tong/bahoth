@@ -569,6 +569,13 @@ export default function GameBoard({ players, onQuit }) {
         setDiceAnimation(null);
       } else if (da.purpose === "combat-attacker-roll" || da.purpose === "combat-defender-roll") {
         setDiceAnimation(null);
+      } else if (da.purpose === "skull-roll") {
+        const total = baseTotal;
+        setGame((g) => {
+          if (!g.skullChallenge) return g;
+          return { ...g, skullChallenge: { ...g.skullChallenge, roll: da.final, total } };
+        });
+        setDiceAnimation(null);
       }
     }, 2000);
 
@@ -1761,6 +1768,68 @@ export default function GameBoard({ players, onQuit }) {
     return getDamagePreviewState(player, choice);
   }
 
+  function handleSkullRoll() {
+    if (!game.skullChallenge || game.skullChallenge.roll !== null) return;
+    const dice = rollDice(3);
+    setDiceAnimation({
+      purpose: "skull-roll",
+      final: dice,
+      display: Array.from({ length: dice.length }, () => Math.floor(Math.random() * 3)),
+      settled: false,
+      modifier: null,
+    });
+  }
+
+  function handleSkullRevive() {
+    setGame((g) => {
+      const skullChallenge = g.skullChallenge;
+      if (!skullChallenge) return g;
+      const player = g.players[skullChallenge.playerIndex];
+      const critStatIndex = Object.fromEntries(PLAYER_STAT_ORDER.map((stat) => [stat, CRITICAL_STAT_INDEX]));
+      const revivedPlayer = { ...player, statIndex: critStatIndex, isAlive: true };
+      const nextPlayers = g.players.map((p, i) => (i === skullChallenge.playerIndex ? revivedPlayer : p));
+      return {
+        ...g,
+        skullChallenge: null,
+        players: nextPlayers,
+        message: `${player.name}'s Skull saves them! All traits set to Critical.`,
+      };
+    });
+  }
+
+  function handleSkullFinalizeDeath() {
+    let nextCameraFloor = null;
+    let shouldClearDiceAnimation = false;
+    let passTurnCameraFloor = null;
+
+    setGame((g) => {
+      const skullChallenge = g.skullChallenge;
+      if (!skullChallenge) return g;
+      const gameWithDamage = { ...g, skullChallenge: null, damageChoice: skullChallenge.damageChoice };
+      const resolved = resolveConfirmDamageChoiceActionState(gameWithDamage, {
+        applyDamageAllocation,
+        applyPostDamagePassiveEffects,
+        applyTileEffectConsequences,
+        resolveEventDamageChoiceState,
+        runAdvanceEventResolution,
+        passTurn: (state) => {
+          const passTurnResult = resolvePassTurnActionState(state, {
+            resolveEndTurnItemPassiveState,
+            statLabels: STAT_LABELS,
+          });
+          passTurnCameraFloor = passTurnResult.cameraFloor;
+          return passTurnResult.game;
+        },
+      });
+      nextCameraFloor = resolved.cameraFloor || passTurnCameraFloor;
+      shouldClearDiceAnimation = resolved.clearDiceAnimation;
+      return resolveHauntAfterDamageState(gameWithDamage, resolved.game);
+    });
+
+    if (shouldClearDiceAnimation) setDiceAnimation(null);
+    if (nextCameraFloor) setCameraFloor(nextCameraFloor);
+  }
+
   function getStatTrackCellClass(index, currentIndex, previewIndex, adjustmentMode = "decrease") {
     return getStatTrackCellClassState(index, currentIndex, previewIndex, adjustmentMode);
   }
@@ -2923,6 +2992,62 @@ export default function GameBoard({ players, onQuit }) {
         onAdjustDamageAllocation={handleAdjustDamageAllocation}
         onConfirmDamageChoice={handleConfirmDamageChoice}
       />
+
+      {game.skullChallenge &&
+        !(diceAnimation && diceAnimation.purpose === "skull-roll" && !diceAnimation.settled) &&
+        (() => {
+          const sc = game.skullChallenge;
+          const player = game.players[sc.playerIndex];
+          const rolled = sc.roll !== null;
+          const survived = rolled && sc.total >= 4;
+          return (
+            <div className="skull-challenge-overlay">
+              <div className="skull-challenge-modal">
+                <h2 className="skull-challenge-title">☠ Skull</h2>
+                {!rolled ? (
+                  <>
+                    <p className="skull-challenge-description">
+                      <strong>{player?.name}</strong> is about to die! They are holding the Skull.
+                    </p>
+                    <p className="skull-challenge-description">
+                      Roll 3 dice — 4+ saves you (all traits set to Critical). 0–3 you die.
+                    </p>
+                    <div className="skull-challenge-buttons">
+                      <button className="btn btn-danger" onClick={handleSkullRoll}>
+                        Use Skull
+                      </button>
+                      <button className="btn btn-secondary" onClick={handleSkullFinalizeDeath}>
+                        Accept Death
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="dice-container skull-challenge-dice">
+                      {sc.roll.map((die, i) => (
+                        <div key={i} className="die">
+                          {die}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="skull-challenge-total">Total: {sc.total}</p>
+                    <p className="skull-challenge-description">
+                      {survived
+                        ? `${player?.name} survives! All traits set to Critical.`
+                        : `${player?.name} rolls too low… they die.`}
+                    </p>
+                    <button
+                      className="btn btn-primary"
+                      onClick={survived ? handleSkullRevive : handleSkullFinalizeDeath}
+                    >
+                      Continue
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          );
+        })()}
     </div>
   );
 }

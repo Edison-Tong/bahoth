@@ -46,6 +46,10 @@ function isLethalDamageAllocation(player, choice) {
   return Object.values(previewStatIndex).some((value) => value <= 0);
 }
 
+function playerHasSkull(player) {
+  return [...(player?.omens ?? []), ...(player?.inventory ?? [])].some((card) => card.id === "skull");
+}
+
 export function passTurnCoreState(g) {
   const shouldTakeExtraTurn = !!g.extraTurnAfterCurrent && !!g.players[g.currentPlayerIndex]?.isAlive;
   let next = shouldTakeExtraTurn ? g.currentPlayerIndex : (g.currentPlayerIndex + 1) % g.players.length;
@@ -235,6 +239,25 @@ export function confirmDamageChoiceState(
     tileEffect: null,
     damageChoice: null,
   };
+
+  const damagedCheckPlayer = resolvedPlayers[choicePlayerIndex];
+  if (!damagedCheckPlayer.isAlive && !choice.skullChallengeResolved && playerHasSkull(damagedCheckPlayer)) {
+    return {
+      game: {
+        ...g,
+        combatState: null,
+        damageChoice: null,
+        skullChallenge: {
+          playerIndex: choicePlayerIndex,
+          damageChoice: { ...choice, skullChallengeResolved: true },
+          roll: null,
+          total: null,
+        },
+      },
+      cameraFloor: null,
+      clearDiceAnimation: false,
+    };
+  }
 
   if (choice.source === "combat") {
     const combatMessage = choice.combatSummaryMessage || "";
