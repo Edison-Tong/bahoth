@@ -78,7 +78,9 @@ export default function CombatOverlay({
         {phase === "attacker-roll" && (
           <div className="combat-controls">
             <p className="card-description">
-              Attacker rolls {combatState.rollStat === "sanity" ? "Sanity" : "Might"} first.
+              Attacker rolls{" "}
+              {combatState.rollStat === "sanity" ? "Sanity" : combatState.rollStat === "speed" ? "Speed" : "Might"}{" "}
+              first.
             </p>
             <button className="btn btn-primary" onClick={onRollAttacker}>
               Roll Attacker
@@ -109,7 +111,10 @@ export default function CombatOverlay({
 
         {phase === "defender-roll" && (
           <div className="combat-controls">
-            <p className="card-description">Defender rolls {combatState.rollStat === "sanity" ? "Sanity" : "Might"}.</p>
+            <p className="card-description">
+              Defender rolls{" "}
+              {combatState.rollStat === "sanity" ? "Sanity" : combatState.rollStat === "speed" ? "Speed" : "Might"}.
+            </p>
             <button className="btn btn-primary" onClick={onRollDefender}>
               Roll Defender
             </button>

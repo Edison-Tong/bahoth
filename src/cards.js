@@ -114,7 +114,7 @@ export const OMEN_CARDS = [
     ],
     passiveAbility: "Add 1 to the result of your Knowledge rolls",
     activeAbility:
-      "If something would cause your explorer to die, first roll 3 dice. 4-6: Instead of dying, set all your traits to critical. 0-3 You die as normal.", // NOTE: I HAVE NOT IMPLEMENTED A WAY TO DIE YET
+      "If something would cause your explorer to die, first roll 3 dice. 4-6: Instead of dying, set all your traits to critical. 0-3 You die as normal.",
   },
 ];
 
@@ -149,7 +149,7 @@ export const ITEM_CARDS = [
     id: "chainsaw",
     name: "Chainsaw",
     isWeapon: true,
-    activeAbilityRule: { trigger: "attack", action: "attack-bonus-die" }, // NOTE: HAVE NOT TESTED ATTACKS YET
+    activeAbilityRule: { trigger: "attack", action: "attack-bonus-die" },
     activeAbility: "When you use the Chainsaw to attack, add one die to your attack.",
   },
   {

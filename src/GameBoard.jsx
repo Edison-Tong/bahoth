@@ -167,6 +167,7 @@ const SUPPORTED_COMBAT_ITEM_ACTIONS = new Set([
   "attack-bonus-die",
   "attack-bonus-total",
   "optional-speed-loss-for-attack-dice",
+  "ranged-attack-speed",
 ]);
 
 function rotateDoors(doors, rotation) {
@@ -217,12 +218,59 @@ function getPlayerSanityDiceCount(player) {
   return player.character.sanity[player.statIndex.sanity] || 0;
 }
 
+function getPlayerSpeedDiceCount(player) {
+  return player.character.speed[player.statIndex.speed] || 0;
+}
+
 function getDefenseRollDiceBonus(player) {
   const effects = getPassiveEffects(player).filter((effect) => effect.type === "defense-roll-dice-bonus");
   return {
     amount: effects.reduce((sum, effect) => sum + (effect.amount || 0), 0),
     sourceNames: effects.map((effect) => effect.sourceName),
   };
+}
+
+function getCrossboxTargets(game, getTileAtPos) {
+  if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return [];
+  if (!game.hauntState) return [];
+  if (game.hasAttackedThisTurn) return [];
+
+  const attackerIndex = game.currentPlayerIndex;
+  const attacker = game.players[attackerIndex];
+  if (!attacker?.isAlive) return [];
+
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+
+  // Build set of reachable positions: same tile + door-adjacent tiles
+  const reachable = new Set();
+  reachable.add(`${attacker.floor}:${attacker.x}:${attacker.y}`);
+  const attackerTile = getTileAtPos(game.board, attacker.x, attacker.y, attacker.floor);
+  if (attackerTile) {
+    for (const dir of attackerTile.doors || []) {
+      const offset = DIR[dir];
+      if (!offset) continue;
+      const nx = attacker.x + offset.dx;
+      const ny = attacker.y + offset.dy;
+      const neighbor = getTileAtPos(game.board, nx, ny, attacker.floor);
+      if (!neighbor) continue;
+      if (!(neighbor.doors || []).includes(OPPOSITE[dir])) continue;
+      reachable.add(`${attacker.floor}:${nx}:${ny}`);
+    }
+  }
+
+  const isValidTarget = (player, playerIndex) => {
+    if (playerIndex === attackerIndex || !player.isAlive) return false;
+    const key = `${player.floor}:${player.x}:${player.y}`;
+    if (!reachable.has(key)) return false;
+    if (!Number.isInteger(traitorIndex)) return false;
+    const attackerIsTraitor = attackerIndex === traitorIndex;
+    const targetIsTraitor = playerIndex === traitorIndex;
+    return attackerIsTraitor ? !targetIsTraitor : targetIsTraitor;
+  };
+
+  return game.players
+    .map((player, playerIndex) => ({ player, playerIndex }))
+    .filter(({ player, playerIndex }) => isValidTarget(player, playerIndex));
 }
 
 function getCombatTargetsOnCurrentTile(game) {
@@ -1297,7 +1345,9 @@ export default function GameBoard({ players, onQuit }) {
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
 
     setGame((g) => {
-      const targets = getCombatTargetsOnCurrentTile(g);
+      const action = sourceCard?.activeAbilityRule?.action;
+      const targets =
+        action === "ranged-attack-speed" ? getCrossboxTargets(g, getTileAtPosition) : getCombatTargetsOnCurrentTile(g);
       if (!targets.some((target) => target.playerIndex === defenderIndex)) return g;
 
       const attacker = g.players[g.currentPlayerIndex];
@@ -1341,8 +1391,17 @@ export default function GameBoard({ players, onQuit }) {
           if (sourceCard.ownerCollection != null && sourceCard.ownerCardIndex != null) {
             usedItemKeys.push(`${sourceCard.ownerCollection}:${sourceCard.ownerCardIndex}:${sourceCard.id}`);
           }
+        } else if (sourceRule.action === "ranged-attack-speed") {
+          rollStat = "speed";
+          preRollBonusDice += 1;
+          preRollItemMessages.push(`${sourceCard.name}: +1 attack die`);
+          if (sourceCard.ownerCollection != null && sourceCard.ownerCardIndex != null) {
+            usedItemKeys.push(`${sourceCard.ownerCollection}:${sourceCard.ownerCardIndex}:${sourceCard.id}`);
+          }
         }
       }
+
+      const attackerNoDamageOnLoss = sourceRule?.action === "ranged-attack-speed";
 
       return {
         ...g,
@@ -1354,6 +1413,7 @@ export default function GameBoard({ players, onQuit }) {
           defenderIndex,
           rollStat,
           combatDamageType,
+          attackerNoDamageOnLoss,
           attacker: {
             dice: [],
             total: null,
@@ -1397,7 +1457,12 @@ export default function GameBoard({ players, onQuit }) {
         : role === "defender"
           ? getDefenseRollDiceBonus(actor)
           : { amount: 0, sourceNames: [] };
-    const baseStatDiceCount = rollStat === "sanity" ? getPlayerSanityDiceCount(actor) : getPlayerMightDiceCount(actor);
+    const baseStatDiceCount =
+      rollStat === "sanity"
+        ? getPlayerSanityDiceCount(actor)
+        : rollStat === "speed"
+          ? getPlayerSpeedDiceCount(actor)
+          : getPlayerMightDiceCount(actor);
     const baseDiceCount = actorProxy?.usesMightDiceCount ?? baseStatDiceCount + defenseBonus.amount;
     const rollResult = actorProxy
       ? {
@@ -1598,6 +1663,14 @@ export default function GameBoard({ players, onQuit }) {
           ...g,
           combatState: null,
           message: `Combat tied at ${outcome.attackerTotal}. No damage dealt.`,
+        };
+      }
+
+      if (combatState.attackerNoDamageOnLoss && outcome.loserIndex === combatState.attackerIndex) {
+        return {
+          ...g,
+          combatState: null,
+          message: `${outcome.winnerName} wins (${outcome.attackerTotal} vs ${outcome.defenderTotal}). ${outcome.loserName} takes no damage (Crossbow).`,
         };
       }
 
@@ -2827,7 +2900,11 @@ export default function GameBoard({ players, onQuit }) {
         viewedCardActiveAbilityState={viewedCardActiveAbilityState}
         showMoveConfirmUseNowDisabled={showMoveConfirmUseNowDisabled}
         canStartCardAttack={canStartCardAttackFromViewer}
-        cardAttackTargets={combatTargetsOnTile}
+        cardAttackTargets={
+          viewedCard?.activeAbilityRule?.action === "ranged-attack-speed"
+            ? getCrossboxTargets(game, getTileAtPosition)
+            : combatTargetsOnTile
+        }
         handleStartCardAttack={handleStartCombatFromViewedCard}
         handleUseViewedCardActiveAbilityNow={handleUseViewedCardActiveAbilityNow}
         handleChooseActiveAbilityValue={handleChooseActiveAbilityValue}
