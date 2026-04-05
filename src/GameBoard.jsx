@@ -160,6 +160,7 @@ import {
   applyCombatItemSource,
   getCombatItemTargets,
   getCrossboxTargets,
+  getGunTargets,
   getCombatTargetsOnCurrentTile,
   getPlayerSpeedDiceCount,
 } from "./items/combatItemAbility";
@@ -2886,7 +2887,9 @@ export default function GameBoard({ players, onQuit }) {
         cardAttackTargets={
           viewedCard?.activeAbilityRule?.action === "ranged-attack-speed"
             ? getCrossboxTargets(game, getTileAtPosition)
-            : combatTargetsOnTile
+            : viewedCard?.activeAbilityRule?.action === "gun-ranged-attack"
+              ? getGunTargets(game)
+              : combatTargetsOnTile
         }
         handleStartCardAttack={handleStartCombatFromViewedCard}
         handleUseViewedCardActiveAbilityNow={handleUseViewedCardActiveAbilityNow}

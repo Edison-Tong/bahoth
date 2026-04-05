@@ -206,7 +206,7 @@ export const ITEM_CARDS = [
     id: "gun",
     name: "Gun",
     isWeapon: true,
-    activeAbilityRule: { trigger: "attack", action: "ranged-attack-speed" }, // NOTE: HAVE NOT TESTED ATTACKS YET
+    activeAbilityRule: { trigger: "attack", action: "gun-ranged-attack" },
     activeAbility:
       "When you use the Gun to attack, you may attack any target in line of sight. You and the defender each roll Speed. If you lose, you take no damage.",
   },

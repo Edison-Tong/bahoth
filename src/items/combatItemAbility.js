@@ -1,6 +1,7 @@
 import { GAME_PHASES, getHauntCombatActorProxyState } from "../haunts/hauntDomain";
 import { DIR, OPPOSITE } from "../game/gameState";
 import { applyStatChangeState } from "../players/playerDomain";
+import { getTileAtPosition } from "../events/eventActions";
 
 // Actions handled by the shared combat engine (trigger: "attack").
 export const SUPPORTED_COMBAT_ITEM_ACTIONS = new Set([
@@ -8,6 +9,7 @@ export const SUPPORTED_COMBAT_ITEM_ACTIONS = new Set([
   "attack-bonus-total",
   "optional-speed-loss-for-attack-dice",
   "ranged-attack-speed",
+  "gun-ranged-attack",
   "sanity-combat",
 ]);
 
@@ -97,9 +99,61 @@ export function getCrossboxTargets(game, getTileAtPos) {
     .filter(({ player, playerIndex }) => isValidTarget(player, playerIndex));
 }
 
+// Line-of-sight targeting: same tile + all tiles reachable in a straight line through
+// connected doorways in any cardinal direction, on the same floor (Gun).
+export function getGunTargets(game) {
+  if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return [];
+  if (!game.hauntState) return [];
+  if (game.hasAttackedThisTurn) return [];
+
+  const attackerIndex = game.currentPlayerIndex;
+  const attacker = game.players[attackerIndex];
+  if (!attacker?.isAlive) return [];
+
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  const floor = attacker.floor;
+
+  // Collect all positions reachable via line-of-sight (same tile + straight lines through doorways)
+  const reachable = new Set();
+  reachable.add(`${floor}:${attacker.x}:${attacker.y}`);
+
+  for (const dir of ["N", "S", "E", "W"]) {
+    const offset = DIR[dir];
+    let cx = attacker.x;
+    let cy = attacker.y;
+
+    while (true) {
+      const currentTile = getTileAtPosition(game.board, cx, cy, floor);
+      if (!currentTile || !(currentTile.doors || []).includes(dir)) break;
+      const nx = cx + offset.dx;
+      const ny = cy + offset.dy;
+      const nextTile = getTileAtPosition(game.board, nx, ny, floor);
+      if (!nextTile || !(nextTile.doors || []).includes(OPPOSITE[dir])) break;
+      reachable.add(`${floor}:${nx}:${ny}`);
+      cx = nx;
+      cy = ny;
+    }
+  }
+
+  const isValidTarget = (player, playerIndex) => {
+    if (playerIndex === attackerIndex || !player.isAlive) return false;
+    const key = `${player.floor}:${player.x}:${player.y}`;
+    if (!reachable.has(key)) return false;
+    if (!Number.isInteger(traitorIndex)) return false;
+    const attackerIsTraitor = attackerIndex === traitorIndex;
+    const targetIsTraitor = playerIndex === traitorIndex;
+    return attackerIsTraitor ? !targetIsTraitor : targetIsTraitor;
+  };
+
+  return game.players
+    .map((player, playerIndex) => ({ player, playerIndex }))
+    .filter(({ player, playerIndex }) => isValidTarget(player, playerIndex));
+}
+
 // Dispatcher: picks the right target function based on the item action.
 export function getCombatItemTargets(game, action, getTileAtPos) {
   if (action === "ranged-attack-speed") return getCrossboxTargets(game, getTileAtPos);
+  if (action === "gun-ranged-attack") return getGunTargets(game);
   return getCombatTargetsOnCurrentTile(game);
 }
 
@@ -171,6 +225,10 @@ export function applyCombatItemSource(sourceRule, sourceCard, attackerIndex, cur
     preRollBonusDice += 1;
     attackerNoDamageOnLoss = true;
     preRollItemMessages.push(`${sourceCard.name}: +1 attack die`);
+    trackUsed();
+  } else if (sourceRule.action === "gun-ranged-attack") {
+    rollStat = "speed";
+    attackerNoDamageOnLoss = true;
     trackUsed();
   }
 
