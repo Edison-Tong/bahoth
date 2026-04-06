@@ -1,5 +1,5 @@
 export const OMEN_CARDS = [
-    {
+  {
     id: "armor",
     name: "Armor",
     passiveEffects: [
@@ -176,7 +176,7 @@ export const ITEM_CARDS = [
     id: "crossbow",
     name: "Crossbow",
     isWeapon: true,
-    activeAbilityRule: { trigger: "attack", action: "ranged-attack-speed" }, 
+    activeAbilityRule: { trigger: "attack", action: "ranged-attack-speed" },
     activeAbility:
       "When you use the Crossbow to attack, you may attack any character on your tile or an adjacent tile. You and the defender each roll Speed. Roll 1 extra die on the attack. If you lose, you take no damage.",
   },
@@ -303,7 +303,7 @@ export const ITEM_CARDS = [
     id: "rabbits-foot",
     name: "Rabbit's Foot",
     isWeapon: false,
-    activeAbilityRule: { trigger: "die-just-rolled", action: "reroll-one-die" }, 
+    activeAbilityRule: { trigger: "die-just-rolled", action: "reroll-one-die" },
     activeAbility: "Once during your turn, you may reroll 1 die that you just rolled.",
   },
   {
@@ -703,7 +703,7 @@ export const EVENT_CARDS = [
     id: "bat-out-of-hell",
     name: "Bat Out of Hell",
     todo: "Make a Speed roll",
-    result: "4+: Place your explorer on an adjacent tile. 0-3: Take 1 Physical damage.", 
+    result: "4+: Place your explorer on an adjacent tile. 0-3: Take 1 Physical damage.",
     steps: [
       createEventStep("trait-roll", {
         stat: "speed",
@@ -1259,7 +1259,7 @@ export const EVENT_CARDS = [
       createEventStep("choice", {
         id: "take-damage",
         prompt: "Take 2 Physical damage?",
-        options: ["yes", "no"], 
+        options: ["yes", "no"],
       }),
       createEventStep("effect", {
         when: { choice: { step: "take-damage", equals: "yes" } },
@@ -1282,7 +1282,7 @@ export const EVENT_CARDS = [
         outcomes: [
           createEventOutcome({ roll: { min: 4 } }, [
             createEventEffect("stat-choice", { mode: "gain", options: ["sanity", "speed"], amount: 1 }),
-            createEventEffect("move", { destination: "adjacent-tile" }), 
+            createEventEffect("move", { destination: "adjacent-tile" }),
           ]),
           createEventOutcome({ roll: { min: 2, max: 3 } }, [
             createEventEffect("stat-change", { mode: "gain", stat: "speed", amount: 1 }),
@@ -1336,7 +1336,7 @@ export const EVENT_CARDS = [
         when: { currentFloor: "basement" },
         effects: [
           createEventEffect("move", { destination: "upper-landing" }),
-          createEventEffect("damage", { damageType: "mental", amount: 1 }), 
+          createEventEffect("damage", { damageType: "mental", amount: 1 }),
         ],
       }),
     ],
@@ -1395,7 +1395,7 @@ export const EVENT_CARDS = [
         id: "make-haunt-roll",
         prompt: "Make a haunt roll?",
         options: ["yes", "no"],
-        onlyIf: { hauntStarted: false }, 
+        onlyIf: { hauntStarted: false },
       }),
       createEventStep("effect", {
         when: {
@@ -1469,7 +1469,7 @@ export const EVENT_CARDS = [
             { roll: { exact: 4 } },
             createEventEffect("stat-change", { mode: "lose", stat: "chosen", amount: 1 })
           ),
-          createEventOutcome({ roll: { max: 3 } }, createEventEffect("stat-change", { mode: "heal", stat: "chosen" })), 
+          createEventOutcome({ roll: { max: 3 } }, createEventEffect("stat-change", { mode: "heal", stat: "chosen" })),
         ],
       }),
     ],

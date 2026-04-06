@@ -1192,8 +1192,8 @@ export default function GameBoard({ players, onQuit }) {
         }
 
         // Discovering any tile always ends the turn
+        nextPlayers = nextPlayers.map((pl, i) => (i === g.currentPlayerIndex ? { ...pl, movesLeft: 0 } : pl));
         if (turnPhase === "move") {
-          nextPlayers = nextPlayers.map((pl, i) => (i === g.currentPlayerIndex ? { ...pl, movesLeft: 0 } : pl));
           message = `${p.name} discovered ${placedTile.name}. Turn ended.`;
         }
 
