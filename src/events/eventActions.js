@@ -1568,6 +1568,7 @@ export function getInitialEventPrimaryAction(g, card, eventEngineDeps) {
     return {
       type: "choice",
       options: awaiting.options,
+      disabledOptions: awaiting.disabledOptions || [],
       prompt: awaiting.prompt || "Choose an option.",
       autoRoll: false,
     };

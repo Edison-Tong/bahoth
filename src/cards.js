@@ -291,7 +291,7 @@ export const ITEM_CARDS = [
     id: "rabbits-foot",
     name: "Rabbit's Foot",
     isWeapon: false,
-    activeAbilityRule: { trigger: "die-just-rolled", action: "reroll-one-die" }, // NOTE: WAS NOT ABLE TO REROLL ANYTHING FOR HANGED MAN EVENT
+    activeAbilityRule: { trigger: "die-just-rolled", action: "reroll-one-die" }, 
     activeAbility: "Once during your turn, you may reroll 1 die that you just rolled.",
   },
   {
@@ -691,7 +691,7 @@ export const EVENT_CARDS = [
     id: "bat-out-of-hell",
     name: "Bat Out of Hell",
     todo: "Make a Speed roll",
-    result: "4+: Place your explorer on an adjacent tile. 0-3: Take 1 Physical damage.", // NOTE: ADJACENT MEANS IT SHARES A DOORWAY
+    result: "4+: Place your explorer on an adjacent tile. 0-3: Take 1 Physical damage.", 
     steps: [
       createEventStep("trait-roll", {
         stat: "speed",
@@ -952,7 +952,7 @@ export const EVENT_CARDS = [
     ],
   }),
   createEventCard({
-    id: "hanged-man",
+    id: "hanged-man", // NOTE: POTENTIAL ISSUES REROLLING WITH ITEMS ON THIS EVENT
     name: "Hanged Man",
     todo: "Roll each trait, one at a time.",
     result: "2+: Nothing happens. 0-1: Lose 1 from that trait. If you roll 2+ on all four rolls, gain 1 in any trait.",
@@ -1022,9 +1022,10 @@ export const EVENT_CARDS = [
         id: "discard-item",
         prompt: "Discard a non-weapon Item card?",
         options: ["yes", "no"],
+        disableIfEmpty: { yes: "non-weapon-item" },
       }),
       createEventStep("effect", {
-        when: { choice: { step: "discard-item", equals: "yes" } }, // NOTE: TEST TO SEE IF ALLOWS TO CHOOSE THE ITEM THAT IS DISCARDED
+        when: { choice: { step: "discard-item", equals: "yes" } },
         effects: [
           createEventEffect("discard-item", { filter: "non-weapon-item" }),
           createEventEffect("stat-change", { mode: "gain", stat: "sanity", amount: 1 }),

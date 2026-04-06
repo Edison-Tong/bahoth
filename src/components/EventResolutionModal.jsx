@@ -67,20 +67,25 @@ export function DrawnCardModal({ drawnCard, drawnEventPrimaryAction, onDismissCa
           <>
             {drawnEventPrimaryAction.prompt && <p className="card-description">{drawnEventPrimaryAction.prompt}</p>}
             <div className="event-option-list">
-              {drawnEventPrimaryAction.options.map((option) => (
-                <button
-                  key={`drawn-event-choice-${option}`}
-                  className="btn btn-primary"
-                  onClick={() =>
-                    onDismissCard({
-                      initialEventChoice: option,
-                      autoRollIfReady: true,
-                    })
-                  }
-                >
-                  {option}
-                </button>
-              ))}
+              {drawnEventPrimaryAction.options.map((option) => {
+                const isDisabled = (drawnEventPrimaryAction.disabledOptions || []).includes(option);
+                return (
+                  <button
+                    key={`drawn-event-choice-${option}`}
+                    className="btn btn-primary"
+                    onClick={() =>
+                      onDismissCard({
+                        initialEventChoice: option,
+                        autoRollIfReady: true,
+                      })
+                    }
+                    disabled={isDisabled}
+                    title={isDisabled ? "You have no eligible items to discard." : undefined}
+                  >
+                    {option}
+                  </button>
+                );
+              })}
             </div>
           </>
         ) : (
@@ -236,15 +241,20 @@ export default function EventResolutionModal({
         {eventState.awaiting?.prompt && <p className="card-description">{eventState.awaiting.prompt}</p>}
         {eventState.awaiting?.type === "choice" && (
           <div className="event-option-list">
-            {eventState.awaiting.options.map((option) => (
-              <button
-                key={`event-choice-${option}`}
-                className="btn btn-primary"
-                onClick={() => onEventAwaitingChoice(option)}
-              >
-                {option}
-              </button>
-            ))}
+            {eventState.awaiting.options.map((option) => {
+              const isDisabled = (eventState.awaiting.disabledOptions || []).includes(option);
+              return (
+                <button
+                  key={`event-choice-${option}`}
+                  className="btn btn-primary"
+                  onClick={() => onEventAwaitingChoice(option)}
+                  disabled={isDisabled}
+                  title={isDisabled ? "You have no eligible items to discard." : undefined}
+                >
+                  {option}
+                </button>
+              );
+            })}
           </div>
         )}
         {eventState.awaiting?.type === "step-stat-choice" && (

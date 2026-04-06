@@ -555,6 +555,16 @@ export function advanceEventResolution(g, deps) {
     };
 
     if (step.kind === "choice") {
+      const disabledOptions = [];
+      if (step.disableIfEmpty) {
+        const inventory = player?.inventory || [];
+        for (const [optionValue, filter] of Object.entries(step.disableIfEmpty)) {
+          let hasItems = false;
+          if (filter === "non-weapon-item") hasItems = inventory.some((card) => !card.isWeapon);
+          else if (filter === "item") hasItems = inventory.length > 0;
+          if (!hasItems) disabledOptions.push(optionValue);
+        }
+      }
       return {
         game: {
           ...nextGame,
@@ -564,6 +574,7 @@ export function advanceEventResolution(g, deps) {
               type: "choice",
               prompt: step.prompt,
               options: step.options,
+              disabledOptions,
               stepId: step.id,
             },
           },
