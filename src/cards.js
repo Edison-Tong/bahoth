@@ -1,4 +1,16 @@
 export const OMEN_CARDS = [
+    {
+    id: "armor",
+    name: "Armor",
+    passiveEffects: [
+      {
+        type: "damage-reduction",
+        damageTypes: ["physical"],
+        amount: 1,
+      },
+    ],
+    passiveAbility: "Whenever you take physical damage, reduce the damage by one",
+  },
   {
     id: "book",
     name: "Book",
