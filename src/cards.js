@@ -1247,7 +1247,7 @@ export const EVENT_CARDS = [
       createEventStep("choice", {
         id: "take-damage",
         prompt: "Take 2 Physical damage?",
-        options: ["yes", "no"], // NOTE: MAYBE MAKE A WAY TO TAKE BACK THE CHOICE TO TAKE DAMAGE IF PLAYER CHOOSES YES BUT THEN DECIDES THEY DON'T WANT TO TAKE DAMAGE AFTER ALL
+        options: ["yes", "no"], 
       }),
       createEventStep("effect", {
         when: { choice: { step: "take-damage", equals: "yes" } },
@@ -1270,7 +1270,7 @@ export const EVENT_CARDS = [
         outcomes: [
           createEventOutcome({ roll: { min: 4 } }, [
             createEventEffect("stat-choice", { mode: "gain", options: ["sanity", "speed"], amount: 1 }),
-            createEventEffect("move", { destination: "adjacent-tile" }), // NOTE: ADJACENT MEANS IT SHARES A DOORWAY
+            createEventEffect("move", { destination: "adjacent-tile" }), 
           ]),
           createEventOutcome({ roll: { min: 2, max: 3 } }, [
             createEventEffect("stat-change", { mode: "gain", stat: "speed", amount: 1 }),
@@ -1324,7 +1324,7 @@ export const EVENT_CARDS = [
         when: { currentFloor: "basement" },
         effects: [
           createEventEffect("move", { destination: "upper-landing" }),
-          createEventEffect("damage", { damageType: "mental", amount: 1 }), // NOTE: HAVE NOT CONFIRMED IF MENTAL DAMAGE IS TAKEN IF ON THE BASEMENT LEVEL
+          createEventEffect("damage", { damageType: "mental", amount: 1 }), 
         ],
       }),
     ],
@@ -1383,7 +1383,7 @@ export const EVENT_CARDS = [
         id: "make-haunt-roll",
         prompt: "Make a haunt roll?",
         options: ["yes", "no"],
-        onlyIf: { hauntStarted: false }, // NOTE: CHECK TO SEE IF RESULTS ARE AUTOMATIC IF HAUNT HAS STARTED
+        onlyIf: { hauntStarted: false }, 
       }),
       createEventStep("effect", {
         when: {
@@ -1457,7 +1457,7 @@ export const EVENT_CARDS = [
             { roll: { exact: 4 } },
             createEventEffect("stat-change", { mode: "lose", stat: "chosen", amount: 1 })
           ),
-          createEventOutcome({ roll: { max: 3 } }, createEventEffect("stat-change", { mode: "heal", stat: "chosen" })), // NOTE:  CHECK TO SEE IF STAT HEALING WORKS
+          createEventOutcome({ roll: { max: 3 } }, createEventEffect("stat-change", { mode: "heal", stat: "chosen" })), 
         ],
       }),
     ],
@@ -1481,7 +1481,7 @@ export const EVENT_CARDS = [
     ],
   }),
   createEventCard({
-    id: "wandering-ghost", // THE EVENT ALLOWS YOU TO BURY AN ITEM EVEN IF YOU DON'T HAVE AN ITEM
+    id: "wandering-ghost", // NOTE: THE EVENT ALLOWS YOU TO BURY AN ITEM EVEN IF YOU DON'T HAVE AN ITEM
     name: "Wandering Ghost",
     todo: "You may bury one of your Items. If you do, gain 1 in any trait. Otherwise, make a Sanity roll.",
     result:
@@ -1491,6 +1491,7 @@ export const EVENT_CARDS = [
         id: "bury-item",
         prompt: "Bury one of your Items?",
         options: ["yes", "no"],
+        disableIfEmpty: { yes: "item" },
       }),
       createEventStep("effect", {
         when: { choice: { step: "bury-item", equals: "yes" } },
