@@ -1379,6 +1379,40 @@
   margin: 0 0 1rem;
 }
 
+.roll-history {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(0, 0, 0, 0.25);
+  border-radius: 6px;
+  border-left: 3px solid rgba(135, 205, 255, 0.4);
+}
+
+.roll-history-entry {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: #a09080;
+  align-items: baseline;
+}
+
+.roll-history-label {
+  color: #c4b69c;
+  font-weight: 600;
+  min-width: 4.5rem;
+}
+
+.roll-history-dice {
+  color: #a09080;
+}
+
+.roll-history-total {
+  color: #c4b69c;
+  font-weight: 600;
+}
+
 .card-flavor {
   font-size: 0.85rem;
   font-style: italic;

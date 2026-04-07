@@ -173,6 +173,17 @@ export default function EventResolutionModal({
         <div className="card-type-label">EVENT</div>
         <h2 className="card-name">{eventState.card.name}</h2>
         <CardAbilityContent card={{ ...eventState.card, type: "event" }} />
+        {eventState.rollHistory?.length > 0 && (
+          <div className="roll-history">
+            {eventState.rollHistory.map((pastRoll, i) => (
+              <div key={`roll-history-${i}`} className="roll-history-entry">
+                <span className="roll-history-label">{pastRoll.label}:</span>
+                <span className="roll-history-dice">{pastRoll.dice.join(", ")}</span>
+                <span className="roll-history-total">(= {pastRoll.total})</span>
+              </div>
+            ))}
+          </div>
+        )}
         {eventState.summary && !eventState.lastRoll && <p className="card-description">{eventState.summary}</p>}
         {eventState.lastRoll && (
           <>

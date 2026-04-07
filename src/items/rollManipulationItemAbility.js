@@ -482,6 +482,22 @@ export function chooseAngelsFeatherValueState(g, total, viewedCard, deps, helper
   const forcedTotal = Math.max(0, Math.min(8, Number(total)));
   const awaiting = g.eventState?.awaiting;
 
+  if (canApplyNow && awaiting?.type === "step-stat-choice") {
+    return {
+      game: {
+        ...g,
+        players: nextPlayers,
+        eventState: {
+          ...g.eventState,
+          featherPendingTotal: forcedTotal,
+        },
+        message: `${owner.name} buries Angel's Feather and sets the next roll to ${forcedTotal}. Choose a trait to apply it to.`,
+      },
+      queueTraitRollOverride: null,
+      closeViewedCard: true,
+    };
+  }
+
   if (canApplyNow && g.hauntActionRoll?.status === "awaiting-roll") {
     return {
       game: {

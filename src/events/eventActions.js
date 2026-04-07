@@ -277,6 +277,7 @@ function getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedT
   const canApplyNow =
     (awaiting?.type === "roll-ready" && awaiting.rollKind === "trait-roll" && awaiting.overrideTotal === undefined) ||
     (awaiting?.type === "trait-roll-sequence-ready" && awaiting.overrideTotal === undefined) ||
+    awaiting?.type === "step-stat-choice" ||
     (hauntActionRoll?.status === "awaiting-roll" && hauntActionRoll.forcedTotal === null);
   const canQueueForDrawnEvent =
     game.drawnCard?.type === "event" &&
@@ -379,12 +380,16 @@ export function continueEventState(g, deps) {
     return { game: resumed.game, cameraFloor: resumed.cameraFloor || null };
   }
 
+  const currentLastRoll = g.eventState.lastRoll;
   const result = runAdvanceEventResolution({
     ...g,
     eventState: {
       ...g.eventState,
       summary: null,
       lastRoll: null,
+      rollHistory: currentLastRoll
+        ? [...(g.eventState.rollHistory || []), currentLastRoll]
+        : (g.eventState.rollHistory || []),
     },
   });
   const pendingEventState = result.game.eventState;
@@ -482,10 +487,12 @@ export function eventAwaitingChoiceState(g, value, deps) {
   }
 
   if (awaiting.type === "step-stat-choice") {
+    const pendingFeatherTotal = g.eventState.featherPendingTotal;
     const nextState = {
       ...g,
       eventState: {
         ...g.eventState,
+        featherPendingTotal: undefined,
         awaiting: null,
         context: {
           ...g.eventState.context,
@@ -500,12 +507,48 @@ export function eventAwaitingChoiceState(g, value, deps) {
     let result = runAdvanceEventResolution(nextState);
     let nextDiceAnimation = null;
     if (result.game.eventState?.awaiting?.type === "roll-ready") {
-      const rollReady = resolveRollReadyAwaiting(result.game, result.game.eventState.awaiting, eventFlowDeps);
-      result = {
-        ...result,
-        game: rollReady.game,
-      };
-      nextDiceAnimation = rollReady.animation || null;
+      if (pendingFeatherTotal !== undefined) {
+        const rollReadyAwaiting = result.game.eventState.awaiting;
+        const matchedOutcome = getMatchingOutcome(rollReadyAwaiting.outcomes || [], pendingFeatherTotal);
+        const resolvedEffects = (matchedOutcome?.effects || []).map((effect) =>
+          effect.stat === "rolled-trait" && rollReadyAwaiting.rollStat
+            ? { ...effect, rolledStat: rollReadyAwaiting.rollStat }
+            : effect
+        );
+        const prevLastRoll = result.game.eventState.lastRoll;
+        const nextRollHistory = prevLastRoll
+          ? [...(result.game.eventState.rollHistory || []), prevLastRoll]
+          : result.game.eventState.rollHistory || [];
+        result = {
+          ...result,
+          game: {
+            ...result.game,
+            eventState: {
+              ...result.game.eventState,
+              featherPendingTotal: undefined,
+              awaiting: null,
+              rollHistory: nextRollHistory,
+              lastRoll: {
+                label: STAT_LABELS[rollReadyAwaiting.rollStat] || rollReadyAwaiting.label || "Trait",
+                dice: [pendingFeatherTotal],
+                total: pendingFeatherTotal,
+                modifier: null,
+                outcomes: [...(rollReadyAwaiting.outcomes || [])],
+              },
+              summary: describeEventEffects(resolvedEffects),
+              pendingEffects: resolvedEffects,
+            },
+            message: `${g.eventState.card.name}: roll set to ${pendingFeatherTotal} by Angel's Feather.`,
+          },
+        };
+      } else {
+        const rollReady = resolveRollReadyAwaiting(result.game, result.game.eventState.awaiting, eventFlowDeps);
+        result = {
+          ...result,
+          game: rollReady.game,
+        };
+        nextDiceAnimation = rollReady.animation || null;
+      }
     }
     return { game: result.game, cameraFloor: result.cameraFloor || null, diceAnimation: nextDiceAnimation };
   }
@@ -1639,6 +1682,7 @@ export function resolveRollReadyAwaiting(g, awaiting, deps) {
         display: Array.from({ length: roll.dice.length }, () => Math.floor(Math.random() * 3)),
         settled: false,
         label: STAT_LABELS[awaiting.rollStat],
+        rollStat: awaiting.rollStat,
         total: roll.total,
         modifier: roll.modifier,
         outcomes: [...(awaiting.outcomes || [])],
@@ -1682,7 +1726,13 @@ export function resolveEventAnimationSettlement(g, da) {
     if (!g.eventState) return { handled: true, game: g };
 
     const matchedOutcome = getMatchingOutcome(da.outcomes || [], da.total);
-    const resolvedEffects = [...(matchedOutcome?.effects || [])];
+    const resolvedEffects = (matchedOutcome?.effects || []).map((effect) =>
+      effect.stat === "rolled-trait" && da.rollStat ? { ...effect, rolledStat: da.rollStat } : effect
+    );
+    const prevLastRoll = g.eventState.lastRoll;
+    const nextRollHistory = prevLastRoll
+      ? [...(g.eventState.rollHistory || []), prevLastRoll]
+      : g.eventState.rollHistory || [];
 
     return {
       handled: true,
@@ -1691,6 +1741,7 @@ export function resolveEventAnimationSettlement(g, da) {
         eventState: {
           ...g.eventState,
           awaiting: null,
+          rollHistory: nextRollHistory,
           lastRoll: {
             label: da.label,
             dice: da.final,

@@ -33,6 +33,14 @@ function matchesEventCondition(condition, g, eventState) {
     );
   }
 
+  if (condition.allChoices) {
+    return Object.entries(condition.allChoices).every(([key, value]) => eventState.context.choices?.[key] === value);
+  }
+
+  if (condition.choiceAbsent) {
+    return !(condition.choiceAbsent in (eventState.context.choices || {}));
+  }
+
   return true;
 }
 
@@ -445,6 +453,24 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
     };
   }
 
+  if (effect.type === "record-context") {
+    return {
+      game: {
+        ...g,
+        eventState: {
+          ...eventState,
+          context: {
+            ...eventState.context,
+            choices: {
+              ...(eventState.context.choices || {}),
+              [effect.key]: effect.value,
+            },
+          },
+        },
+      },
+    };
+  }
+
   return { game: g };
 }
 
@@ -598,6 +624,8 @@ export function advanceEventResolution(g, deps) {
       const stepKey = step.id || `${eventState.card.id}-${stepIndex}`;
       const selectedStat = step.stat || eventState.context.selectedStats?.[stepKey];
       if (!selectedStat && step.chooseFrom?.length) {
+        const usedStats = step.excludeSelectedStats ? Object.values(eventState.context.selectedStats || {}) : [];
+        const availableOptions = step.chooseFrom.filter((s) => !usedStats.includes(s));
         return {
           game: {
             ...nextGame,
@@ -606,7 +634,7 @@ export function advanceEventResolution(g, deps) {
               awaiting: {
                 type: "step-stat-choice",
                 prompt: "Choose a trait to roll.",
-                options: step.chooseFrom,
+                options: availableOptions,
                 stepKey,
               },
             },

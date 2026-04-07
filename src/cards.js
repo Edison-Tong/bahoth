@@ -964,26 +964,63 @@ export const EVENT_CARDS = [
     ],
   }),
   createEventCard({
-    id: "hanged-man", // NOTE: POTENTIAL ISSUES REROLLING WITH ITEMS ON THIS EVENT
+    id: "hanged-man",
     name: "Hanged Man",
     todo: "Roll each trait, one at a time.",
     result: "2+: Nothing happens. 0-1: Lose 1 from that trait. If you roll 2+ on all four rolls, gain 1 in any trait.",
     steps: [
-      createEventStep("trait-roll-sequence", {
-        stats: ["might", "speed", "knowledge", "sanity"],
+      createEventStep("trait-roll", {
+        id: "hanged-roll-1",
+        chooseFrom: ["might", "speed", "knowledge", "sanity"],
+        excludeSelectedStats: true,
         outcomes: [
-          createEventOutcome(
-            { perRoll: { max: 1 } },
-            createEventEffect("stat-change", { mode: "lose", stat: "rolled-trait", amount: 1 })
-          ),
-          createEventOutcome(
-            { allRolls: { min: 2 } },
-            createEventEffect("stat-choice", {
-              mode: "gain",
-              options: ["might", "speed", "knowledge", "sanity"],
-              amount: 1,
-            })
-          ),
+          createEventOutcome({ roll: { max: 1 } }, [
+            createEventEffect("stat-change", { mode: "lose", stat: "rolled-trait", amount: 1 }),
+            createEventEffect("record-context", { key: "hanged-man-any-failed", value: "yes" }),
+          ]),
+        ],
+      }),
+      createEventStep("trait-roll", {
+        id: "hanged-roll-2",
+        chooseFrom: ["might", "speed", "knowledge", "sanity"],
+        excludeSelectedStats: true,
+        outcomes: [
+          createEventOutcome({ roll: { max: 1 } }, [
+            createEventEffect("stat-change", { mode: "lose", stat: "rolled-trait", amount: 1 }),
+            createEventEffect("record-context", { key: "hanged-man-any-failed", value: "yes" }),
+          ]),
+        ],
+      }),
+      createEventStep("trait-roll", {
+        id: "hanged-roll-3",
+        chooseFrom: ["might", "speed", "knowledge", "sanity"],
+        excludeSelectedStats: true,
+        outcomes: [
+          createEventOutcome({ roll: { max: 1 } }, [
+            createEventEffect("stat-change", { mode: "lose", stat: "rolled-trait", amount: 1 }),
+            createEventEffect("record-context", { key: "hanged-man-any-failed", value: "yes" }),
+          ]),
+        ],
+      }),
+      createEventStep("trait-roll", {
+        id: "hanged-roll-4",
+        chooseFrom: ["might", "speed", "knowledge", "sanity"],
+        excludeSelectedStats: true,
+        outcomes: [
+          createEventOutcome({ roll: { max: 1 } }, [
+            createEventEffect("stat-change", { mode: "lose", stat: "rolled-trait", amount: 1 }),
+            createEventEffect("record-context", { key: "hanged-man-any-failed", value: "yes" }),
+          ]),
+        ],
+      }),
+      createEventStep("effect", {
+        when: { choiceAbsent: "hanged-man-any-failed" },
+        effects: [
+          createEventEffect("stat-choice", {
+            mode: "gain",
+            options: ["might", "speed", "knowledge", "sanity"],
+            amount: 1,
+          }),
         ],
       }),
     ],
@@ -1493,7 +1530,7 @@ export const EVENT_CARDS = [
     ],
   }),
   createEventCard({
-    id: "wandering-ghost", // NOTE: THE EVENT ALLOWS YOU TO BURY AN ITEM EVEN IF YOU DON'T HAVE AN ITEM
+    id: "wandering-ghost",
     name: "Wandering Ghost",
     todo: "You may bury one of your Items. If you do, gain 1 in any trait. Otherwise, make a Sanity roll.",
     result:
