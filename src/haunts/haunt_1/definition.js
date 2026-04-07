@@ -75,8 +75,7 @@ const haunt1Definition = {
         introduction: "You smile. Jack is back.",
         setupSteps: [
           "Your explorer is still in the game. You are the traitor.",
-          "Place the Monster card by your left hand.",
-          "Heal all traits. Gain your physical bonus from player count.",
+          "Heal all traits. Gain (number) in each of your physical traits.",
         ],
       },
       sidebarSections: [

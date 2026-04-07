@@ -134,20 +134,23 @@ export function HeroRulesPage({ hauntDefinition, onDone }) {
   );
 }
 
-export function TraitorRulesPage({ hauntDefinition, onDone }) {
+export function TraitorRulesPage({ hauntDefinition, playerCount, onDone }) {
   const booklet = getRulesBooklet(hauntDefinition);
   const traitorContent = booklet.traitor;
   const monsterCard = traitorContent.monsterCard;
   const monsterStats = monsterCard?.stats || {};
 
+  const physicalBonus = hauntDefinition?.scaling?.traitorPhysicalBonusByPlayerCount?.[playerCount] ?? null;
+  const resolvedSetupSteps = traitorContent.readFirst.setupSteps.map((step) =>
+    typeof step === "string" && physicalBonus !== null ? step.replace("(number)", physicalBonus) : step
+  );
+  const resolvedReadFirst = { ...traitorContent.readFirst, setupSteps: resolvedSetupSteps };
+
   return (
     <div className="card-overlay" role="dialog" aria-label="Traitor rules">
       <div className="haunt-booklet haunt-booklet-traitor">
         <BookletHeader title={booklet.header.title} meta={booklet.header.meta} number={booklet.header.number} />
-        <ReadFirstBlock
-          introduction={traitorContent.readFirst.introduction}
-          setupSteps={traitorContent.readFirst.setupSteps}
-        />
+        <ReadFirstBlock introduction={resolvedReadFirst.introduction} setupSteps={resolvedReadFirst.setupSteps} />
 
         <div className="haunt-booklet-grid">
           <aside className="haunt-booklet-sidebar">
@@ -267,7 +270,9 @@ export default function HauntSetupOverlay({ game, hauntDefinition, onAdvanceRule
   }
 
   if (rulesStep === "traitor-rules") {
-    return <TraitorRulesPage hauntDefinition={hauntDefinition} onDone={onBeginHaunt} />;
+    return (
+      <TraitorRulesPage hauntDefinition={hauntDefinition} playerCount={game.players.length} onDone={onBeginHaunt} />
+    );
   }
 
   return null;

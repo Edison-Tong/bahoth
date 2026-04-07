@@ -188,7 +188,10 @@ function healAllTraits(player) {
     might: Math.max(player.statIndex.might, player.character?.startIndex?.might ?? player.statIndex.might),
     speed: Math.max(player.statIndex.speed, player.character?.startIndex?.speed ?? player.statIndex.speed),
     sanity: Math.max(player.statIndex.sanity, player.character?.startIndex?.sanity ?? player.statIndex.sanity),
-    knowledge: Math.max(player.statIndex.knowledge, player.character?.startIndex?.knowledge ?? player.statIndex.knowledge),
+    knowledge: Math.max(
+      player.statIndex.knowledge,
+      player.character?.startIndex?.knowledge ?? player.statIndex.knowledge
+    ),
   };
   return {
     ...player,
