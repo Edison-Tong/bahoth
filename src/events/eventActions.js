@@ -1012,6 +1012,17 @@ export function getCardActiveAbilityState({
     return { canUseNow: false, requiresValueSelection: false, valueOptions: [] };
   }
 
+  const isPlacingTile = game.turnPhase === "rotate" && rule.action !== "holy-symbol-bury-discovered-tile";
+  if (isPlacingTile) {
+    return { canUseNow: false, requiresValueSelection: false, valueOptions: [] };
+  }
+
+  const isPostDiscoveryActionItem =
+    game.postDiscovery && (rule.trigger === "on-your-turn" || rule.trigger === "attack");
+  if (isPostDiscoveryActionItem) {
+    return { canUseNow: false, requiresValueSelection: false, valueOptions: [] };
+  }
+
   const triggerHandler = ACTIVE_ABILITY_TRIGGER_HANDLERS[rule.trigger];
   const triggerSatisfied = triggerHandler
     ? triggerHandler({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride })
@@ -1188,11 +1199,7 @@ export function applyRabbitFootRerollState(g) {
     return { game: g, diceAnimation: null };
   }
 
-  const sourceDice = isSkeletonKeyRoll
-    ? skeletonKeyRollDice
-    : isHauntActionRoll
-      ? hauntLastRoll.dice
-      : lastRoll.dice;
+  const sourceDice = isSkeletonKeyRoll ? skeletonKeyRollDice : isHauntActionRoll ? hauntLastRoll.dice : lastRoll.dice;
 
   const selectedIndex = Number(pending.selectedDieIndex);
   if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= sourceDice.length) {

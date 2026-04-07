@@ -136,9 +136,10 @@ export function applyCreepyDollNowState(game, viewedCard, deps) {
           }
         : card
     );
+    const minSanity = game.gamePhase === "preHaunt" ? 1 : 0;
     const nextStatIndex = {
       ...player.statIndex,
-      sanity: Math.max(0, player.statIndex.sanity - 1),
+      sanity: Math.max(minSanity, player.statIndex.sanity - 1),
     };
     const isAlive = Object.values(nextStatIndex).every((value) => value > 0);
 

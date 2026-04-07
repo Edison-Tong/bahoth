@@ -422,7 +422,8 @@ export default function GameBoard({ players, onQuit }) {
             sanityLoss > 0 && Number.isInteger(da.ownerIndex)
               ? g.players.map((player, playerIndex) => {
                   if (playerIndex !== da.ownerIndex) return player;
-                  const nextSanity = Math.max(0, (player.statIndex?.sanity ?? 0) - sanityLoss);
+                  const minSanity = g.gamePhase === "preHaunt" ? 1 : 0;
+                  const nextSanity = Math.max(minSanity, (player.statIndex?.sanity ?? 0) - sanityLoss);
                   const nextStatIndex = {
                     ...player.statIndex,
                     sanity: nextSanity,
@@ -2108,9 +2109,30 @@ export default function GameBoard({ players, onQuit }) {
     const hauntRoll = game.hauntActionRoll;
     if (!hauntRoll?.isCollapsedRoll) return;
     const lastRoll = hauntRoll.lastRoll;
+    const total = lastRoll.total;
+
+    if (total >= 5) {
+      // Pass: advance turn immediately — no need for the redundant "The floor holds!" intermediate step
+      let passTurnCameraFloor = null;
+      setGame((g) => {
+        const base = { ...g, hauntActionRoll: null, tileEffect: null };
+        const passTurnResult = resolvePassTurnActionState(base, {
+          resolveEndTurnItemPassiveState,
+          statLabels: STAT_LABELS,
+        });
+        passTurnCameraFloor = passTurnResult.cameraFloor;
+        return resolveHauntAfterDamageState(g, passTurnResult.game);
+      });
+      if (passTurnCameraFloor) {
+        setCameraFloor(passTurnCameraFloor);
+      }
+      return;
+    }
+
+    // Fail: show "collapsed-pending" so player can roll for damage
     const syntheticAnimation = {
       purpose: "collapsed",
-      resolvedTotal: lastRoll.total,
+      resolvedTotal: total,
       final: lastRoll.dice,
       modifier: lastRoll.modifier,
       playerIndex: hauntRoll.playerIndex,
