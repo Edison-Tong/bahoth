@@ -345,7 +345,8 @@ export function getMagicCameraUsageState(params, deps) {
   const canApplyNow =
     base.canApplyNow &&
     ((awaiting?.type === "roll-ready" && awaiting.rollKind === "trait-roll" && awaiting.rollStat === "knowledge") ||
-      (hauntRoll?.status === "awaiting-roll" && hauntRoll.stat === "knowledge"));
+      (hauntRoll?.status === "awaiting-roll" && hauntRoll.stat === "knowledge") ||
+      (awaiting?.type === "step-stat-choice" && (awaiting.options || []).includes("knowledge")));
   const canQueueForDrawnEvent =
     base.canQueueForDrawnEvent &&
     drawnEventPrimaryAction?.isTraitRoll &&
@@ -414,6 +415,22 @@ export function applyMagicCameraNowState(game, viewedCard, args = {}, deps) {
           baseDiceCount: sanityDiceCount,
         },
         message: `${owner.name} uses ${inventoryCard.name} and will roll Sanity instead of Knowledge.`,
+      },
+      closeViewedCard: true,
+      diceAnimation: null,
+      queueTraitRollOverride: undefined,
+    };
+  }
+
+  if (awaiting?.type === "step-stat-choice") {
+    return {
+      game: {
+        ...game,
+        eventState: {
+          ...game.eventState,
+          pendingRollSubstitute: { to: "sanity", from: "knowledge", sourceName: inventoryCard.name },
+        },
+        message: `${owner.name} will use ${inventoryCard.name} on the Knowledge roll they choose.`,
       },
       closeViewedCard: true,
       diceAnimation: null,

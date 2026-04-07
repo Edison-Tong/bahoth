@@ -25,7 +25,9 @@ export function getBookUsageState({
   const base = getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride });
   const awaiting = game.eventState?.awaiting;
   const canApplyNow =
-    base.canApplyNow && awaiting?.type === "roll-ready" && awaiting.rollKind === "trait-roll" && !!awaiting.rollStat;
+    base.canApplyNow &&
+    ((awaiting?.type === "roll-ready" && awaiting.rollKind === "trait-roll" && !!awaiting.rollStat) ||
+      awaiting?.type === "step-stat-choice");
   const canQueueForDrawnEvent = base.canQueueForDrawnEvent && !!drawnEventPrimaryAction?.isTraitRoll;
 
   return {
@@ -114,6 +116,31 @@ export function applyBookNowState(game, viewedCard, deps) {
   }
 
   const awaiting = game.eventState?.awaiting;
+
+  if (awaiting?.type === "step-stat-choice") {
+    const nextOwner = nextPlayers[viewedCard.ownerIndex];
+    const ownerKnowledgeDice = nextOwner?.character?.knowledge?.[nextOwner?.statIndex?.knowledge];
+    return {
+      game: {
+        ...game,
+        players: nextPlayers,
+        eventState: {
+          ...game.eventState,
+          pendingRollSubstitute: {
+            to: "knowledge",
+            from: "any",
+            sourceName: omenCard.name,
+            knowledgeDiceCount: ownerKnowledgeDice,
+          },
+        },
+        message: `${owner.name} uses ${omenCard.name}, loses 1 Sanity, and will roll Knowledge for the next trait they choose.`,
+      },
+      closeViewedCard: true,
+      diceAnimation: null,
+      queueTraitRollOverride: undefined,
+    };
+  }
+
   if (!awaiting || awaiting.type !== "roll-ready" || awaiting.rollKind !== "trait-roll" || !awaiting.rollStat) {
     return { game, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
   }

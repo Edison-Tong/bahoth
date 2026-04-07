@@ -389,7 +389,7 @@ export function continueEventState(g, deps) {
       lastRoll: null,
       rollHistory: currentLastRoll
         ? [...(g.eventState.rollHistory || []), currentLastRoll]
-        : (g.eventState.rollHistory || []),
+        : g.eventState.rollHistory || [],
     },
   });
   const pendingEventState = result.game.eventState;
@@ -488,11 +488,13 @@ export function eventAwaitingChoiceState(g, value, deps) {
 
   if (awaiting.type === "step-stat-choice") {
     const pendingFeatherTotal = g.eventState.featherPendingTotal;
+    const pendingRollSubstitute = g.eventState.pendingRollSubstitute;
     const nextState = {
       ...g,
       eventState: {
         ...g.eventState,
         featherPendingTotal: undefined,
+        pendingRollSubstitute: undefined,
         awaiting: null,
         context: {
           ...g.eventState.context,
@@ -541,6 +543,32 @@ export function eventAwaitingChoiceState(g, value, deps) {
             message: `${g.eventState.card.name}: roll set to ${pendingFeatherTotal} by Angel's Feather.`,
           },
         };
+      } else if (pendingRollSubstitute) {
+        const rollReadyAwaiting = result.game.eventState.awaiting;
+        if (pendingRollSubstitute.from === "any" || rollReadyAwaiting.rollStat === pendingRollSubstitute.from) {
+          const currentPlayer = result.game.players[result.game.currentPlayerIndex];
+          const targetStat = pendingRollSubstitute.to;
+          const targetDiceCount =
+            currentPlayer?.character?.[targetStat]?.[currentPlayer?.statIndex?.[targetStat]] ??
+            rollReadyAwaiting.baseDiceCount;
+          result = {
+            ...result,
+            game: {
+              ...result.game,
+              eventState: {
+                ...result.game.eventState,
+                awaiting: {
+                  ...rollReadyAwaiting,
+                  rollStat: targetStat,
+                  baseDiceCount: targetDiceCount,
+                },
+              },
+            },
+          };
+        }
+        const rollReady = resolveRollReadyAwaiting(result.game, result.game.eventState.awaiting, eventFlowDeps);
+        result = { ...result, game: rollReady.game };
+        nextDiceAnimation = rollReady.animation || null;
       } else {
         const rollReady = resolveRollReadyAwaiting(result.game, result.game.eventState.awaiting, eventFlowDeps);
         result = {
