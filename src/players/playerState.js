@@ -1,13 +1,14 @@
 import { buildDynamiteRollReadyEventState } from "../items/dynamiteAbility";
 
-export function applyStatChangeState(players, playerIndex, stat, amount) {
+export function applyStatChangeState(players, playerIndex, stat, amount, options = {}) {
   if (!amount) return players;
 
+  const minIndex = options.preventDeath ? 1 : 0;
   return players.map((pl, i) => {
     if (i !== playerIndex) return pl;
 
     const maxIndex = pl.character[stat].length - 1;
-    const nextIndex = Math.max(0, Math.min(maxIndex, pl.statIndex[stat] + amount));
+    const nextIndex = Math.max(minIndex, Math.min(maxIndex, pl.statIndex[stat] + amount));
     const newStatIndex = { ...pl.statIndex, [stat]: nextIndex };
     const isAlive = Object.values(newStatIndex).every((value) => value > 0);
 
@@ -15,7 +16,14 @@ export function applyStatChangeState(players, playerIndex, stat, amount) {
   });
 }
 
-export function applyDamageAllocationState(players, playerIndex, allocation, adjustmentMode = "decrease") {
+export function applyDamageAllocationState(
+  players,
+  playerIndex,
+  allocation,
+  adjustmentMode = "decrease",
+  options = {}
+) {
+  const minIndex = options.preventDeath ? 1 : 0;
   return players.map((pl, i) => {
     if (i !== playerIndex) return pl;
 
@@ -26,7 +34,7 @@ export function applyDamageAllocationState(players, playerIndex, allocation, adj
       newStatIndex[stat] =
         adjustmentMode === "increase"
           ? Math.min(maxIndex, newStatIndex[stat] + amount)
-          : Math.max(0, newStatIndex[stat] - amount);
+          : Math.max(minIndex, newStatIndex[stat] - amount);
     }
 
     const isAlive = Object.values(newStatIndex).every((value) => value > 0);
@@ -232,7 +240,9 @@ export function confirmDamageChoiceState(
     return { game: g, cameraFloor: null, clearDiceAnimation: false };
   }
 
-  const damagedPlayers = applyDamageAllocation(g.players, choicePlayerIndex, choice.allocation, choice.adjustmentMode);
+  const damagedPlayers = applyDamageAllocation(g.players, choicePlayerIndex, choice.allocation, choice.adjustmentMode, {
+    preventDeath: g.gamePhase === "preHaunt",
+  });
   const postDamageResult = applyPostDamagePassiveEffects(damagedPlayers, choicePlayerIndex, choice);
   const resolvedPlayers = applyTileEffectConsequences(g, postDamageResult.players, choice.effect);
   const baseState = {

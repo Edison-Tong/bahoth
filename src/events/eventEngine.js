@@ -99,7 +99,7 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
               const isAlive = Object.values(statIndex).every((value) => value > 0);
               return { ...player, statIndex, isAlive };
             })
-          : applyStatChange(updatedPlayers, playerIndex, stat, delta);
+          : applyStatChange(updatedPlayers, playerIndex, stat, delta, { preventDeath: g.gamePhase === "preHaunt" });
       }, players);
     }
 
@@ -114,7 +114,7 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
     }
 
     const delta = statEffect.mode === "lose" ? -(statEffect.amount || 0) : statEffect.amount || 0;
-    return applyStatChange(players, playerIndex, targetStat, delta);
+    return applyStatChange(players, playerIndex, targetStat, delta, { preventDeath: g.gamePhase === "preHaunt" });
   }
 
   const player = g.players[g.currentPlayerIndex];

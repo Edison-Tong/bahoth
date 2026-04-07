@@ -1292,12 +1292,12 @@ export default function GameBoard({ players, onQuit }) {
     }
   }
 
-  function applyStatChange(players, playerIndex, stat, amount) {
-    return applyStatChangeState(players, playerIndex, stat, amount);
+  function applyStatChange(players, playerIndex, stat, amount, options = {}) {
+    return applyStatChangeState(players, playerIndex, stat, amount, options);
   }
 
-  function applyDamageAllocation(players, playerIndex, allocation, adjustmentMode = "decrease") {
-    return applyDamageAllocationState(players, playerIndex, allocation, adjustmentMode);
+  function applyDamageAllocation(players, playerIndex, allocation, adjustmentMode = "decrease", options = {}) {
+    return applyDamageAllocationState(players, playerIndex, allocation, adjustmentMode, options);
   }
 
   function handleStartCombat(defenderIndex) {

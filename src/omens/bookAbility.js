@@ -88,7 +88,7 @@ export function applyBookNowState(game, viewedCard, deps) {
       ),
       statIndex: {
         ...player.statIndex,
-        sanity: Math.max(0, player.statIndex.sanity - 1),
+        sanity: Math.max(game.gamePhase === "preHaunt" ? 1 : 0, player.statIndex.sanity - 1),
       },
     };
   });
