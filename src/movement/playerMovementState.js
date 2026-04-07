@@ -336,6 +336,26 @@ export function placePendingSpecialTileState(g, placement, { getIdolChoiceStateF
         : player
     );
 
+    const jacksSpiritInScenario = g.hauntState?.scenarioState?.jacksSpirit;
+    const updatedHauntState =
+      jacksSpiritInScenario?.active &&
+      jacksSpiritInScenario.floor === oldFloor &&
+      jacksSpiritInScenario.x === oldX &&
+      jacksSpiritInScenario.y === oldY
+        ? {
+            ...g.hauntState,
+            scenarioState: {
+              ...g.hauntState.scenarioState,
+              jacksSpirit: {
+                ...jacksSpiritInScenario,
+                floor: selectedPlacement.floor,
+                x: selectedPlacement.x,
+                y: selectedPlacement.y,
+              },
+            },
+          }
+        : g.hauntState;
+
     const idolOfferState = getIdolChoiceStateForQueuedEvent({
       player: currentPlayer,
       tileName: placedTile.name,
@@ -350,6 +370,7 @@ export function placePendingSpecialTileState(g, placement, { getIdolChoiceStateF
           ...g,
           board: updatedBoard,
           players: updatedPlayers,
+          hauntState: updatedHauntState,
           movePath: [{ x: selectedPlacement.x, y: selectedPlacement.y, floor: selectedPlacement.floor, cost: 0 }],
           pendingSpecialPlacement: null,
           drawnCard: idolOfferState.drawnCard,
@@ -366,6 +387,7 @@ export function placePendingSpecialTileState(g, placement, { getIdolChoiceStateF
         ...g,
         board: updatedBoard,
         players: updatedPlayers,
+        hauntState: updatedHauntState,
         movePath: [{ x: selectedPlacement.x, y: selectedPlacement.y, floor: selectedPlacement.floor, cost: 0 }],
         pendingSpecialPlacement: null,
         drawnCard: pendingPlacement.queuedCard || null,
