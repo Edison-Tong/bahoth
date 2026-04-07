@@ -9,6 +9,7 @@ export default function TileEffectOverlay({
   onSkipNecklaceOfTeethGain,
   onDrawIdolEventCard,
   onSkipIdolEventCard,
+  onRollCollapsedStability,
   onStartCollapsedDamage,
   onDismissTileEffect,
 }) {
@@ -21,11 +22,13 @@ export default function TileEffectOverlay({
   const modalTone =
     te.type === "laundry-chute"
       ? "card-tile-neutral"
-      : te.type === "collapsed-pending"
+      : te.type === "collapsed-prompt"
         ? "card-tile-danger"
-        : te.damage > 0 || te.collapsed
+        : te.type === "collapsed-pending"
           ? "card-tile-danger"
-          : "card-tile-safe";
+          : te.damage > 0 || te.collapsed
+            ? "card-tile-danger"
+            : "card-tile-safe";
 
   return (
     <div className="card-overlay">
@@ -101,6 +104,10 @@ export default function TileEffectOverlay({
               Skip Event card
             </button>
           </>
+        ) : te.type === "collapsed-prompt" ? (
+          <button className="btn btn-primary" onClick={onRollCollapsedStability}>
+            Roll for Stability
+          </button>
         ) : te.type === "collapsed-pending" ? (
           <button className="btn btn-primary" onClick={onStartCollapsedDamage}>
             Roll for damage

@@ -39,24 +39,18 @@ export function getEndTurnTileAbilityState({
 
   if (tile.endOfTurn === "collapsed") {
     const speedVal = player.character.speed[player.statIndex.speed];
-    const roll = resolveTraitRoll(player, {
-      stat: "speed",
-      baseDiceCount: speedVal,
-      context: "end-of-turn",
-      board: game.board,
-    });
+    // Show a prompt card so the player can see what they're rolling before the animation plays.
     return {
-      game: { ...game, message: `${tile.name} — rolling for stability...` },
-      diceAnimation: {
-        purpose: "collapsed",
-        token: createRollToken(),
-        final: roll.dice,
-        display: Array.from({ length: roll.dice.length }, () => Math.floor(Math.random() * 3)),
-        tileName: tile.name,
-        playerIndex: currentPlayerIndex,
-        modifier: roll.modifier,
-        resolvedTotal: roll.total,
-        settled: false,
+      game: {
+        ...game,
+        message: `${tile.name} — roll for stability!`,
+        tileEffect: {
+          type: "collapsed-prompt",
+          tileName: tile.name,
+          playerIndex: currentPlayerIndex,
+          diceCount: speedVal,
+          message: `Roll your Speed dice. On a 5 or higher the floor holds. On a 4 or lower, you fall to the Basement Landing and take damage.`,
+        },
       },
     };
   }

@@ -2005,6 +2005,32 @@ export default function GameBoard({ players, onQuit }) {
     setDiceAnimation(rollState.diceAnimation);
   }
 
+  function handleRollCollapsedStability() {
+    const te = game.tileEffect;
+    if (!te || te.type !== "collapsed-prompt") return;
+    const playerIndex = te.playerIndex ?? game.currentPlayerIndex;
+    const player = game.players[playerIndex];
+    const roll = resolveTraitRoll(player, {
+      stat: "speed",
+      baseDiceCount: te.diceCount,
+      context: "end-of-turn",
+      board: game.board,
+    });
+    const createRollToken = () => `${Date.now()}-${Math.random()}`;
+    setGame((g) => ({ ...g, tileEffect: null, message: `${te.tileName} — rolling for stability...` }));
+    setDiceAnimation({
+      purpose: "collapsed",
+      token: createRollToken(),
+      final: roll.dice,
+      display: Array.from({ length: roll.dice.length }, () => Math.floor(Math.random() * 3)),
+      tileName: te.tileName,
+      playerIndex,
+      modifier: roll.modifier,
+      resolvedTotal: roll.total,
+      settled: false,
+    });
+  }
+
   function handleStartCollapsedDamage() {
     const te = game.tileEffect;
     if (!te || te.type !== "collapsed-pending") return;
@@ -2577,6 +2603,46 @@ export default function GameBoard({ players, onQuit }) {
   }, [game.currentPlayerIndex, game.turnNumber]);
 
   useEffect(() => {
+    const player = game.players[game.currentPlayerIndex];
+    if (player?.floor) {
+      setCameraFloor(player.floor);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [game.currentPlayerIndex, game.turnNumber]);
+
+  // Recovery: if game is stuck with "rolling for stability" message but no dice animation
+  // running (animation was lost due to a race condition), re-trigger the roll.
+  useEffect(() => {
+    if (diceAnimation) return;
+    if (game.tileEffect) return;
+    if (!game.message.endsWith("— rolling for stability...")) return;
+    const currentPlayer = game.players[game.currentPlayerIndex];
+    if (!currentPlayer) return;
+    const currentTile = game.board[currentPlayer.floor]?.find(
+      (t) => t.x === currentPlayer.x && t.y === currentPlayer.y
+    );
+    if (currentTile?.endOfTurn !== "collapsed") return;
+
+    let nextDiceAnimation = null;
+    setGame((g) => {
+      const resolved = resolveEndTurnActionState(g, {
+        isItemAbilityTileChoiceAwaiting,
+        getEndTurnTileAbilityState,
+        rollDice,
+        resolveTraitRoll,
+        getDamageReduction,
+        createDiceModifier,
+        resolveEndTurnItemPassiveState,
+        statLabels: STAT_LABELS,
+      });
+      nextDiceAnimation = resolved.diceAnimation;
+      return resolved.game;
+    });
+    if (nextDiceAnimation) setDiceAnimation(nextDiceAnimation);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diceAnimation, game.tileEffect, game.message, game.currentPlayerIndex]);
+
+  useEffect(() => {
     if (debugHauntOptions.length === 0) {
       if (debugSelectedHauntId !== "") {
         setDebugSelectedHauntId("");
@@ -3026,6 +3092,7 @@ export default function GameBoard({ players, onQuit }) {
         onSkipNecklaceOfTeethGain={handleSkipNecklaceOfTeethGain}
         onDrawIdolEventCard={handleDrawIdolEventCard}
         onSkipIdolEventCard={handleSkipIdolEventCard}
+        onRollCollapsedStability={handleRollCollapsedStability}
         onStartCollapsedDamage={handleStartCollapsedDamage}
         onDismissTileEffect={handleDismissTileEffect}
       />
