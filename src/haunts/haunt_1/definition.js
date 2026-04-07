@@ -148,40 +148,16 @@ const haunt1Definition = {
   },
   objectives: {
     heroes: "Exorcise Jack's Spirit.",
-    heroesChecklist: ["Kill the traitor to release Jack's Spirit.", "Exorcise Jack's Spirit."],
     traitor: "Win when all heroes are dead.",
   },
   tokens: {
     required: ["jacks-spirit", "exorcism", "knowledge-of-jack"],
   },
-  combatModifiers: [
-    {
-      id: "knowledge-of-jack-attack-bonus",
-      appliesWhen: "attacking-traitor-or-defending-vs-jacks-spirit",
-      condition: "actor-has-knowledge-of-jack-token",
-      bonusType: "flat-roll-bonus",
-      amount: 2,
-    },
-  ],
   mechanics: {
     combat: true,
     deathAndRevive: true,
-    extraMonsterTurnAfterTraitor: true,
     hiddenObjectives: true,
     traitorCorpseTracking: true,
-  },
-  traitorRules: {
-    deathBehavior: {
-      description:
-        "When the traitor dies, place Jack's Spirit on the omen tile farthest from the traitor's corpse. Repeat each time the traitor dies.",
-      spawn: {
-        actorId: "jacks-spirit",
-        locationRule: "farthest-omen-tile-from-traitor-corpse",
-      },
-    },
-    turnStartBehavior: {
-      ifDead: "take-turn-with-jacks-spirit",
-    },
   },
   heroActions: [
     {

@@ -317,6 +317,8 @@ export default function GameBoard({ players, onQuit }) {
   const gameplayLockedByCombat = !!game.combatState;
   const gameplayLockedByHauntActionRoll = !!game.hauntActionRoll;
   const gameplayLockedByStalkPreyPlacement = hauntPendingChoiceType === "stalk-prey-placement";
+  const gameplayLockedByHauntPendingChoice =
+    hauntPendingChoiceType === "assign-knowledge-token" || hauntPendingChoiceType === "move-exorcism-token";
   const gameIsOver = game.gamePhase === GAME_PHASES.GAME_OVER;
   const gameplayUiLocked =
     debugModeEnabled ||
@@ -324,6 +326,7 @@ export default function GameBoard({ players, onQuit }) {
     gameplayLockedByCombat ||
     gameplayLockedByHauntActionRoll ||
     gameplayLockedByStalkPreyPlacement ||
+    gameplayLockedByHauntPendingChoice ||
     gameIsOver;
 
   useEffect(() => {

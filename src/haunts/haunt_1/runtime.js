@@ -179,7 +179,8 @@ export function getActionAvailabilityState(game, { hauntActionLocked }) {
     };
   }
 
-  const isTraitorTurn = game.hauntState.traitorPlayerIndex === game.currentPlayerIndex;
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  const isTraitorTurn = traitorIndex === game.currentPlayerIndex;
   const currentPlayer = getCurrentPlayer(game);
   const currentTile = getCurrentTile(game);
   const scenarioState = getScenarioState(game.hauntState);
@@ -206,11 +207,18 @@ export function getActionAvailabilityState(game, { hauntActionLocked }) {
   const canGainKnowledgeToken =
     knowledgeTokenHolders.length < 2 && getKnowledgeEligibleHeroIndexes(game, knowledgeTokenHolders).length > 0;
 
+  const traitor = game.players[traitorIndex];
+  const traitorIsAlive = !!traitor?.isAlive;
+  const stalkPreyUsageKey = createUsageKey(game, "stalk-prey");
+  const stalkPreyAlreadyUsed = !!game.hauntState.oncePerTurnUsage?.[stalkPreyUsageKey];
+  const canStalkPrey =
+    isTraitorTurn && traitorIsAlive && !hauntActionLocked && !game.hasAttackedThisTurn && !stalkPreyAlreadyUsed;
+
   return {
     learnAboutJack: canUseHeroAction && onLibrary && canGainKnowledgeToken,
     studyExorcism: canUseHeroAction && onEventTile,
     exorciseJacksSpirit: canUseHeroAction && onSpiritTile,
-    stalkPrey: isTraitorTurn && !hauntActionLocked,
+    stalkPrey: canStalkPrey,
   };
 }
 
@@ -253,7 +261,7 @@ export function getActionButtonsState(game, context) {
       enabled: availability.learnAboutJack,
     },
     {
-      id: "study-exorcism",
+      id: "study-the-exorcism",
       label: "Study Exorcism",
       tone: "secondary",
       enabled: availability.studyExorcism,
@@ -293,7 +301,7 @@ export function resolveActionState(game, { actionId }) {
   if (actionId === "learn-about-jack") {
     return resolveLearnAboutJackState(game);
   }
-  if (actionId === "study-exorcism") {
+  if (actionId === "study-the-exorcism") {
     return resolveStudyExorcismState(game);
   }
   if (actionId === "exorcise-jacks-spirit") {
@@ -598,18 +606,6 @@ function getFarthestOmenTileFrom(board, origin) {
 
   scored.sort((a, b) => b.distance - a.distance || a.name.localeCompare(b.name));
   return scored[0];
-}
-
-function _healAllTraits(player) {
-  const nextStatIndex = { ...player.statIndex };
-  for (const stat of ["might", "speed", "sanity", "knowledge"]) {
-    nextStatIndex[stat] = player.character[stat].length - 1;
-  }
-  return {
-    ...player,
-    statIndex: nextStatIndex,
-    isAlive: true,
-  };
 }
 
 function restoreStartingTraits(player) {
