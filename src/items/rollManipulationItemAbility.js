@@ -28,7 +28,8 @@ export function getAngelsFeatherUsageState({ game, drawnEventPrimaryAction, queu
   const { getTraitRollRequiredUsageState } = deps;
   const base = getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride });
   const canApplyToHauntActionRoll =
-    game.hauntActionRoll?.status === "awaiting-roll" || game.hauntActionRoll?.status === "rolled-pending-continue";
+    game.hauntActionRoll?.status === "awaiting-roll" ||
+    (game.hauntActionRoll?.status === "rolled-pending-continue" && !game.hauntActionRoll?.isCollapsedRoll);
   const canApplyNow = base.canApplyNow || canApplyToHauntActionRoll;
   return {
     ...base,
@@ -302,6 +303,7 @@ export function applyRabbitsFootNowState(game, viewedCard, deps) {
     game.tileEffect?.type === "skeleton-key-result" && Array.isArray(game.tileEffect?.dice)
       ? game.tileEffect.dice
       : null;
+
   if (
     !owner ||
     !inventoryCard ||

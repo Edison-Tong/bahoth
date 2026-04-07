@@ -434,6 +434,15 @@ export default function GameBoard({ players, onQuit }) {
                   };
                 })
               : g.players;
+          const updatedLastRoll = {
+            ...(actionRoll.lastRoll || {}),
+            label: da.label || actionRoll.label || "Trait",
+            stat: actionRoll.stat,
+            dice: [...da.final],
+            total: rollTotal,
+            modifier: da.modifier || null,
+            outcomes: Array.isArray(da.outcomes) ? [...da.outcomes] : [],
+          };
           return {
             ...g,
             players: nextPlayers,
@@ -441,16 +450,20 @@ export default function GameBoard({ players, onQuit }) {
             hauntActionRoll: {
               ...actionRoll,
               status: "rolled-pending-continue",
-              lastRoll: {
-                ...(actionRoll.lastRoll || {}),
-                label: da.label || actionRoll.label || "Trait",
-                stat: actionRoll.stat,
-                dice: [...da.final],
-                total: rollTotal,
-                modifier: da.modifier || null,
-                outcomes: Array.isArray(da.outcomes) ? [...da.outcomes] : [],
-              },
+              lastRoll: updatedLastRoll,
             },
+            ...(actionRoll.isCollapsedRoll && {
+              tileEffect: {
+                ...g.tileEffect,
+                dice: [...da.final],
+                diceModifier: da.modifier || null,
+                total: rollTotal,
+                message:
+                  rollTotal >= 5
+                    ? `Rolled ${rollTotal} — the floor holds! (Needed 5+)`
+                    : `Rolled ${rollTotal} — the floor gives way! (Needed 5+)`,
+              },
+            }),
             message: `${actor?.name || "Explorer"} rolled ${rollTotal}. Review the result and press Continue to apply it.`,
           };
         });
@@ -505,7 +518,40 @@ export default function GameBoard({ players, onQuit }) {
       ) {
         setGame((g) => resolveEventAnimationSettlement(g, da).game);
         setDiceAnimation(null);
-      } else if (da.purpose === "collapsed" || da.purpose === "collapsed-damage" || da.purpose === "furnace") {
+      } else if (da.purpose === "collapsed") {
+        // Store the roll in hauntActionRoll so after-roll items (Creepy Doll, Lucky Coin, Rabbit's Foot)
+        // can interact with it as a standard trait roll before the player presses Continue.
+        const resolvedTotal = Number.isFinite(da.resolvedTotal) ? da.resolvedTotal : baseTotal;
+        setGame((g) => ({
+          ...g,
+          hauntActionRoll: {
+            status: "rolled-pending-continue",
+            isCollapsedRoll: true,
+            tileName: da.tileName,
+            playerIndex: da.playerIndex ?? g.currentPlayerIndex,
+            lastRoll: {
+              label: "Speed",
+              stat: "speed",
+              dice: [...da.final],
+              total: resolvedTotal,
+              modifier: da.modifier || null,
+              outcomes: [],
+            },
+          },
+          tileEffect: {
+            type: "collapsed-roll-result",
+            tileName: da.tileName,
+            dice: da.final,
+            diceModifier: da.modifier || null,
+            total: resolvedTotal,
+            message:
+              resolvedTotal >= 5
+                ? `Rolled ${resolvedTotal} — the floor holds! (Needed 5+)`
+                : `Rolled ${resolvedTotal} — the floor gives way! (Needed 5+)`,
+          },
+        }));
+        setDiceAnimation(null);
+      } else if (da.purpose === "collapsed-damage" || da.purpose === "furnace") {
         setGame(
           (g) =>
             resolveTileDiceAnimationState({
@@ -1214,6 +1260,7 @@ export default function GameBoard({ players, onQuit }) {
           tileEffect,
           turnPhase,
           message,
+          postDiscovery: true,
         };
       };
 
@@ -1281,7 +1328,7 @@ export default function GameBoard({ players, onQuit }) {
       });
       nextCameraFloor = resolved.cameraFloor;
       nextDiceAnimation = resolved.diceAnimation;
-      return resolved.game;
+      return { ...resolved.game, postDiscovery: false };
     });
 
     if (nextDiceAnimation) {
@@ -2010,12 +2057,38 @@ export default function GameBoard({ players, onQuit }) {
     if (!te || te.type !== "collapsed-prompt") return;
     const playerIndex = te.playerIndex ?? game.currentPlayerIndex;
     const player = game.players[playerIndex];
-    const roll = resolveTraitRoll(player, {
-      stat: "speed",
-      baseDiceCount: te.diceCount,
-      context: "end-of-turn",
-      board: game.board,
-    });
+
+    const override = queuedTraitRollOverrideRef.current;
+    let roll;
+    let stat = "speed";
+
+    if (override?.kind === "substitute-stat") {
+      // Book / Magic Camera substituted a different stat for the roll
+      stat = override.to || stat;
+      const targetVal = player.character[stat]?.[player.statIndex?.[stat]] ?? te.diceCount;
+      roll = resolveTraitRoll(player, {
+        stat,
+        baseDiceCount: targetVal,
+        context: "end-of-turn",
+        board: game.board,
+      });
+      setQueuedTraitRollOverride(null);
+    } else {
+      roll = resolveTraitRoll(player, {
+        stat,
+        baseDiceCount: te.diceCount,
+        context: "end-of-turn",
+        board: game.board,
+      });
+    }
+
+    let resolvedTotal = roll.total;
+    if (override?.kind === "set-total") {
+      // Angel's Feather / similar item forced the total
+      resolvedTotal = Math.max(0, Math.min(8, Number(override.total)));
+      setQueuedTraitRollOverride(null);
+    }
+
     const createRollToken = () => `${Date.now()}-${Math.random()}`;
     setGame((g) => ({ ...g, tileEffect: null, message: `${te.tileName} — rolling for stability...` }));
     setDiceAnimation({
@@ -2026,8 +2099,35 @@ export default function GameBoard({ players, onQuit }) {
       tileName: te.tileName,
       playerIndex,
       modifier: roll.modifier,
-      resolvedTotal: roll.total,
+      resolvedTotal,
       settled: false,
+    });
+  }
+
+  function handleContinueCollapsedRoll() {
+    const hauntRoll = game.hauntActionRoll;
+    if (!hauntRoll?.isCollapsedRoll) return;
+    const lastRoll = hauntRoll.lastRoll;
+    const syntheticAnimation = {
+      purpose: "collapsed",
+      resolvedTotal: lastRoll.total,
+      final: lastRoll.dice,
+      modifier: lastRoll.modifier,
+      playerIndex: hauntRoll.playerIndex,
+      tileName: hauntRoll.tileName,
+    };
+    const baseTotal = (lastRoll.dice || []).reduce((a, b) => a + b, 0);
+    setGame((g) => {
+      const updated = { ...g, hauntActionRoll: null, tileEffect: null };
+      return (
+        resolveTileDiceAnimationState({
+          game: updated,
+          animation: syntheticAnimation,
+          baseTotal,
+          getDamageReduction,
+          createDiceModifier,
+        }) || updated
+      );
     });
   }
 
@@ -3093,6 +3193,7 @@ export default function GameBoard({ players, onQuit }) {
         onDrawIdolEventCard={handleDrawIdolEventCard}
         onSkipIdolEventCard={handleSkipIdolEventCard}
         onRollCollapsedStability={handleRollCollapsedStability}
+        onContinueCollapsedRoll={handleContinueCollapsedRoll}
         onStartCollapsedDamage={handleStartCollapsedDamage}
         onDismissTileEffect={handleDismissTileEffect}
       />

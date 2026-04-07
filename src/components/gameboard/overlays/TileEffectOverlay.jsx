@@ -10,6 +10,7 @@ export default function TileEffectOverlay({
   onDrawIdolEventCard,
   onSkipIdolEventCard,
   onRollCollapsedStability,
+  onContinueCollapsedRoll,
   onStartCollapsedDamage,
   onDismissTileEffect,
 }) {
@@ -18,11 +19,13 @@ export default function TileEffectOverlay({
 
   const isRabbitFootSkeletonKey =
     isSkeletonKeyResultEffect(te) && game.rabbitFootPendingReroll?.sourceType === "skeleton-key-roll";
+  const isRabbitFootCollapsedRoll =
+    te.type === "collapsed-roll-result" && game.rabbitFootPendingReroll?.sourceType === "haunt-action-roll";
 
   const modalTone =
     te.type === "laundry-chute"
       ? "card-tile-neutral"
-      : te.type === "collapsed-prompt"
+      : te.type === "collapsed-prompt" || te.type === "collapsed-roll-result"
         ? "card-tile-danger"
         : te.type === "collapsed-pending"
           ? "card-tile-danger"
@@ -35,7 +38,10 @@ export default function TileEffectOverlay({
       <div className={`card-modal card-tile-effect ${modalTone}`}>
         <div className="card-type-label">{te.tileName}</div>
 
-        {te.dice && !isRabbitFootSkeletonKey && renderDiceRow({ dice: te.dice, modifier: te.diceModifier, rolling: false })}
+        {te.dice &&
+          !isRabbitFootSkeletonKey &&
+          !isRabbitFootCollapsedRoll &&
+          renderDiceRow({ dice: te.dice, modifier: te.diceModifier, rolling: false })}
 
         {te.total !== undefined && <div className="dice-total">Total: {te.total}</div>}
 
@@ -68,9 +74,29 @@ export default function TileEffectOverlay({
           </div>
         )}
 
+        {isRabbitFootCollapsedRoll && (
+          <div className="dice-row">
+            <div className="dice-container">
+              {(te.dice || []).map((die, index) => {
+                const selected = game.rabbitFootPendingReroll?.selectedDieIndex === index;
+                return (
+                  <button
+                    key={`collapsed-rabbit-foot-die-${index}`}
+                    type="button"
+                    className={selected ? "die die-selectable die-selected" : "die die-selectable"}
+                    onClick={() => onSelectRabbitFootDie(index)}
+                  >
+                    {die}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <p className="card-description">{te.message}</p>
 
-        {isRabbitFootSkeletonKey ? (
+        {isRabbitFootSkeletonKey || isRabbitFootCollapsedRoll ? (
           <button
             className="btn btn-primary"
             onClick={onConfirmRabbitFootReroll}
@@ -104,6 +130,10 @@ export default function TileEffectOverlay({
               Skip Event card
             </button>
           </>
+        ) : te.type === "collapsed-roll-result" ? (
+          <button className="btn btn-primary" onClick={onContinueCollapsedRoll}>
+            Continue
+          </button>
         ) : te.type === "collapsed-prompt" ? (
           <button className="btn btn-primary" onClick={onRollCollapsedStability}>
             Roll for Stability
@@ -121,4 +151,3 @@ export default function TileEffectOverlay({
     </div>
   );
 }
-

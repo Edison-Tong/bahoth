@@ -6,7 +6,7 @@ export default function HauntActionRollOverlay({
   renderDiceRow,
 }) {
   const rollState = game?.hauntActionRoll;
-  if (!rollState || rollState.status !== "rolled-pending-continue") return null;
+  if (!rollState || rollState.status !== "rolled-pending-continue" || rollState.isCollapsedRoll) return null;
   if (diceAnimation?.purpose === "haunt-action-roll" || diceAnimation?.purpose === "haunt-action-partial-reroll") {
     return null;
   }

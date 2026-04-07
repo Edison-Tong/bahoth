@@ -278,7 +278,8 @@ function getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedT
     (awaiting?.type === "roll-ready" && awaiting.rollKind === "trait-roll" && awaiting.overrideTotal === undefined) ||
     (awaiting?.type === "trait-roll-sequence-ready" && awaiting.overrideTotal === undefined) ||
     awaiting?.type === "step-stat-choice" ||
-    (hauntActionRoll?.status === "awaiting-roll" && hauntActionRoll.forcedTotal === null);
+    (hauntActionRoll?.status === "awaiting-roll" && hauntActionRoll.forcedTotal === null) ||
+    game.tileEffect?.type === "collapsed-prompt";
   const canQueueForDrawnEvent =
     game.drawnCard?.type === "event" &&
     drawnEventPrimaryAction?.type === "roll" &&
@@ -1187,7 +1188,11 @@ export function applyRabbitFootRerollState(g) {
     return { game: g, diceAnimation: null };
   }
 
-  const sourceDice = isSkeletonKeyRoll ? skeletonKeyRollDice : isHauntActionRoll ? hauntLastRoll.dice : lastRoll.dice;
+  const sourceDice = isSkeletonKeyRoll
+    ? skeletonKeyRollDice
+    : isHauntActionRoll
+      ? hauntLastRoll.dice
+      : lastRoll.dice;
 
   const selectedIndex = Number(pending.selectedDieIndex);
   if (!Number.isInteger(selectedIndex) || selectedIndex < 0 || selectedIndex >= sourceDice.length) {

@@ -1,5 +1,6 @@
 export function isDogTradeAvailableThisTurn(game, viewedCard, getDogTradeTargets) {
   if (!viewedCard || viewedCard.ownerCollection !== "omens") return false;
+  if (game.postDiscovery) return false;
   const owner = game.players?.[viewedCard.ownerIndex];
   const omenCard = owner?.omens?.[viewedCard.ownerCardIndex];
   if (!owner || !omenCard || omenCard.id !== "dog") return false;

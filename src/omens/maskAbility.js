@@ -1,5 +1,6 @@
 export function isMaskPushAvailableThisTurn(game, viewedCard, getMovementNeighbors) {
   if (!viewedCard || viewedCard.ownerCollection !== "omens") return false;
+  if (game.postDiscovery) return false;
   const owner = game.players?.[viewedCard.ownerIndex];
   const omenCard = owner?.omens?.[viewedCard.ownerCardIndex];
   if (!owner || !omenCard || omenCard.id !== "mask") return false;
