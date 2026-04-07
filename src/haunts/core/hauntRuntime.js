@@ -184,10 +184,12 @@ function getTraitorPhysicalBonus(hauntDefinition, playerCount) {
 }
 
 function healAllTraits(player) {
-  const nextStatIndex = { ...player.statIndex };
-  for (const stat of ["might", "speed", "sanity", "knowledge"]) {
-    nextStatIndex[stat] = player.character[stat].length - 1;
-  }
+  const nextStatIndex = {
+    might: Math.max(player.statIndex.might, player.character?.startIndex?.might ?? player.statIndex.might),
+    speed: Math.max(player.statIndex.speed, player.character?.startIndex?.speed ?? player.statIndex.speed),
+    sanity: Math.max(player.statIndex.sanity, player.character?.startIndex?.sanity ?? player.statIndex.sanity),
+    knowledge: Math.max(player.statIndex.knowledge, player.character?.startIndex?.knowledge ?? player.statIndex.knowledge),
+  };
   return {
     ...player,
     statIndex: nextStatIndex,

@@ -271,10 +271,10 @@ const haunt1Definition = {
   ],
   scaling: {
     traitorPhysicalBonusByPlayerCount: {
-      3: 2,
-      4: 2,
-      5: 3,
-      6: 3,
+      3: 1,
+      4: 1,
+      5: 2,
+      6: 2,
     },
   },
 };

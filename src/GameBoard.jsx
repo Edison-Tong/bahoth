@@ -138,7 +138,7 @@ import {
 } from "./game/gameState";
 import {
   advanceHauntRulesViewState,
-  beginHauntAfterRulesViewState,
+  completeHauntSetupState,
   GAME_PHASES,
   getHauntActionButtonsState,
   getHauntActionRollPreviewState,
@@ -2410,7 +2410,7 @@ export default function GameBoard({ players, onQuit }) {
     let nextCameraFloor = null;
 
     setGame((g) => {
-      const nextState = beginHauntAfterRulesViewState(g);
+      const nextState = completeHauntSetupState(g, { getHauntDefinitionById });
       const activePlayer = nextState.players[nextState.currentPlayerIndex];
       nextCameraFloor = activePlayer?.floor || null;
       return nextState;
