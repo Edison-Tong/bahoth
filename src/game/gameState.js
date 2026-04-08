@@ -31,7 +31,7 @@ export const STAT_ICONS = {
   knowledge: "📖",
 };
 
-export const PLAYER_STAT_ORDER = ["might", "speed", "sanity", "knowledge"];
+export const PLAYER_STAT_ORDER = ["speed", "might", "knowledge", "sanity"];
 export const CRITICAL_STAT_INDEX = 1;
 export const TILE_SIZE = 150;
 export const GAP = 4;

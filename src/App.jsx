@@ -451,10 +451,10 @@ function App() {
               </div>
               <div className="char-tracks">
                 {[
-                  ["Might", "might", "💪"],
                   ["Speed", "speed", "🏃"],
-                  ["Sanity", "sanity", "🧠"],
+                  ["Might", "might", "💪"],
                   ["Knowledge", "knowledge", "📖"],
+                  ["Sanity", "sanity", "🧠"],
                 ].map(([label, key, icon]) => (
                   <div className="track-row" key={key}>
                     <span className="track-label">

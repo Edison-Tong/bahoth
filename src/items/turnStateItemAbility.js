@@ -1,4 +1,4 @@
-const PLAYER_STAT_ORDER = ["might", "speed", "sanity", "knowledge"];
+const PLAYER_STAT_ORDER = ["speed", "might", "knowledge", "sanity"];
 const CRITICAL_STAT_INDEX = 1;
 const NECKLACE_OF_TEETH_ID = "necklace-of-teeth";
 const NECKLACE_OF_TEETH_CHOICE_TYPE = "necklace-of-teeth-choice";
