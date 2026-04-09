@@ -14,7 +14,9 @@ export function useOnlineSync(onMessage) {
   });
 
   useEffect(() => {
-    const ws = new WebSocket(`${WS_BASE_URL}/ws`);
+    const token = import.meta.env.VITE_WS_SECRET || "";
+    const wsUrl = token ? `${WS_BASE_URL}/ws?token=${encodeURIComponent(token)}` : `${WS_BASE_URL}/ws`;
+    const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {

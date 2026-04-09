@@ -2825,18 +2825,21 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [game.currentPlayerIndex, game.turnNumber]);
 
-  // Recovery: if game is stuck with "rolling for stability" message but no dice animation
-  // running (animation was lost due to a race condition), re-trigger the roll.
+  // Recovery: if game is stuck with "rolling for stability" or "rolling for damage" message
+  // but no dice animation running (animation was lost due to a race condition), re-trigger the roll.
   useEffect(() => {
     if (diceAnimation) return;
     if (game.tileEffect) return;
-    if (!game.message.endsWith("— rolling for stability...")) return;
+    const isFurnaceStuck = game.message.includes("Furnace Room") && game.message.includes("rolling for damage");
+    const isCollapsedStuck = game.message.endsWith("— rolling for stability...");
+    if (!isFurnaceStuck && !isCollapsedStuck) return;
     const currentPlayer = game.players[game.currentPlayerIndex];
     if (!currentPlayer) return;
     const currentTile = game.board[currentPlayer.floor]?.find(
       (t) => t.x === currentPlayer.x && t.y === currentPlayer.y
     );
-    if (currentTile?.endOfTurn !== "collapsed") return;
+    if (isCollapsedStuck && currentTile?.endOfTurn !== "collapsed") return;
+    if (isFurnaceStuck && currentTile?.endOfTurn !== "furnace") return;
 
     let nextDiceAnimation = null;
     setGame((g) => {
