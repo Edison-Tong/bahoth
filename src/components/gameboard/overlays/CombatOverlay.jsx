@@ -147,10 +147,12 @@ export default function CombatOverlay({
             <p className="card-description">
               {outcome.tie
                 ? `Tie at ${outcome.attackerTotal}. No damage dealt.`
-                : `${outcome.winnerName} wins. ${outcome.loserName} takes ${outcome.damage} damage.`}
+                : outcome.loserIsProxy
+                  ? `${outcome.winnerName} wins. Jack's Spirit cannot be harmed.`
+                  : `${outcome.winnerName} wins. ${outcome.loserName} takes ${outcome.damage} damage.`}
             </p>
             <button className="btn btn-primary" onClick={onAdvanceResolution}>
-              {outcome.tie ? "Continue" : "Allocate Damage"}
+              {outcome.tie || outcome.loserIsProxy ? "Continue" : "Allocate Damage"}
             </button>
           </div>
         )}

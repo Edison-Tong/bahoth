@@ -1,2 +1,3 @@
 cannot use omens special action if you did not have it at the start of your turn
 once per turn special actions might not be doable if they require an item that you did not have at the start of your turn
+furnace room roll freezes the game

@@ -1611,15 +1611,26 @@ export default function GameBoard({ players, onQuit }) {
           : g.combatState.attackerIndex;
       const damage = tie ? 0 : Math.abs(attackerTotal - defenderTotal);
 
+      const loserIsProxy = loserIndex != null && !!getHauntCombatActorProxyState(g, loserIndex);
+      const winnerIsProxy = winnerIndex != null && !!getHauntCombatActorProxyState(g, winnerIndex);
       const outcome = {
         tie,
         attackerTotal,
         defenderTotal,
         winnerIndex,
         loserIndex,
+        loserIsProxy,
         damage,
-        winnerName: winnerIndex != null ? g.players[winnerIndex]?.name || "Winner" : "No one",
-        loserName: loserIndex != null ? g.players[loserIndex]?.name || "Loser" : "No one",
+        winnerName: winnerIsProxy
+          ? "Jack's Spirit"
+          : winnerIndex != null
+            ? g.players[winnerIndex]?.name || "Winner"
+            : "No one",
+        loserName: loserIsProxy
+          ? "Jack's Spirit"
+          : loserIndex != null
+            ? g.players[loserIndex]?.name || "Loser"
+            : "No one",
       };
 
       return {
@@ -1652,6 +1663,15 @@ export default function GameBoard({ players, onQuit }) {
           ...g,
           combatState: null,
           message: `${outcome.winnerName} wins (${outcome.attackerTotal} vs ${outcome.defenderTotal}). ${outcome.loserName} takes no damage (Crossbow).`,
+        };
+      }
+
+      const loserIsProxy = !!getHauntCombatActorProxyState(g, outcome.loserIndex);
+      if (loserIsProxy) {
+        return {
+          ...g,
+          combatState: null,
+          message: `${outcome.winnerName} wins (${outcome.attackerTotal} vs ${outcome.defenderTotal}). Jack's Spirit cannot be harmed.`,
         };
       }
 
