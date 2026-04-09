@@ -13,6 +13,7 @@ export default function DamageChoiceOverlay({
   onToggleDamageConversion,
   onAdjustDamageAllocation,
   onConfirmDamageChoice,
+  isMyDamage = true,
 }) {
   function describePostDamageEffects(effects) {
     if (!effects || effects.length === 0) return "";
@@ -22,6 +23,23 @@ export default function DamageChoiceOverlay({
   }
 
   if (!damageChoice) return null;
+
+  if (isMyDamage === false) {
+    const isGain = damageChoice.adjustmentMode === "increase";
+    return (
+      <div className={`mini-peek ${isGain ? "mini-peek-safe" : "mini-peek-damage"}`}>
+        <span className="mini-peek-icon">{isGain ? "✨" : "💥"}</span>
+        <div>
+          <div className="mini-peek-title">
+            {isGain ? "STAT GAIN" : `${damageChoice.damageType?.toUpperCase() ?? ""} DAMAGE`}
+          </div>
+          <div className="mini-peek-label">
+            {damageChoice.playerName} allocating {damageChoice.amount} point{damageChoice.amount === 1 ? "" : "s"}…
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="card-overlay">
@@ -33,13 +51,11 @@ export default function DamageChoiceOverlay({
           {damageChoice.adjustmentMode === "increase" ? "Choose where the gain goes" : "Choose where the damage goes"}
         </h2>
         <p className="card-description">
-          {damageChoice.adjustmentMode === "increase" ? (
-            `Assign ${damageChoice.amount} point${damageChoice.amount === 1 ? "" : "s"} of gain to ${damageChoice.playerName}.`
-          ) : damageChoice.allowPartial ? (
-            `Assign up to ${damageChoice.amount} point${damageChoice.amount === 1 ? "" : "s"} of ${damageChoice.damageType} damage to ${damageChoice.playerName}.`
-          ) : (
-            `Assign ${damageChoice.amount} point${damageChoice.amount === 1 ? "" : "s"} of ${damageChoice.damageType} damage to ${damageChoice.playerName}.`
-          )}
+          {damageChoice.adjustmentMode === "increase"
+            ? `Assign ${damageChoice.amount} point${damageChoice.amount === 1 ? "" : "s"} of gain to ${damageChoice.playerName}.`
+            : damageChoice.allowPartial
+              ? `Assign up to ${damageChoice.amount} point${damageChoice.amount === 1 ? "" : "s"} of ${damageChoice.damageType} damage to ${damageChoice.playerName}.`
+              : `Assign ${damageChoice.amount} point${damageChoice.amount === 1 ? "" : "s"} of ${damageChoice.damageType} damage to ${damageChoice.playerName}.`}
         </p>
 
         {damageChoice.adjustmentMode !== "increase" && damageChoice.canConvertToGeneral && (
@@ -50,13 +66,17 @@ export default function DamageChoiceOverlay({
                 : `${formatSourceNames(damageChoice.conversionSourceNames)} can convert this to General damage.`}
             </div>
             <button className="btn btn-secondary damage-conversion-button" onClick={onToggleDamageConversion}>
-              {damageChoice.damageType === "general" ? `Use ${damageChoice.originalDamageType} damage` : "Take as General Damage"}
+              {damageChoice.damageType === "general"
+                ? `Use ${damageChoice.originalDamageType} damage`
+                : "Take as General Damage"}
             </button>
           </div>
         )}
 
         {damageChoice.adjustmentMode !== "increase" && damageChoice.postDamageEffects.length > 0 && (
-          <p className="damage-choice-hint">After taking damage: {describePostDamageEffects(damageChoice.postDamageEffects)}.</p>
+          <p className="damage-choice-hint">
+            After taking damage: {describePostDamageEffects(damageChoice.postDamageEffects)}.
+          </p>
         )}
 
         <p className="damage-choice-hint">
@@ -140,4 +160,3 @@ export default function DamageChoiceOverlay({
     </div>
   );
 }
-

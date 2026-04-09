@@ -38,9 +38,20 @@ export default function GameBoardActions({
   hauntActionButtons,
   onUseHauntAction,
   controlsDisabled,
+  isMyTurn,
+  currentTurnPlayerName,
 }) {
   if (game.gamePhase === "game-over") {
     return null;
+  }
+
+  // Online multiplayer: hide all controls when it's not this player's turn
+  if (isMyTurn === false) {
+    return (
+      <div className="game-actions game-actions-waiting">
+        <span className="waiting-turn-label">⏳ {currentTurnPlayerName}&apos;s turn</span>
+      </div>
+    );
   }
 
   const isPathTracking = !tradeState && game.turnPhase === "move" && game.movePath.length > 1;

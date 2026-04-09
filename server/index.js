@@ -195,6 +195,20 @@ wss.on("connection", (socket, request) => {
       return;
     }
 
+    if (type === "dice-anim") {
+      const room = rooms.get(code);
+      if (!room?.started) return;
+      broadcastRoom(code, { type: "dice-anim", purpose: msg.purpose, count: msg.count }, socket);
+      return;
+    }
+
+    if (type === "dice-result") {
+      const room = rooms.get(code);
+      if (!room?.started) return;
+      broadcastRoom(code, { type: "dice-result", roll: msg.roll }, socket);
+      return;
+    }
+
     if (type === "leave-room") {
       handleDisconnect(socket);
       return;

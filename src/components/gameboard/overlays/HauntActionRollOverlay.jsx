@@ -4,6 +4,7 @@ export default function HauntActionRollOverlay({
   hauntActionRollPreview,
   onContinue,
   renderDiceRow,
+  isMyTurn = true,
 }) {
   const rollState = game?.hauntActionRoll;
   if (!rollState || rollState.status !== "rolled-pending-continue" || rollState.isCollapsedRoll) return null;
@@ -12,6 +13,20 @@ export default function HauntActionRollOverlay({
   }
 
   const lastRoll = rollState.lastRoll || { dice: [], total: null, modifier: null };
+
+  if (isMyTurn === false) {
+    const outcomeLabel = hauntActionRollPreview?.outcomeLabel || "Result";
+    const total = hauntActionRollPreview?.totalLabel || lastRoll.total || 0;
+    return (
+      <div className="mini-peek mini-peek-haunt">
+        <span className="mini-peek-icon">🎲</span>
+        <div>
+          <div className="mini-peek-title">HAUNT ACTION • Total: {total}</div>
+          <div className="mini-peek-label">{outcomeLabel}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="card-overlay" role="dialog" aria-label="Haunt action roll result">

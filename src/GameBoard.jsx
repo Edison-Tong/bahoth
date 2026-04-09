@@ -35,7 +35,7 @@ import {
 } from "./events/eventDomain";
 import EventResolutionModal, { DrawnCardModal } from "./components/EventResolutionModal";
 import BoardCanvas from "./components/gameboard/BoardCanvas";
-import DamageChoiceOverlay from "./components/gameboard/overlays/DamageChoiceOverlay";
+import DiceBox from "./components/gameboard/DiceBox";
 import CombatOverlay from "./components/gameboard/overlays/CombatOverlay";
 import DiceRollOverlay from "./components/gameboard/overlays/DiceRollOverlay";
 import HauntRollOverlay from "./components/gameboard/overlays/HauntRollOverlay";
@@ -43,6 +43,7 @@ import TileEffectOverlay from "./components/gameboard/overlays/TileEffectOverlay
 import HauntSetupOverlay from "./components/gameboard/overlays/HauntSetupOverlay";
 import HauntRulesViewerOverlay from "./components/gameboard/overlays/HauntRulesViewerOverlay";
 import HauntActionRollOverlay from "./components/gameboard/overlays/HauntActionRollOverlay";
+import DamageChoiceOverlay from "./components/gameboard/overlays/DamageChoiceOverlay";
 import DebugModePanel from "./components/gameboard/DebugModePanel";
 import GameBoardActions from "./components/gameboard/GameBoardActions";
 import PlayerSidebar from "./components/gameboard/PlayerSidebar";
@@ -289,6 +290,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
   const [game, setGame] = useState(() => initialGameState ?? initGameState(players));
   const [cameraFloor, setCameraFloor] = useState("ground");
   const [diceAnimation, setDiceAnimation] = useState(null);
+  const [lastSettledRoll, setLastSettledRoll] = useState(null);
   const [expandedSidebarPlayers, setExpandedSidebarPlayers] = useState(() => new Set());
   const [viewedCard, setViewedCard] = useState(null);
   const [tradeState, setTradeState] = useState(null);
@@ -329,6 +331,8 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     if (!remoteGame || remoteGame === lastReceivedRemoteGame.current) return;
     lastReceivedRemoteGame.current = remoteGame;
     setGame(remoteGame);
+    // Clear any spectator dice animation — the result is now in the incoming state
+    setDiceAnimation((prev) => (prev?.spectator ? null : prev));
   }, [onlineConfig?.remoteGameState]);
 
   // Broadcast local state changes to all other players
@@ -338,6 +342,46 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     if (game === initialGameRef.current) return; // don't broadcast the initial state
     broadcastRef.current(game);
   }, [game]);
+
+  // Broadcast dice animation start so spectators can see the rolling animation
+  const sentAnimPurposeRef = useRef(null);
+  useEffect(() => {
+    if (!onlineConfig?.sendDiceAnim) return;
+    if (!diceAnimation || diceAnimation.settled || diceAnimation.spectator) {
+      sentAnimPurposeRef.current = null;
+      return;
+    }
+    // Guard: only broadcast once per animation (purpose changes on new animation, goes undefined when null)
+    if (sentAnimPurposeRef.current === diceAnimation.purpose) return;
+    sentAnimPurposeRef.current = diceAnimation.purpose;
+    onlineConfig.sendDiceAnim(diceAnimation.purpose, diceAnimation.final?.length ?? 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [diceAnimation?.purpose, diceAnimation?.settled, onlineConfig]);
+
+  // Spectator: start visual-only animation when a dice-anim hint arrives via WS
+  useEffect(() => {
+    if (!onlineConfig?.remoteDiceAnim) return;
+    setDiceAnimation((prev) => {
+      if (prev) return prev; // already animating (event path may have started one)
+      const { purpose, count } = onlineConfig.remoteDiceAnim;
+      return {
+        purpose,
+        final: Array(count).fill(0),
+        display: Array.from({ length: count }, () => Math.floor(Math.random() * 3)),
+        settled: false,
+        spectator: true,
+        modifier: null,
+      };
+    });
+  }, [onlineConfig?.remoteDiceAnim]);
+
+  // Spectator: update dice box with real result when it arrives, and clear
+  // the settled spectator animation in the same batch (no null gap).
+  useEffect(() => {
+    if (!onlineConfig?.remoteDiceResult) return;
+    setLastSettledRoll(onlineConfig.remoteDiceResult);
+    setDiceAnimation((prev) => (prev?.spectator ? null : prev));
+  }, [onlineConfig?.remoteDiceResult]);
   // --- End online sync ---
   const hauntPendingChoiceType = game?.hauntState?.scenarioState?.pendingChoice?.type;
   const gameplayLockedByHauntSetup = game.gamePhase === GAME_PHASES.HAUNT_SETUP;
@@ -417,14 +461,35 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }, 80);
 
     const timeout = setTimeout(() => {
+      const da = activeAnimation;
+      if (!da) return;
+
+      // Spectator animation: mark it settled so DiceBox holds position while
+      // we wait for the real dice-result message to arrive with the true values.
+      if (da.spectator) {
+        setDiceAnimation((prev) => (prev ? { ...prev, display: prev.final, settled: true } : null));
+        return;
+      }
+
       setDiceAnimation((prev) => {
         if (!prev) return prev;
         return { ...prev, display: prev.final, settled: true };
       });
-      const da = activeAnimation;
-      if (!da) return;
       const baseTotal = da.final.reduce((a, b) => a + b, 0);
       const total = baseTotal;
+
+      // Persist this roll in the dice box for all players to review
+      const rollingPlayer = game.players[game.currentPlayerIndex];
+      const settledRoll = {
+        purpose: da.purpose,
+        final: da.final,
+        dice: da.final,
+        total: Number.isFinite(da.total) ? da.total : baseTotal,
+        modifier: da.modifier ?? null,
+        playerName: rollingPlayer?.name ?? null,
+      };
+      setLastSettledRoll(settledRoll);
+      onlineConfig?.sendDiceResult?.(settledRoll);
 
       if (da.purpose === "haunt") {
         const hauntTriggered = baseTotal >= 5;
@@ -636,6 +701,8 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
 
   const currentPlayer = game.players[game.currentPlayerIndex];
   const floorTiles = game.board[cameraFloor] || [];
+  // In online mode, only the player whose turn it is can interact
+  const isMyTurn = onlineConfig == null || onlineConfig.myPlayerIndex === game.currentPlayerIndex;
 
   // Keyboard controls
   useEffect(() => {
@@ -667,7 +734,8 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         gameplayLockedByStalkPreyPlacement ||
         gameplayLockedByHauntPendingChoice ||
         gameIsOver ||
-        isInputFocused
+        isInputFocused ||
+        !isMyTurn
       ) {
         return;
       }
@@ -1078,6 +1146,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
 
   // Handle clicking a move/explore/backtrack target
   function handleAction(move) {
+    if (!isMyTurn) return;
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP || game.gamePhase === GAME_PHASES.GAME_OVER)
       return;
     let nextCameraFloor = null;
@@ -1730,6 +1799,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     setDiceAnimation,
     eventFlowDeps,
     applyStatChange,
+    isMyTurn,
   });
 
   const {
@@ -2507,7 +2577,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }
   }
 
-  const validMoves = cameraFloor === currentPlayer.floor ? getValidMoves() : [];
+  const validMoves = isMyTurn && cameraFloor === currentPlayer.floor ? getValidMoves() : [];
   const placedTileIds = useMemo(() => {
     const ids = new Set();
     for (const floorTiles of Object.values(game.board)) {
@@ -3000,6 +3070,8 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
 
       {messageBubble && !gameIsOver && <div className="game-message-bubble">{messageBubble}</div>}
 
+      <DiceBox diceAnimation={diceAnimation} lastSettled={lastSettledRoll} />
+
       {/* Board */}
       <BoardCanvas
         boardRef={boardRef}
@@ -3074,6 +3146,8 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         hauntActionButtons={hauntActionButtons}
         onUseHauntAction={handleUseHauntAction}
         controlsDisabled={gameplayUiLocked && !isBoardTileChoiceActive}
+        isMyTurn={isMyTurn}
+        currentTurnPlayerName={game.players[game.currentPlayerIndex]?.name ?? ""}
       />
 
       <PlayerSidebar
@@ -3094,6 +3168,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         drawnEventPrimaryAction={drawnEventPrimaryAction}
         hauntStarted={game.gamePhase !== GAME_PHASES.PRE_HAUNT}
         onDismissCard={handleDismissCard}
+        isMyTurn={isMyTurn}
       />
 
       <ViewedCardViewer
@@ -3206,6 +3281,8 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
           onConfirmRabbitFootReroll={handleConfirmRabbitFootReroll}
           onContinueEvent={handleContinueEvent}
           renderDiceRow={(props) => <DiceRow {...props} />}
+          isMyTurn={isMyTurn}
+          currentTurnPlayerName={currentPlayer?.name ?? ""}
         />
       )}
 
@@ -3215,15 +3292,21 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         hauntActionRollPreview={hauntActionRollPreview}
         onContinue={handleContinueHauntActionRoll}
         renderDiceRow={(props) => <DiceRow {...props} />}
+        isMyTurn={isMyTurn}
       />
 
-      <DiceRollOverlay diceAnimation={diceAnimation} renderDiceRow={(props) => <DiceRow {...props} />} />
+      <DiceRollOverlay
+        diceAnimation={diceAnimation}
+        renderDiceRow={(props) => <DiceRow {...props} />}
+        isMyTurn={isMyTurn}
+      />
 
       <HauntRollOverlay
         game={game}
         diceAnimation={diceAnimation}
         onDismissHauntRoll={handleDismissHauntRoll}
         renderDiceRow={(props) => <DiceRow {...props} />}
+        isMyTurn={isMyTurn}
       />
 
       <TileEffectOverlay
@@ -3241,6 +3324,8 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         onContinueCollapsedRoll={handleContinueCollapsedRoll}
         onStartCollapsedDamage={handleStartCollapsedDamage}
         onDismissTileEffect={handleDismissTileEffect}
+        isMyTurn={isMyTurn}
+        currentTurnPlayerName={currentPlayer?.name ?? ""}
       />
 
       <CombatOverlay
@@ -3256,6 +3341,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         onContinueAttacker={handleContinueCombatAttacker}
         onContinueDefender={handleContinueCombatDefender}
         onAdvanceResolution={handleAdvanceCombatResolution}
+        myPlayerIndex={onlineConfig?.myPlayerIndex ?? -1}
       />
 
       <DamageChoiceOverlay
@@ -3273,6 +3359,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         onToggleDamageConversion={handleToggleDamageConversion}
         onAdjustDamageAllocation={handleAdjustDamageAllocation}
         onConfirmDamageChoice={handleConfirmDamageChoice}
+        isMyDamage={onlineConfig == null || onlineConfig.myPlayerIndex === damageChoicePlayerIndex}
       />
 
       {game.skullChallenge &&
@@ -3282,6 +3369,24 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
           const player = game.players[sc.playerIndex];
           const rolled = sc.roll !== null;
           const survived = rolled && sc.total >= 4;
+          const isSkullPlayer = onlineConfig == null || onlineConfig.myPlayerIndex === sc.playerIndex;
+          if (!isSkullPlayer) {
+            // Spectator: show mini peek
+            const statusLabel = !rolled
+              ? `${player?.name} must use the Skull…`
+              : survived
+                ? `${player?.name} survived the Skull!`
+                : `${player?.name} failed the Skull roll.`;
+            return (
+              <div className="mini-peek mini-peek-skull">
+                <span className="mini-peek-icon">☠</span>
+                <span className="mini-peek-label">
+                  {statusLabel}
+                  {rolled ? ` (${sc.total})` : ""}
+                </span>
+              </div>
+            );
+          }
           return (
             <div className="skull-challenge-overlay">
               <div className="skull-challenge-modal">

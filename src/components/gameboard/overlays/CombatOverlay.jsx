@@ -44,6 +44,7 @@ export default function CombatOverlay({
   onContinueAttacker,
   onContinueDefender,
   onAdvanceResolution,
+  myPlayerIndex = -1,
 }) {
   if (!combatState) return null;
 
@@ -61,6 +62,38 @@ export default function CombatOverlay({
 
   const phase = combatState.phase;
   const outcome = combatState.outcome || null;
+
+  // Spectator: neither attacker nor defender (only applies in online play when myPlayerIndex is set)
+  const isSpectator =
+    myPlayerIndex !== -1 && myPlayerIndex !== combatState.attackerIndex && myPlayerIndex !== combatState.defenderIndex;
+
+  if (isSpectator) {
+    const phaseLabel =
+      phase === "attacker-roll"
+        ? `${attackerName} rolls…`
+        : phase === "attacker-item"
+          ? `${attackerName} uses item…`
+          : phase === "defender-roll"
+            ? `${defenderName} rolls…`
+            : phase === "defender-item"
+              ? `${defenderName} uses item…`
+              : outcome
+                ? outcome.tie
+                  ? `Tie at ${outcome.attackerTotal}`
+                  : `${outcome.winnerName} wins!`
+                : "Resolving…";
+    return (
+      <div className="mini-peek mini-peek-combat">
+        <span className="mini-peek-icon">⚔️</span>
+        <div>
+          <div className="mini-peek-title">
+            COMBAT: {attackerName} vs {defenderName}
+          </div>
+          <div className="mini-peek-label">{phaseLabel}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="card-overlay" role="dialog" aria-label="Combat">

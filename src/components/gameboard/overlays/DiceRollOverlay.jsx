@@ -1,4 +1,4 @@
-export default function DiceRollOverlay({ diceAnimation, renderDiceRow }) {
+export default function DiceRollOverlay({ diceAnimation, renderDiceRow, isMyTurn = true }) {
   if (!diceAnimation || diceAnimation.settled) return null;
   if (diceAnimation.purpose === "event-damage-sequence" || diceAnimation.purpose === "event-trait-sequence-roll")
     return null;
@@ -29,6 +29,10 @@ export default function DiceRollOverlay({ diceAnimation, renderDiceRow }) {
                           : diceAnimation.purpose === "collapsed-damage"
                             ? "COLLAPSED ROOM — DAMAGE"
                             : "FURNACE ROOM";
+
+  if (isMyTurn === false) {
+    return null;
+  }
 
   return (
     <div className="card-overlay card-overlay-animation">

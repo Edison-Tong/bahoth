@@ -1,8 +1,20 @@
-export default function HauntRollOverlay({ game, diceAnimation, onDismissHauntRoll, renderDiceRow }) {
+export default function HauntRollOverlay({ game, diceAnimation, onDismissHauntRoll, renderDiceRow, isMyTurn = true }) {
   if (!game?.hauntRoll) return null;
   if (!diceAnimation?.settled || diceAnimation.purpose !== "haunt") return null;
 
   const { hauntTriggered, total, omenCount, dice } = game.hauntRoll;
+
+  if (isMyTurn === false) {
+    return (
+      <div className={`mini-peek ${hauntTriggered ? "mini-peek-haunt" : "mini-peek-safe"}`}>
+        <span className="mini-peek-icon">{hauntTriggered ? "💀" : "🕯️"}</span>
+        <div>
+          <div className="mini-peek-title">HAUNT ROLL • Total: {total}</div>
+          <div className="mini-peek-label">{hauntTriggered ? "The Haunt Begins!" : "Safe… for now."}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="card-overlay">
@@ -24,4 +36,3 @@ export default function HauntRollOverlay({ game, diceAnimation, onDismissHauntRo
     </div>
   );
 }
-

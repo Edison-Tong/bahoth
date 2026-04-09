@@ -31,6 +31,8 @@ function App() {
   const [myPlayerIndex, setMyPlayerIndex] = useState(0);
   const [remoteGameState, setRemoteGameState] = useState(null);
   const [onlineInitialGameState, setOnlineInitialGameState] = useState(null);
+  const [remoteDiceAnim, setRemoteDiceAnim] = useState(null);
+  const [remoteDiceResult, setRemoteDiceResult] = useState(null);
   const [wsError, setWsError] = useState(null);
 
   // Pass-and-play state
@@ -116,6 +118,15 @@ function App() {
 
       case "state-update":
         setRemoteGameState(msg.gameState);
+        setRemoteDiceAnim(null); // clear animation hint when result arrives
+        break;
+
+      case "dice-anim":
+        setRemoteDiceAnim({ purpose: msg.purpose, count: msg.count });
+        break;
+
+      case "dice-result":
+        setRemoteDiceResult(msg.roll);
         break;
 
       case "error":
@@ -432,7 +443,7 @@ function App() {
             WS: {wsStatus}
           </p>
 
-          {isHost && players.length >= 2 && (
+          {isHost && players.length >= 3 && (
             <button className="btn btn-primary" onClick={handleStartCharacterSelect}>
               Start Game — Pick Characters
             </button>
@@ -440,8 +451,8 @@ function App() {
 
           <p className="lobby-footer">
             {isHost
-              ? players.length < 2
-                ? "Waiting for at least one more player..."
+              ? players.length < 3
+                ? `Waiting for players... (${players.length}/3 minimum)`
                 : "Ready! Pick characters to begin."
               : players.length === 0
                 ? wsStatus === "connected"
@@ -741,7 +752,11 @@ function App() {
             code: gameCode,
             myPlayerIndex,
             remoteGameState,
+            remoteDiceAnim,
+            remoteDiceResult,
             broadcast: (gs) => send({ type: "state-update", code: gameCode, gameState: gs }),
+            sendDiceAnim: (purpose, count) => send({ type: "dice-anim", code: gameCode, purpose, count }),
+            sendDiceResult: (roll) => send({ type: "dice-result", code: gameCode, roll }),
           }}
         />
       );

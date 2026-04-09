@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { formatEventResultLines, getEventRollButtonLabel } from "../events/eventUtils";
 
 function EventCardContent({ card }) {
@@ -53,8 +54,55 @@ export function CardAbilityContent({ card }) {
   );
 }
 
-export function DrawnCardModal({ drawnCard, drawnEventPrimaryAction, onDismissCard, hauntStarted = false }) {
+const CARD_TYPE_ICON = { omen: "🔮", event: "⚡", item: "🎒" };
+
+function CardPeek({ drawnCard, currentTurnPlayerName }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div
+      className={`card-peek card-peek-${drawnCard.type}${expanded ? " card-peek-expanded" : ""}`}
+      style={{ pointerEvents: "auto" }}
+    >
+      <button
+        className="card-peek-toggle"
+        onClick={() => setExpanded((v) => !v)}
+        aria-label={expanded ? "Collapse card" : "Expand card"}
+      >
+        <span className="card-peek-icon">{CARD_TYPE_ICON[drawnCard.type] ?? "🃏"}</span>
+        <span className="card-peek-type">{drawnCard.type.toUpperCase()}</span>
+        <span className="card-peek-name">{drawnCard.name}</span>
+        <span className="card-peek-chevron">{expanded ? "▼" : "▲"}</span>
+      </button>
+
+      {expanded && (
+        <div className="card-peek-body">
+          <CardAbilityContent card={drawnCard} />
+          {drawnCard.flavor && <p className="card-flavor card-peek-flavor">{drawnCard.flavor}</p>}
+        </div>
+      )}
+
+      <div className="card-peek-status">
+        {currentTurnPlayerName ? `${currentTurnPlayerName} is resolving...` : "Active player is resolving..."}
+      </div>
+    </div>
+  );
+}
+
+export function DrawnCardModal({
+  drawnCard,
+  drawnEventPrimaryAction,
+  onDismissCard,
+  hauntStarted = false,
+  isMyTurn = true,
+  currentTurnPlayerName = "",
+}) {
   if (!drawnCard) return null;
+
+  // Non-active players: compact expandable banner, board stays fully usable
+  if (!isMyTurn) {
+    return <CardPeek drawnCard={drawnCard} currentTurnPlayerName={currentTurnPlayerName} />;
+  }
 
   return (
     <div className="card-overlay">
@@ -152,8 +200,27 @@ export default function EventResolutionModal({
   onConfirmRabbitFootReroll,
   onContinueEvent,
   renderDiceRow,
+  isMyTurn = true,
+  currentTurnPlayerName = "",
 }) {
   if (!eventState || eventState.awaiting?.type === "tile-choice") return null;
+
+  if (isMyTurn === false) {
+    const cardName = eventState.card?.name ?? "Event";
+    const summary = eventState.summary ?? "";
+    return (
+      <div className="mini-peek mini-peek-event">
+        <span className="mini-peek-icon">📜</span>
+        <div>
+          <div className="mini-peek-title">EVENT{currentTurnPlayerName ? ` · ${currentTurnPlayerName}` : ""}</div>
+          <div className="mini-peek-label">
+            {cardName}
+            {summary ? ` — ${summary}` : ""}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const isRabbitFootSelectionActive =
     !!rabbitFootPendingReroll &&

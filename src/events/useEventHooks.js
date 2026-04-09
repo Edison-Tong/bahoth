@@ -143,9 +143,9 @@ export function useEventRuntimeEffects({
   setDiceAnimation,
   eventFlowDeps,
   applyStatChange,
+  isMyTurn = true,
 }) {
-  // Guard against edge cases where event state is "rolling" but the event-roll
-  // animation is missing; restart the roll animation so the flow can continue.
+  // All players (active + spectators) see the animation; only active player updates game state.
   useEffect(() => {
     const awaiting = game.eventState?.awaiting;
     if (!awaiting || awaiting.type !== "rolling") return;
@@ -155,11 +155,12 @@ export function useEventRuntimeEffects({
     }
 
     const rollReady = resolveRollReadyAwaiting(game, { ...awaiting, type: "roll-ready" }, eventFlowDeps);
-    if (rollReady.animation) {
+    if (!rollReady.animation) return;
+    if (isMyTurn !== false) {
       setGame(rollReady.game);
-      setDiceAnimation(rollReady.animation);
     }
-  }, [game, game.eventState?.awaiting, diceAnimation, eventFlowDeps, setDiceAnimation, setGame]);
+    setDiceAnimation({ ...rollReady.animation, spectator: isMyTurn === false });
+  }, [isMyTurn, game, game.eventState?.awaiting, diceAnimation, eventFlowDeps, setDiceAnimation, setGame]);
 
   useEffect(() => {
     const awaiting = game.eventState?.awaiting;
@@ -168,10 +169,11 @@ export function useEventRuntimeEffects({
 
     const result = beginEventDamageRoll(game, rollDice);
     if (!result) return;
-
-    setGame(result.game);
-    setDiceAnimation(result.animation);
-  }, [game, game.eventState?.awaiting, diceAnimation, setDiceAnimation, setGame]);
+    if (isMyTurn !== false) {
+      setGame(result.game);
+    }
+    setDiceAnimation({ ...result.animation, spectator: isMyTurn === false });
+  }, [isMyTurn, game, game.eventState?.awaiting, diceAnimation, setDiceAnimation, setGame]);
 
   useEffect(() => {
     const awaiting = game.eventState?.awaiting;
@@ -180,25 +182,28 @@ export function useEventRuntimeEffects({
 
     const result = beginEventDamageSequenceRoll(game, rollDice);
     if (!result) return;
-
-    setGame(result.game);
-    setDiceAnimation(result.animation);
-  }, [game, game.eventState?.awaiting, diceAnimation, setDiceAnimation, setGame]);
+    if (isMyTurn !== false) {
+      setGame(result.game);
+    }
+    setDiceAnimation({ ...result.animation, spectator: isMyTurn === false });
+  }, [isMyTurn, game, game.eventState?.awaiting, diceAnimation, setDiceAnimation, setGame]);
 
   useEffect(() => {
     const awaiting = game.eventState?.awaiting;
     if (!awaiting || awaiting.type !== "trait-roll-sequence-rolling") return;
     if (diceAnimation) return;
 
-    let overrideApplied = false;
-    setGame((g) => {
-      const result = applyTraitRollSequenceOverride(g);
-      if (!result) return g;
-      overrideApplied = true;
-      return result.game;
-    });
-    if (overrideApplied) {
-      return;
+    if (isMyTurn !== false) {
+      let overrideApplied = false;
+      setGame((g) => {
+        const result = applyTraitRollSequenceOverride(g);
+        if (!result) return g;
+        overrideApplied = true;
+        return result.game;
+      });
+      if (overrideApplied) {
+        return;
+      }
     }
 
     const stat = awaiting.stats?.[awaiting.currentIndex];
@@ -221,8 +226,10 @@ export function useEventRuntimeEffects({
       total: roll.total,
       stat,
       modifier: roll.modifier,
+      spectator: isMyTurn === false,
     });
   }, [
+    isMyTurn,
     game,
     game.eventState?.awaiting,
     diceAnimation,
@@ -235,7 +242,9 @@ export function useEventRuntimeEffects({
   ]);
 
   // Auto-close event modal when an event reaches an inert state with nothing left to resolve.
+  // Only the active player should finalize event state and broadcast it.
   useEffect(() => {
+    if (isMyTurn === false) return;
     const eventState = game.eventState;
     if (!isEventStateInert(eventState)) return;
 
@@ -245,7 +254,7 @@ export function useEventRuntimeEffects({
 
       return finalizeEventState(g, g.message || `${currentEventState.card.name} resolved.`).game;
     });
-  }, [game.eventState, game.message, setGame]);
+  }, [isMyTurn, game.eventState, game.message, setGame]);
 }
 
 export function useEventActionHandlers({

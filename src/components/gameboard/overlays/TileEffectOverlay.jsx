@@ -13,9 +13,33 @@ export default function TileEffectOverlay({
   onContinueCollapsedRoll,
   onStartCollapsedDamage,
   onDismissTileEffect,
+  isMyTurn = true,
+  currentTurnPlayerName = "",
 }) {
   if (!game?.tileEffect) return null;
   const te = game.tileEffect;
+
+  if (isMyTurn === false) {
+    const isHazard =
+      te.damage > 0 ||
+      te.collapsed ||
+      te.type === "collapsed-prompt" ||
+      te.type === "collapsed-roll-result" ||
+      te.type === "collapsed-pending";
+    const colorClass = isHazard ? "mini-peek-danger" : "mini-peek-safe";
+    return (
+      <div className={`mini-peek ${colorClass}`}>
+        <span className="mini-peek-icon">{isHazard ? "⚠️" : "🏠"}</span>
+        <div>
+          <div className="mini-peek-title">{te.tileName}</div>
+          <div className="mini-peek-label">
+            {currentTurnPlayerName ? `${currentTurnPlayerName}: ` : ""}
+            {te.message || te.tileName}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const isRabbitFootSkeletonKey =
     isSkeletonKeyResultEffect(te) && game.rabbitFootPendingReroll?.sourceType === "skeleton-key-roll";
