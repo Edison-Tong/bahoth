@@ -244,6 +244,12 @@
   font-style: italic;
 }
 
+.lobby-error {
+  color: #e74c3c;
+  font-size: 14px;
+  margin: 4px 0;
+}
+
 .btn-link {
   background: none;
   border: none;

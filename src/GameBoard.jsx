@@ -285,8 +285,8 @@ function DiceRow({ dice, modifier = null, rolling = false }) {
   );
 }
 
-export default function GameBoard({ players, onQuit }) {
-  const [game, setGame] = useState(() => initGameState(players));
+export default function GameBoard({ players, onQuit, onlineConfig, initialGameState }) {
+  const [game, setGame] = useState(() => initialGameState ?? initGameState(players));
   const [cameraFloor, setCameraFloor] = useState("ground");
   const [diceAnimation, setDiceAnimation] = useState(null);
   const [expandedSidebarPlayers, setExpandedSidebarPlayers] = useState(() => new Set());
@@ -313,6 +313,32 @@ export default function GameBoard({ players, onQuit }) {
   const queuedTraitRollOverrideRef = useRef(null);
   const messageBubbleTimeoutRef = useRef(null);
   const boardRef = useRef(null);
+
+  // --- Online multiplayer sync ---
+  // Tracks the last game state received from the server so we don't echo it back
+  const lastReceivedRemoteGame = useRef(null);
+  // Captures the very first game state so we don't broadcast it on mount
+  const initialGameRef = useRef(game);
+  // Always-current reference to the broadcast function (avoids stale closure in effect)
+  const broadcastRef = useRef(null);
+  broadcastRef.current = onlineConfig?.broadcast ?? null;
+
+  // Apply remote state when App.jsx receives a state-update from the server
+  useEffect(() => {
+    const remoteGame = onlineConfig?.remoteGameState;
+    if (!remoteGame || remoteGame === lastReceivedRemoteGame.current) return;
+    lastReceivedRemoteGame.current = remoteGame;
+    setGame(remoteGame);
+  }, [onlineConfig?.remoteGameState]);
+
+  // Broadcast local state changes to all other players
+  useEffect(() => {
+    if (!broadcastRef.current) return;
+    if (game === lastReceivedRemoteGame.current) return; // don't echo a received state
+    if (game === initialGameRef.current) return; // don't broadcast the initial state
+    broadcastRef.current(game);
+  }, [game]);
+  // --- End online sync ---
   const hauntPendingChoiceType = game?.hauntState?.scenarioState?.pendingChoice?.type;
   const gameplayLockedByHauntSetup = game.gamePhase === GAME_PHASES.HAUNT_SETUP;
   const gameplayLockedByCombat = !!game.combatState;
