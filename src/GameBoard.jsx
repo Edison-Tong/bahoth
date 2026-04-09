@@ -673,6 +673,7 @@ export default function GameBoard({ players, onQuit }) {
         gameplayLockedByHauntSetup ||
         gameplayLockedByCombat ||
         gameplayLockedByStalkPreyPlacement ||
+        gameplayLockedByHauntPendingChoice ||
         gameIsOver ||
         isInputFocused
       ) {
@@ -1023,7 +1024,12 @@ export default function GameBoard({ players, onQuit }) {
 
   // Move player to an existing tile and extend the current path.
   function handleMove(nx, ny, cost, options = {}) {
-    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP || game.gamePhase === GAME_PHASES.GAME_OVER)
+    if (
+      debugModeEnabled ||
+      game.gamePhase === GAME_PHASES.HAUNT_SETUP ||
+      game.gamePhase === GAME_PHASES.GAME_OVER ||
+      gameplayLockedByHauntPendingChoice
+    )
       return;
     let nextDiceAnimation = null;
     setGame((g) => {

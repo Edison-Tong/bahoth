@@ -222,7 +222,7 @@ export default function GameBoardActions({
                 : "btn btn-secondary"
           }
           onClick={() => onUseHauntAction(action.id)}
-          disabled={controlsDisabled}
+          disabled={false}
         >
           {action.label}
         </button>
