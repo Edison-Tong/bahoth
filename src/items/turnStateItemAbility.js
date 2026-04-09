@@ -1,5 +1,4 @@
-const PLAYER_STAT_ORDER = ["speed", "might", "knowledge", "sanity"];
-const CRITICAL_STAT_INDEX = 1;
+import { PLAYER_STAT_ORDER, CRITICAL_STAT_INDEX } from "../game/gameState";
 const NECKLACE_OF_TEETH_ID = "necklace-of-teeth";
 const NECKLACE_OF_TEETH_CHOICE_TYPE = "necklace-of-teeth-choice";
 

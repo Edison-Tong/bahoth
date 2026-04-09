@@ -142,42 +142,6 @@ export function advanceHauntRulesViewState(game) {
   };
 }
 
-export function beginHauntAfterRulesViewState(game) {
-  if (game.gamePhase !== GAME_PHASES.HAUNT_SETUP) return game;
-  const rulesStep = game.hauntState?.rulesView?.step;
-  if (rulesStep !== "traitor-rules" && !game.hauntState?.rulesView?.completed) return game;
-
-  const desiredFirstPlayer =
-    game.hauntState.firstPlayerAfterSetup ?? (game.hauntState.traitorPlayerIndex + 1) % game.players.length;
-  const firstPlayer = game.players[desiredFirstPlayer] || game.players[0];
-  if (!firstPlayer) return game;
-
-  const firstPlayerSpeed = firstPlayer.character.speed[firstPlayer.statIndex.speed];
-  const playersWithMoves = game.players.map((player, index) => ({
-    ...player,
-    movesLeft: index === desiredFirstPlayer ? firstPlayerSpeed : 0,
-  }));
-
-  return {
-    ...game,
-    players: playersWithMoves,
-    currentPlayerIndex: desiredFirstPlayer,
-    gamePhase: GAME_PHASES.HAUNT_ACTIVE,
-    turnPhase: "move",
-    movePath: [{ x: firstPlayer.x, y: firstPlayer.y, floor: firstPlayer.floor, cost: 0 }],
-    hauntState: {
-      ...game.hauntState,
-      status: "active",
-      rulesView: {
-        ...game.hauntState.rulesView,
-        step: "completed",
-        completed: true,
-      },
-    },
-    message: `${firstPlayer.name} begins the haunt.`,
-  };
-}
-
 function getTraitorPhysicalBonus(hauntDefinition, playerCount) {
   if (!hauntDefinition?.scaling?.traitorPhysicalBonusByPlayerCount) return 0;
   return hauntDefinition.scaling.traitorPhysicalBonusByPlayerCount[playerCount] || 0;

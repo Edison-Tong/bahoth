@@ -1,13 +1,7 @@
 import { GAME_PHASES, HAUNT_TEAMS } from "../core/hauntPhases";
+import { OPPOSITE, STAT_LABELS } from "../../game/gameState";
 
 const JACKS_SPIRIT_SPEED_DICE = 3;
-const OPPOSITE_DIR = { N: "S", S: "N", E: "W", W: "E" };
-const STAT_LABELS = {
-  might: "Might",
-  speed: "Speed",
-  sanity: "Sanity",
-  knowledge: "Knowledge",
-};
 
 export function createInitialScenarioState() {
   return {
@@ -564,7 +558,7 @@ function hasDoorwayLineOfSight(board, from, target) {
 
     const currentDoors = currentTile.doors || [];
     const nextDoors = nextTile.doors || [];
-    if (!currentDoors.includes(travel.dir) || !nextDoors.includes(OPPOSITE_DIR[travel.dir])) {
+    if (!currentDoors.includes(travel.dir) || !nextDoors.includes(OPPOSITE[travel.dir])) {
       return false;
     }
 
@@ -809,7 +803,7 @@ function resolveConfirmStalkPreyPlacementState(game) {
   };
 }
 
-export function resolveLearnAboutJackState(game) {
+function resolveLearnAboutJackState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
     return game;
   }
@@ -855,7 +849,7 @@ export function resolveLearnAboutJackState(game) {
   };
 }
 
-export function resolveStudyExorcismState(game) {
+function resolveStudyExorcismState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
     return game;
   }
@@ -901,7 +895,7 @@ export function resolveStudyExorcismState(game) {
   };
 }
 
-export function resolveExorciseJacksSpiritState(game) {
+function resolveExorciseJacksSpiritState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
     return game;
   }
@@ -1147,7 +1141,7 @@ export function resolveActionRollContinueState(game, { createDamageChoice }) {
   return clearHauntActionRoll(game);
 }
 
-export function resolveStalkPreyState(game) {
+function resolveStalkPreyState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
     return game;
   }

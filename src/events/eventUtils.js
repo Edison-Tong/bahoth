@@ -1,13 +1,8 @@
+import { STAT_LABELS } from "../game/gameState";
+
 export function getEventRollButtonLabel(diceCount) {
   return diceCount === 1 ? "Roll Die" : "Roll Dice";
 }
-
-const STAT_LABELS = {
-  might: "Might",
-  speed: "Speed",
-  sanity: "Sanity",
-  knowledge: "Knowledge",
-};
 
 export function appendEventSummary(summary, text) {
   if (!text) return summary || "";

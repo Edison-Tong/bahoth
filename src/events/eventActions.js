@@ -57,25 +57,7 @@ import {
   buildDynamiteThrowState,
 } from "../items/dynamiteAbility";
 
-const DAMAGE_STATS = {
-  physical: ["might", "speed"],
-  mental: ["sanity", "knowledge"],
-  general: ["might", "speed", "sanity", "knowledge"],
-};
-
-const STAT_LABELS = {
-  might: "Might",
-  speed: "Speed",
-  sanity: "Sanity",
-  knowledge: "Knowledge",
-};
-const DIR = {
-  N: { dx: 0, dy: -1 },
-  S: { dx: 0, dy: 1 },
-  E: { dx: 1, dy: 0 },
-  W: { dx: -1, dy: 0 },
-};
-const OPPOSITE = { N: "S", S: "N", E: "W", W: "E" };
+import { DAMAGE_STATS, STAT_LABELS, DIR, OPPOSITE } from "../game/gameState";
 
 function getLeaveMoveCost(tile) {
   const hasObstacleToken = Array.isArray(tile?.tokens) && tile.tokens.some((token) => token?.type === "obstacle");
