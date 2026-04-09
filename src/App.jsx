@@ -41,6 +41,7 @@ function App() {
   // Character select state
   const [pickingPlayerIndex, setPickingPlayerIndex] = useState(0);
   const [characterChoices, setCharacterChoices] = useState({}); // { playerIndex: character }
+  const [charPicks, setCharPicks] = useState({}); // online: { playerIndex: character }
   const [backendStatus, setBackendStatus] = useState("checking");
 
   useEffect(() => {
@@ -91,14 +92,25 @@ function App() {
         setIsHost(false);
         setPlayers([]);
         setMyPlayerIndex(0);
+        setCharPicks({});
         setScreen("online-menu");
         setWsError("The host left the game.");
+        break;
+
+      case "char-select-started":
+        setCharPicks({});
+        setScreen("char-select");
+        break;
+
+      case "char-picks-update":
+        setCharPicks(msg.picks);
         break;
 
       case "game-started":
         // Non-host clients: receive initial game state and player list from host
         setPlayers(msg.players.map((p) => ({ ...p, isHost: p.playerIndex === 0 })));
         setOnlineInitialGameState(msg.gameState);
+        setCharPicks({});
         setScreen("game");
         break;
 
@@ -120,6 +132,25 @@ function App() {
   // Ref so we can call send inside useEffect-free handlers without stale closure issues
   const sendRef = useRef(send);
   sendRef.current = send;
+
+  // Online char-select: once all players have picked, host fires start-game
+  useEffect(() => {
+    if (!gameCode || !isHost) return;
+    if (screen !== "char-select") return;
+    if (players.length === 0) return;
+    if (Object.keys(charPicks).length < players.length) return;
+
+    const finalPlayers = players.map((p, i) => ({
+      ...p,
+      character: charPicks[i],
+      color: charPicks[i].color,
+    }));
+    setPlayers(finalPlayers);
+    const initialState = initGameState(finalPlayers);
+    setOnlineInitialGameState(initialState);
+    sendRef.current({ type: "start-game", code: gameCode, players: finalPlayers, gameState: initialState });
+    setScreen("game");
+  }, [charPicks, players.length, gameCode, isHost, screen]);
 
   function renderBackendStatus() {
     const statusLabel =
@@ -177,6 +208,7 @@ function App() {
     setMyPlayerIndex(0);
     setRemoteGameState(null);
     setOnlineInitialGameState(null);
+    setCharPicks({});
     setWsError(null);
     setScreen("online-menu");
   }
@@ -227,12 +259,23 @@ function App() {
   // --- Character select handlers ---
 
   function handleStartCharacterSelect() {
+    if (gameCode) {
+      // Online: tell the server to notify all players to begin character select
+      send({ type: "start-char-select", code: gameCode });
+      return;
+    }
     setPickingPlayerIndex(0);
     setCharacterChoices({});
     setScreen("char-select");
   }
 
   function handlePickCharacter(character) {
+    if (gameCode) {
+      // Online mode: send this player's pick to the server
+      send({ type: "char-pick", code: gameCode, character });
+      return;
+    }
+    // Pass & play: cycle through each player locally
     const updated = { ...characterChoices, [pickingPlayerIndex]: character };
     setCharacterChoices(updated);
 
@@ -243,14 +286,6 @@ function App() {
         color: updated[i].color,
       }));
       setPlayers(finalPlayers);
-
-      if (gameCode) {
-        // Online mode: create the initial game state on the host and broadcast to all players
-        const initialState = initGameState(finalPlayers);
-        setOnlineInitialGameState(initialState);
-        send({ type: "start-game", code: gameCode, players: finalPlayers, gameState: initialState });
-      }
-
       setScreen("game");
     } else {
       setPickingPlayerIndex(pickingPlayerIndex + 1);
@@ -509,6 +544,107 @@ function App() {
 
   // --- Character Select ---
   if (screen === "char-select") {
+    // ── Online mode ───────────────────────────────────────────────────────────
+    if (gameCode) {
+      const myPick = charPicks[myPlayerIndex];
+      const pickedCount = Object.keys(charPicks).length;
+      const stillWaiting = players.filter((_, i) => !charPicks[i]);
+
+      return (
+        <div className="app app-wide">
+          {renderBackendStatus()}
+          <h1 className="title">Choose Your Character</h1>
+          <p className="subtitle">
+            {myPick ? (
+              <>
+                You picked <span style={{ color: myPick.color, fontWeight: "bold" }}>{myPick.name}</span> — waiting for
+                others ({pickedCount}/{players.length})
+              </>
+            ) : (
+              "Pick your character"
+            )}
+          </p>
+
+          {stillWaiting.length > 0 && (
+            <p style={{ textAlign: "center", opacity: 0.55, fontSize: "13px", marginBottom: "8px" }}>
+              Still choosing: {stillWaiting.map((p) => p.name).join(", ")}
+            </p>
+          )}
+
+          <div className="char-grid">
+            {CHARACTERS.map((char) => {
+              const takenByIndex = Number(Object.entries(charPicks).find(([, c]) => c.name === char.name)?.[0] ?? -1);
+              const takenByMe = takenByIndex === myPlayerIndex;
+              const takenByOther = takenByIndex >= 0 && !takenByMe;
+              const takenByPlayer = takenByOther ? players[takenByIndex] : null;
+              const isDisabled = takenByOther;
+
+              return (
+                <button
+                  className={`char-card${takenByOther ? " char-card-taken" : ""}${takenByMe ? " char-card-mine" : ""}`}
+                  key={char.name}
+                  onClick={() => !isDisabled && handlePickCharacter(char)}
+                  disabled={isDisabled}
+                  style={{ "--char-color": char.color }}
+                >
+                  {takenByOther && (
+                    <div className="char-taken-overlay">
+                      <span>{takenByPlayer?.name ?? "Taken"}</span>
+                    </div>
+                  )}
+                  {takenByMe && <div className="char-mine-badge">✓ Your pick</div>}
+                  <div className="char-header">
+                    <div className="char-portrait" style={{ background: char.color }}>
+                      {char.name.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="char-name">{char.name}</div>
+                      <div className="char-age">
+                        Age {char.age} • {char.birthday}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="char-tracks">
+                    {[
+                      ["Speed", "speed", "🏃"],
+                      ["Might", "might", "💪"],
+                      ["Knowledge", "knowledge", "📖"],
+                      ["Sanity", "sanity", "🧠"],
+                    ].map(([label, key, icon]) => (
+                      <div className="track-row" key={key}>
+                        <span className="track-label">
+                          {icon} {label}
+                        </span>
+                        <div className="track-pips">
+                          {char[key].slice(1).map((val, i) => {
+                            const idx = i + 1;
+                            const isStart = idx === char.startIndex[key];
+                            return (
+                              <span
+                                className={`pip${isStart ? " pip-start" : ""}${idx < char.startIndex[key] ? " pip-low" : ""}`}
+                                key={idx}
+                              >
+                                {val}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <button className="btn btn-danger" style={{ marginTop: "16px" }} onClick={handleLeaveGame}>
+            Leave Game
+          </button>
+        </div>
+      );
+    }
+
+    // ── Pass & Play mode ──────────────────────────────────────────────────────
     const currentPicker = players[pickingPlayerIndex];
     const chosen = getChosenCharacterNames();
     const available = CHARACTERS.filter((c) => !chosen.includes(c.name));

@@ -117,9 +117,18 @@ wss.on("connection", (socket, request) => {
     if (type === "join-room") {
       const { playerName, color } = msg;
       const room = rooms.get(code);
-      if (!room) { safeSend(socket, { type: "error", message: "Room not found" }); return; }
-      if (room.started) { safeSend(socket, { type: "error", message: "Game already started" }); return; }
-      if (room.players.length >= 6) { safeSend(socket, { type: "error", message: "Room is full" }); return; }
+      if (!room) {
+        safeSend(socket, { type: "error", message: "Room not found" });
+        return;
+      }
+      if (room.started) {
+        safeSend(socket, { type: "error", message: "Game already started" });
+        return;
+      }
+      if (room.players.length >= 6) {
+        safeSend(socket, { type: "error", message: "Room is full" });
+        return;
+      }
       const playerIndex = room.players.length;
       const player = {
         ws: socket,
@@ -131,6 +140,33 @@ wss.on("connection", (socket, request) => {
       socketMeta.set(socket, { code, playerIndex });
       safeSend(socket, { type: "room-joined", code, players: roomPlayerList(room), myPlayerIndex: playerIndex });
       broadcastRoom(code, { type: "player-joined", players: roomPlayerList(room) }, socket);
+      return;
+    }
+
+    if (type === "start-char-select") {
+      const meta = socketMeta.get(socket);
+      if (!meta || meta.playerIndex !== 0) {
+        safeSend(socket, { type: "error", message: "Only the host can start character select" });
+        return;
+      }
+      const room = rooms.get(code);
+      if (!room) return;
+      room.charPicks = {};
+      // Broadcast to ALL players including host
+      for (const p of room.players) safeSend(p.ws, { type: "char-select-started" });
+      return;
+    }
+
+    if (type === "char-pick") {
+      const meta = socketMeta.get(socket);
+      if (!meta) return;
+      const room = rooms.get(code);
+      if (!room) return;
+      const { character } = msg;
+      if (!room.charPicks) room.charPicks = {};
+      room.charPicks[meta.playerIndex] = character;
+      // Broadcast updated picks map to all players
+      for (const p of room.players) safeSend(p.ws, { type: "char-picks-update", picks: room.charPicks });
       return;
     }
 
