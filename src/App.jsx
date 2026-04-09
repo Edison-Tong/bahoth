@@ -67,6 +67,7 @@ function App() {
 
   // --- WebSocket message handler (function declaration — hoisted so it can be passed to hook) ---
   function handleWsMessage(msg) {
+    console.log("[WS←]", msg.type, msg);
     switch (msg.type) {
       case "room-created":
         setMyPlayerIndex(msg.myPlayerIndex);
@@ -392,6 +393,9 @@ function App() {
           </div>
 
           {wsError && <p className="lobby-error">{wsError}</p>}
+          <p className="lobby-error" style={{ opacity: 0.45, fontSize: "12px" }}>
+            WS: {wsStatus}
+          </p>
 
           {isHost && players.length >= 2 && (
             <button className="btn btn-primary" onClick={handleStartCharacterSelect}>
@@ -405,7 +409,9 @@ function App() {
                 ? "Waiting for at least one more player..."
                 : "Ready! Pick characters to begin."
               : players.length === 0
-                ? "Connecting to room..."
+                ? wsStatus === "connected"
+                  ? "Joined — waiting for host..."
+                  : `Connecting... (${wsStatus})`
                 : "Waiting for host to start the game..."}
           </p>
 
