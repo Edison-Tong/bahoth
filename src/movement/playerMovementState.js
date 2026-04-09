@@ -1,4 +1,33 @@
-import { getHauntMovementOptionsState } from "../haunts/hauntDomain";
+import { getHauntMovementOptionsState, getHauntCombatActorProxyState } from "../haunts/hauntDomain";
+
+// Returns how many extra moves it costs to leave a tile due to enemies present on it.
+// Heroes are obstructed by the traitor (alive) or an active monster proxy.
+// The traitor is obstructed by alive heroes.
+function getEnemyObstacleCost(game, playerIndex) {
+  if (game.gamePhase !== "hauntActive" || !game.hauntState) return 0;
+
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  const player = game.players[playerIndex];
+  if (!player) return 0;
+
+  const { floor, x, y } = player;
+
+  if (playerIndex === traitorIndex) {
+    // Traitor: obstructed by alive heroes on same tile
+    const heroIndexes = game.hauntState.teams?.heroes?.playerIndexes || [];
+    return heroIndexes.filter((hi) => {
+      const h = game.players[hi];
+      return h?.isAlive && h.floor === floor && h.x === x && h.y === y;
+    }).length;
+  } else {
+    // Hero: obstructed by the traitor (alive) or an active proxy (spirit) on same tile
+    const traitor = game.players[traitorIndex];
+    if (traitor?.isAlive && traitor.floor === floor && traitor.x === x && traitor.y === y) return 1;
+    const proxy = getHauntCombatActorProxyState(game, traitorIndex);
+    if (proxy && proxy.floor === floor && proxy.x === x && proxy.y === y) return 1;
+    return 0;
+  }
+}
 
 export function getValidMovesState({
   game,
@@ -45,7 +74,11 @@ export function getValidMovesState({
   if (hauntMoveOptions) return hauntMoveOptions;
 
   const moves = [];
-  const moveCost = getLeaveMoveCost(tile);
+  const tileLeaveCost = getLeaveMoveCost(tile);
+  const enemyCost = getEnemyObstacleCost(game, game.currentPlayerIndex);
+  const moveCost = tileLeaveCost + enemyCost;
+  const isFirstMove = !game.hasMovedThisTurn;
+  const canAffordMove = currentPlayer.movesLeft >= moveCost || (isFirstMove && currentPlayer.movesLeft > 0);
   const canUseSkeletonKeyMovement = canUseArmedSkeletonKeyMovement(game, currentPlayer);
 
   for (const dir of tile.doors) {
@@ -60,16 +93,16 @@ export function getValidMovesState({
           backtrackPos && backtrackPos.x === nx && backtrackPos.y === ny && backtrackPos.floor === currentPlayer.floor;
         if (isBacktrack) {
           moves.push({ dir, x: nx, y: ny, type: "backtrack" });
-        } else if (currentPlayer.movesLeft >= moveCost) {
+        } else if (canAffordMove) {
           moves.push({ dir, x: nx, y: ny, type: "move", cost: moveCost });
         }
       }
-    } else if (currentPlayer.movesLeft >= moveCost) {
+    } else if (canAffordMove) {
       moves.push({ dir, x: nx, y: ny, type: "explore", cost: moveCost });
     }
   }
 
-  if (canUseSkeletonKeyMovement && currentPlayer.movesLeft >= moveCost) {
+  if (canUseSkeletonKeyMovement && canAffordMove) {
     for (const dir of ["N", "S", "E", "W"]) {
       const { dx, dy } = DIR[dir];
       const nx = currentPlayer.x + dx;
@@ -97,12 +130,14 @@ export function movePlayerState(
 ) {
   const player = g.players[g.currentPlayerIndex];
   const currentTile = g.board[player.floor]?.find((t) => t.x === player.x && t.y === player.y);
-  const resolvedCost = cost ?? getLeaveMoveCost(currentTile);
-  if (player.movesLeft < resolvedCost) return g;
+  const resolvedCost = cost ?? getLeaveMoveCost(currentTile) + getEnemyObstacleCost(g, g.currentPlayerIndex);
+  const isFirstMove = !g.hasMovedThisTurn;
+  if (player.movesLeft <= 0) return g;
+  if (!isFirstMove && player.movesLeft < resolvedCost) return g;
 
   if (useSkeletonKey && !canUseArmedSkeletonKeyMovement(g, player)) return g;
 
-  const movesLeft = player.movesLeft - resolvedCost;
+  const movesLeft = Math.max(0, player.movesLeft - resolvedCost);
   const newPath = [...g.movePath, { x: nx, y: ny, floor: player.floor, cost: resolvedCost }];
   const destinationTile = g.board[player.floor]?.find((tile) => tile.x === nx && tile.y === ny);
 
@@ -136,6 +171,7 @@ export function movePlayerState(
     mysticElevatorReady:
       destinationTile?.enterEffect === "mystic-elevator" && !g.mysticElevatorUsed ? true : g.mysticElevatorReady,
     skeletonKeyArmed: useSkeletonKey ? false : g.skeletonKeyArmed,
+    hasMovedThisTurn: true,
     message: skeletonKeyMessage ? `${baseMessage}. ${skeletonKeyMessage}` : baseMessage,
   };
 }
@@ -196,6 +232,7 @@ export function exploreState(g, { dir, nx, ny, cost, OPPOSITE, getLeaveMoveCost 
     ...g,
     players: updatedPlayers,
     movePath: newPath,
+    hasMovedThisTurn: true,
     pendingExplore: {
       tile,
       tileIndex,

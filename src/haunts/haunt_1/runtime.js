@@ -112,6 +112,14 @@ export function getSpecialMoveOptionsState({ game, currentPlayer, DIR, getTileAt
   };
   const movesLeft = Number(currentPlayer?.movesLeft) || 0;
 
+  const heroesAtOrigin = getHeroIndexes(game).filter((hi) => {
+    const h = game.players[hi];
+    return h?.isAlive && h.floor === origin.floor && h.x === origin.x && h.y === origin.y;
+  }).length;
+  const leaveCost = 1 + heroesAtOrigin;
+  const isFirstMove = !game.hasMovedThisTurn;
+  const canAffordLeave = movesLeft >= leaveCost || (isFirstMove && movesLeft > 0);
+
   const spiritMoves = [];
   for (const dir of ["N", "S", "E", "W"]) {
     const { dx, dy } = DIR[dir];
@@ -124,8 +132,8 @@ export function getSpecialMoveOptionsState({ game, currentPlayer, DIR, getTileAt
       backtrackPos && backtrackPos.x === nx && backtrackPos.y === ny && backtrackPos.floor === origin.floor;
     if (isBacktrack) {
       spiritMoves.push({ dir, x: nx, y: ny, type: "backtrack" });
-    } else if (movesLeft >= 1) {
-      spiritMoves.push({ dir, x: nx, y: ny, type: "move", cost: 1 });
+    } else if (canAffordLeave) {
+      spiritMoves.push({ dir, x: nx, y: ny, type: "move", cost: leaveCost });
     }
   }
 

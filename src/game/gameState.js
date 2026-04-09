@@ -87,6 +87,7 @@ export function initGameState(players) {
     activeHauntId: null,
     hauntState: null,
     hasAttackedThisTurn: false,
+    hasMovedThisTurn: false,
     combatState: null,
     drawnCard: null,
     hauntRoll: null,

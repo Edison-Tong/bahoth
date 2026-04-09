@@ -746,6 +746,19 @@
   flex-shrink: 0;
   min-height: 50px;
   align-items: center;
+  flex-wrap: wrap;
+}
+
+.movement-counter {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--accent);
+  padding: 4px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  user-select: none;
+  white-space: nowrap;
 }
 
 .game-actions .btn-primary {

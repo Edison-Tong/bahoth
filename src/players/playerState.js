@@ -92,6 +92,7 @@ export function passTurnCoreState(g) {
       mysticElevatorReady: canReadyMysticElevator,
       mysticElevatorUsed: false,
       hasAttackedThisTurn: false,
+      hasMovedThisTurn: false,
       combatState: null,
       tileEffect: null,
       damageChoice: null,

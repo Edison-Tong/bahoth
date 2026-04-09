@@ -93,6 +93,9 @@ export default function GameBoardActions({
 
   return (
     <div className="game-actions">
+      {!tradeState && game.turnPhase === "move" && (
+        <span className="movement-counter">Movement: {currentPlayer?.movesLeft ?? 0}</span>
+      )}
       {!tradeState && game.turnPhase === "move" && game.movePath.length > 1 && (
         <button className="btn btn-confirm" onClick={handleConfirmMove} disabled={controlsDisabled}>
           Move Here
