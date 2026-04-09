@@ -145,6 +145,7 @@ import {
   getAllHauntDefinitions,
   getHauntCombatBonus,
   getHauntCombatActorProxyState,
+  resolveHauntMonsterSpeedRollState,
   getHauntDefinitionById,
   resolveHauntActionRollContinueState,
   resolveHauntAfterDamageState,
@@ -474,43 +475,8 @@ export default function GameBoard({ players, onQuit }) {
         setDiceAnimation(null);
       } else if (da.purpose === "monster-speed-roll") {
         setGame((g) => {
-          const scenarioState = g.hauntState?.scenarioState;
-          const spirit = scenarioState?.jacksSpirit;
-          if (!spirit?.active) return g;
           const total = Number.isFinite(da.total) ? da.total : baseTotal;
-          const moves = Math.max(1, total);
-          const traitorIndex = g.hauntState?.traitorPlayerIndex;
-          const nextPlayers = g.players.map((player, index) =>
-            index === traitorIndex
-              ? {
-                  ...player,
-                  floor: spirit.floor,
-                  x: spirit.x,
-                  y: spirit.y,
-                  movesLeft: moves,
-                }
-              : player
-          );
-          return {
-            ...g,
-            players: nextPlayers,
-            movePath: [{ x: spirit.x, y: spirit.y, floor: spirit.floor, cost: 0 }],
-            hauntState: {
-              ...g.hauntState,
-              scenarioState: {
-                ...scenarioState,
-                jacksSpirit: {
-                  ...spirit,
-                  movesLeft: moves,
-                  speedRoll: [...da.final],
-                  speedTotal: total,
-                },
-              },
-            },
-            message: `${da.monsterName || "Jack's Spirit"} rolls ${da.final.join(", ")} (${total}) and may move ${moves} tile${
-              moves !== 1 ? "s" : ""
-            } this turn.`,
-          };
+          return resolveHauntMonsterSpeedRollState(g, { dice: da.final, total, monsterName: da.monsterName });
         });
         setDiceAnimation(null);
       } else if (
@@ -1372,6 +1338,10 @@ export default function GameBoard({ players, onQuit }) {
 
       const attacker = g.players[g.currentPlayerIndex];
       const defender = g.players[defenderIndex];
+      const attackerProxy = getHauntCombatActorProxyState(g, g.currentPlayerIndex);
+      const defenderProxy = getHauntCombatActorProxyState(g, defenderIndex);
+      const attackerDisplayName = attackerProxy?.name ?? attacker.name;
+      const defenderDisplayName = defenderProxy?.name ?? defender.name;
       const sourceRule = sourceCard?.activeAbilityRule || null;
       const {
         rollStat,
@@ -1392,6 +1362,8 @@ export default function GameBoard({ players, onQuit }) {
           phase: "attacker-roll",
           attackerIndex: g.currentPlayerIndex,
           defenderIndex,
+          attackerName: attackerDisplayName,
+          defenderName: defenderDisplayName,
           rollStat,
           combatDamageType,
           attackerNoDamageOnLoss,
@@ -1414,7 +1386,7 @@ export default function GameBoard({ players, onQuit }) {
           },
           outcome: null,
         },
-        message: `${attacker.name} attacks ${defender.name}.`,
+        message: `${attackerDisplayName} attacks ${defenderDisplayName}.`,
       };
     });
   }
@@ -1474,7 +1446,10 @@ export default function GameBoard({ players, onQuit }) {
     const preRollDice = preRollBonusDice > 0 ? rollDice(preRollBonusDice) : [];
     const preRollDiceTotal = preRollDice.reduce((sum, value) => sum + value, 0);
     const opponentIndex = role === "attacker" ? combatState.defenderIndex : combatState.attackerIndex;
-    const hauntKnowledgeBonus = getHauntCombatBonus(game, actorIndex, opponentIndex);
+    const hauntKnowledgeBonus = getHauntCombatBonus(game, actorIndex, opponentIndex, role);
+    if (hauntKnowledgeBonus > 0) {
+      itemMessages.push(`+${hauntKnowledgeBonus} to roll from Knowledge of Jack.`);
+    }
     const animatedDice = [...rollResult.dice, ...preRollDice];
 
     setGame((g) => {
@@ -1611,8 +1586,9 @@ export default function GameBoard({ players, onQuit }) {
           : g.combatState.attackerIndex;
       const damage = tie ? 0 : Math.abs(attackerTotal - defenderTotal);
 
-      const loserIsProxy = loserIndex != null && !!getHauntCombatActorProxyState(g, loserIndex);
-      const winnerIsProxy = winnerIndex != null && !!getHauntCombatActorProxyState(g, winnerIndex);
+      const loserProxy = loserIndex != null ? getHauntCombatActorProxyState(g, loserIndex) : null;
+      const winnerProxy = winnerIndex != null ? getHauntCombatActorProxyState(g, winnerIndex) : null;
+      const loserIsProxy = !!loserProxy;
       const outcome = {
         tie,
         attackerTotal,
@@ -1621,16 +1597,8 @@ export default function GameBoard({ players, onQuit }) {
         loserIndex,
         loserIsProxy,
         damage,
-        winnerName: winnerIsProxy
-          ? "Jack's Spirit"
-          : winnerIndex != null
-            ? g.players[winnerIndex]?.name || "Winner"
-            : "No one",
-        loserName: loserIsProxy
-          ? "Jack's Spirit"
-          : loserIndex != null
-            ? g.players[loserIndex]?.name || "Loser"
-            : "No one",
+        winnerName: winnerProxy?.name ?? (winnerIndex != null ? g.players[winnerIndex]?.name || "Winner" : "No one"),
+        loserName: loserProxy?.name ?? (loserIndex != null ? g.players[loserIndex]?.name || "Loser" : "No one"),
       };
 
       return {
@@ -1671,7 +1639,7 @@ export default function GameBoard({ players, onQuit }) {
         return {
           ...g,
           combatState: null,
-          message: `${outcome.winnerName} wins (${outcome.attackerTotal} vs ${outcome.defenderTotal}). Jack's Spirit cannot be harmed.`,
+          message: `${outcome.winnerName} wins (${outcome.attackerTotal} vs ${outcome.defenderTotal}). ${outcome.loserName} cannot be harmed.`,
         };
       }
 

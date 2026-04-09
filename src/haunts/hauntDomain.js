@@ -9,6 +9,7 @@ export {
   resolveHauntTurnStartState,
   getHauntCombatBonus,
   getHauntCombatActorProxyState,
+  resolveHauntMonsterSpeedRollState,
   getHauntMovementOptionsState,
   getHauntTileTokenLabelsState,
   getHauntKnowledgeTokenHoldersState,

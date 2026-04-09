@@ -56,8 +56,8 @@ export default function CombatOverlay({
 
   const attacker = players[combatState.attackerIndex];
   const defender = players[combatState.defenderIndex];
-  const attackerName = attacker?.name || "Attacker";
-  const defenderName = defender?.name || "Defender";
+  const attackerName = combatState.attackerName || attacker?.name || "Attacker";
+  const defenderName = combatState.defenderName || defender?.name || "Defender";
 
   const phase = combatState.phase;
   const outcome = combatState.outcome || null;
@@ -148,7 +148,7 @@ export default function CombatOverlay({
               {outcome.tie
                 ? `Tie at ${outcome.attackerTotal}. No damage dealt.`
                 : outcome.loserIsProxy
-                  ? `${outcome.winnerName} wins. Jack's Spirit cannot be harmed.`
+                  ? `${outcome.winnerName} wins. ${outcome.loserName} cannot be harmed.`
                   : `${outcome.winnerName} wins. ${outcome.loserName} takes ${outcome.damage} damage.`}
             </p>
             <button className="btn btn-primary" onClick={onAdvanceResolution}>

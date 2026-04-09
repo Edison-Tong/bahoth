@@ -90,6 +90,7 @@ export function getCombatActorProxyState(game, actorIndex) {
     x: spirit.x,
     y: spirit.y,
     usesMightDiceCount: 5,
+    name: "Jack's Spirit",
   };
 }
 
@@ -1433,16 +1434,54 @@ export function resolveTurnStartState(game, { rollDice }) {
   };
 }
 
-export function getCombatKnowledgeBonus(game, actorIndex, defenderIndex) {
+export function resolveMonsterSpeedRollState(game, { dice, total, monsterName }) {
+  if (game.activeHauntId !== "haunt_1" || !game.hauntState) return game;
+  const scenarioState = getScenarioState(game.hauntState);
+  const spirit = scenarioState.jacksSpirit;
+  if (!spirit?.active) return game;
+  const moves = Math.max(1, total);
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  const nextPlayers = game.players.map((player, index) =>
+    index === traitorIndex ? { ...player, floor: spirit.floor, x: spirit.x, y: spirit.y, movesLeft: moves } : player
+  );
+  return {
+    ...game,
+    players: nextPlayers,
+    movePath: [{ x: spirit.x, y: spirit.y, floor: spirit.floor, cost: 0 }],
+    hauntState: {
+      ...game.hauntState,
+      scenarioState: {
+        ...scenarioState,
+        jacksSpirit: {
+          ...spirit,
+          movesLeft: moves,
+          speedRoll: [...dice],
+          speedTotal: total,
+        },
+      },
+    },
+    message: `${monsterName || "Monster"} rolls ${dice.join(", ")} (${total}) and may move ${moves} tile${moves !== 1 ? "s" : ""} this turn.`,
+  };
+}
+
+export function getCombatKnowledgeBonus(game, actorIndex, defenderIndex, role) {
   if (game.activeHauntId !== "haunt_1" || !game.hauntState) return 0;
 
   const traitorIndex = game.hauntState.traitorPlayerIndex;
-  const actorIsHero = actorIndex !== traitorIndex;
-  if (!actorIsHero) return 0;
+  if (actorIndex === traitorIndex) return 0; // traitor rolling — never gets bonus
 
   const scenarioState = getScenarioState(game.hauntState);
   const hasKnowledgeToken = scenarioState.revealedKnowledgeOfJackHolders.includes(actorIndex);
   if (!hasKnowledgeToken) return 0;
 
-  return defenderIndex === traitorIndex ? 2 : 0;
+  if (defenderIndex !== traitorIndex) return 0; // not fighting the traitor/spirit
+
+  const opponentIsProxy = !!getCombatActorProxyState(game, traitorIndex);
+  if (!opponentIsProxy) {
+    // Traitor is alive (body) — hero attacking traitor → +2
+    return role === "attacker" ? 2 : 0;
+  }
+
+  // Spirit is active — only applies when hero is defending against the spirit
+  return role === "defender" ? 2 : 0;
 }

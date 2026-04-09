@@ -273,10 +273,10 @@ export function resolveHauntTurnStartState(game, { rollDice }) {
   };
 }
 
-export function getHauntCombatBonus(game, actorIndex, defenderIndex) {
+export function getHauntCombatBonus(game, actorIndex, defenderIndex, role) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.getCombatBonus) {
-    return runtimeHooks.getCombatBonus(game, actorIndex, defenderIndex);
+    return runtimeHooks.getCombatBonus(game, actorIndex, defenderIndex, role);
   }
   return 0;
 }
@@ -287,6 +287,14 @@ export function getHauntCombatActorProxyState(game, actorIndex) {
     return runtimeHooks.getCombatActorProxyState(game, actorIndex);
   }
   return null;
+}
+
+export function resolveHauntMonsterSpeedRollState(game, { dice, total, monsterName }) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.resolveMonsterSpeedRollState) {
+    return runtimeHooks.resolveMonsterSpeedRollState(game, { dice, total, monsterName });
+  }
+  return game;
 }
 
 export function getHauntMovementOptionsState(context) {

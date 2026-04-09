@@ -52,7 +52,8 @@ export function getCombatTargetsOnCurrentTile(game) {
     attacker.x === traitorProxy.x &&
     attacker.y === traitorProxy.y;
   if ((!traitor || !traitorOnSameTile) && !spiritOnSameTile) return [];
-  return [{ player: traitor, playerIndex: traitorIndex }];
+  const displayPlayer = traitorProxy ? { ...traitor, name: traitorProxy.name } : traitor;
+  return [{ player: displayPlayer, playerIndex: traitorIndex }];
 }
 
 // Ranged targeting: same tile OR any door-adjacent tile (Crossbow).

@@ -15,6 +15,7 @@ import {
   getActionRollPreviewState,
   resolveActionState,
   resolveActionRollContinueState,
+  resolveMonsterSpeedRollState,
 } from "./haunt_1/runtime";
 
 const HAUNT_REGISTRY = {
@@ -38,6 +39,7 @@ const HAUNT_RUNTIME_REGISTRY = {
     getActionRollPreviewState,
     resolveActionState,
     resolveActionRollContinueState,
+    resolveMonsterSpeedRollState,
   },
 };
 
