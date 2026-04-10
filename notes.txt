@@ -1,8 +1,10 @@
 cannot use omens special action if you did not have it at the start of your turn
 once per turn special actions might not be doable if they require an item that you did not have at the start of your turn
+camera moves to the traitors corpse, not the monster
 
 
 MULTIPLAYER
 When selecting a tile to place your character on, all othert players can select tiles but they cannot confirm placement.
 Dont see dice roll for colapsed room
 colapsed room made me roll for stability 3 times and the roll was different each time
+while allocating stats, if player ends turn the window goes away

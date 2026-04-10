@@ -68,6 +68,21 @@ function App() {
     };
   }, []);
 
+  // Keep the Render server alive while any tab is open — ping every 10 minutes
+  useEffect(() => {
+    const IS_LOCAL_DEV =
+      typeof window !== "undefined" &&
+      (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+    if (IS_LOCAL_DEV) return; // don't ping during local development
+    const id = setInterval(
+      () => {
+        fetch(`${API_BASE_URL}/api/ping`).catch(() => {});
+      },
+      10 * 60 * 1000
+    );
+    return () => clearInterval(id);
+  }, []);
+
   // --- WebSocket message handler (function declaration — hoisted so it can be passed to hook) ---
   function handleWsMessage(msg) {
     console.log("[WS←]", msg.type, msg);
@@ -142,7 +157,9 @@ function App() {
 
   // Ref so we can call send inside useEffect-free handlers without stale closure issues
   const sendRef = useRef(send);
-  sendRef.current = send;
+  useEffect(() => {
+    sendRef.current = send;
+  });
 
   // Online char-select: once all players have picked, host fires start-game
   useEffect(() => {
@@ -156,12 +173,12 @@ function App() {
       character: charPicks[i],
       color: charPicks[i].color,
     }));
-    setPlayers(finalPlayers);
     const initialState = initGameState(finalPlayers);
     setOnlineInitialGameState(initialState);
     sendRef.current({ type: "start-game", code: gameCode, players: finalPlayers, gameState: initialState });
+    setPlayers(finalPlayers);
     setScreen("game");
-  }, [charPicks, players.length, gameCode, isHost, screen]);
+  }, [charPicks, players, gameCode, isHost, screen]);
 
   function renderBackendStatus() {
     const statusLabel =
