@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import "./App.css";
 import { CHARACTERS } from "./characters";
 import GameBoard from "./GameBoard";
@@ -174,10 +174,13 @@ function App() {
       color: charPicks[i].color,
     }));
     const initialState = initGameState(finalPlayers);
-    setOnlineInitialGameState(initialState);
     sendRef.current({ type: "start-game", code: gameCode, players: finalPlayers, gameState: initialState });
-    setPlayers(finalPlayers);
-    setScreen("game");
+    // Batch all state updates together at the end to avoid cascading renders
+    React.startTransition(() => {
+      setOnlineInitialGameState(initialState);
+      setPlayers(finalPlayers);
+      setScreen("game");
+    });
   }, [charPicks, players, gameCode, isHost, screen]);
 
   function renderBackendStatus() {
