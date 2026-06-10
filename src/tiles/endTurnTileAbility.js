@@ -3,36 +3,22 @@ export function getEndTurnTileAbilityState({
   player,
   tile,
   currentPlayerIndex,
-  rollDice,
-  resolveTraitRoll,
-  getDamageReduction,
-  createDiceModifier,
 }) {
-  const createRollToken = () => `${Date.now()}-${Math.random()}`;
-
   if (!tile?.endOfTurn || game.tileEffect) {
     return null;
   }
 
   if (tile.endOfTurn === "furnace") {
-    const finalDice = rollDice(1);
-    const damageReduction = getDamageReduction(player, "physical");
     return {
-      game: { ...game, message: `${tile.name} — rolling for damage...` },
-      diceAnimation: {
-        purpose: "furnace",
-        token: createRollToken(),
-        final: finalDice,
-        display: Array.from({ length: 1 }, () => Math.floor(Math.random() * 3)),
-        tileName: tile.name,
-        playerIndex: currentPlayerIndex,
-        modifier: createDiceModifier({
-          amount: damageReduction.amount,
-          sourceNames: damageReduction.sourceNames,
-          sign: "-",
-          labelPrefix: "blocked by",
-        }),
-        settled: false,
+      game: {
+        ...game,
+        message: `${tile.name} — roll for damage!`,
+        tileEffect: {
+          type: "furnace-prompt",
+          tileName: tile.name,
+          playerIndex: currentPlayerIndex,
+          message: `Roll 1 die for furnace damage. Take that much Physical damage (reduced by armor).`,
+        },
       },
     };
   }

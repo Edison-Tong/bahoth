@@ -2246,6 +2246,31 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  function handleRollFurnaceDamage() {
+    const te = game.tileEffect;
+    if (!te || te.type !== "furnace-prompt") return;
+    const playerIndex = te.playerIndex ?? game.currentPlayerIndex;
+    const player = game.players[playerIndex];
+    const finalDice = rollDice(1);
+    const damageReduction = getDamageReduction(player, "physical");
+    setGame((g) => ({ ...g, tileEffect: null }));
+    setDiceAnimation({
+      purpose: "furnace",
+      token: `${Date.now()}-${Math.random()}`,
+      final: finalDice,
+      display: [Math.floor(Math.random() * 3)],
+      tileName: te.tileName,
+      playerIndex,
+      modifier: createDiceModifier({
+        amount: damageReduction.amount,
+        sourceNames: damageReduction.sourceNames,
+        sign: "-",
+        labelPrefix: "blocked by",
+      }),
+      settled: false,
+    });
+  }
+
   function handleStartCollapsedDamage() {
     const te = game.tileEffect;
     if (!te || te.type !== "collapsed-pending") return;
@@ -3326,6 +3351,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         onRollCollapsedStability={handleRollCollapsedStability}
         onContinueCollapsedRoll={handleContinueCollapsedRoll}
         onStartCollapsedDamage={handleStartCollapsedDamage}
+        onRollFurnaceDamage={handleRollFurnaceDamage}
         onDismissTileEffect={handleDismissTileEffect}
         isMyTurn={isMyTurn}
         currentTurnPlayerName={currentPlayer?.name ?? ""}

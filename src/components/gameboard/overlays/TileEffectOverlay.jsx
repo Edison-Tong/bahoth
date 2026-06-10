@@ -12,6 +12,7 @@ export default function TileEffectOverlay({
   onRollCollapsedStability,
   onContinueCollapsedRoll,
   onStartCollapsedDamage,
+  onRollFurnaceDamage,
   onDismissTileEffect,
   isMyTurn = true,
   currentTurnPlayerName = "",
@@ -25,7 +26,8 @@ export default function TileEffectOverlay({
       te.collapsed ||
       te.type === "collapsed-prompt" ||
       te.type === "collapsed-roll-result" ||
-      te.type === "collapsed-pending";
+      te.type === "collapsed-pending" ||
+      te.type === "furnace-prompt";
     const colorClass = isHazard ? "mini-peek-danger" : "mini-peek-safe";
     return (
       <div className={`mini-peek ${colorClass}`}>
@@ -57,9 +59,11 @@ export default function TileEffectOverlay({
             : "card-tile-danger"
           : te.type === "collapsed-pending"
             ? "card-tile-danger"
-            : te.damage > 0 || te.collapsed
+            : te.type === "furnace-prompt"
               ? "card-tile-danger"
-              : "card-tile-safe";
+              : te.damage > 0 || te.collapsed
+                ? "card-tile-danger"
+                : "card-tile-safe";
 
   return (
     <div className="card-overlay">
@@ -169,6 +173,10 @@ export default function TileEffectOverlay({
         ) : te.type === "collapsed-pending" ? (
           <button className="btn btn-primary" onClick={onStartCollapsedDamage}>
             Roll for damage
+          </button>
+        ) : te.type === "furnace-prompt" ? (
+          <button className="btn btn-primary" onClick={onRollFurnaceDamage}>
+            Roll for Damage
           </button>
         ) : (
           <button className="btn btn-primary" onClick={onDismissTileEffect}>
