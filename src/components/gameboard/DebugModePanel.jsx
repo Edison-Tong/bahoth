@@ -5,6 +5,8 @@ const STAT_ICONS = {
   knowledge: "Knowledge",
 };
 
+// Debug/cheat panel: lets developers place tiles, grant items/omens, adjust stats, and trigger haunts.
+// Only rendered when the debug overlay is open. All actions call handlers wired in GameBoard.jsx.
 export default function DebugModePanel({
   game,
   isOpen,

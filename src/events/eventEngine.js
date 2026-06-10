@@ -1,5 +1,6 @@
 import { appendEventSummary, describeTokenPlacementLocation, getDiscoveredTileOptions } from "./eventUtils";
 
+// Checks whether an event step's conditional matches the current game/event state.
 function matchesEventCondition(condition, g, eventState) {
   if (!condition) return true;
 
@@ -44,6 +45,7 @@ function matchesEventCondition(condition, g, eventState) {
   return true;
 }
 
+/* Returns true if total satisfies a roll condition (exact/min/max). Private helper. */
 function matchesRollCondition(rollCondition, total) {
   if (!rollCondition) return true;
   if (rollCondition.exact !== undefined) return total === rollCondition.exact;
@@ -52,10 +54,12 @@ function matchesRollCondition(rollCondition, total) {
   return true;
 }
 
+// Returns the first outcome whose "when.roll" range includes `total`.
 export function getMatchingOutcome(outcomes, total) {
   return outcomes.find((outcome) => matchesRollCondition(outcome.when?.roll, total)) || null;
 }
 
+// Closes the active eventState and transitions to card or endTurn phase.
 export function finalizeEventState(g, message) {
   return {
     game: {
@@ -67,6 +71,8 @@ export function finalizeEventState(g, message) {
   };
 }
 
+// Applies a single resolved event effect (stat change, damage, move, draw-card, etc.) to the game state.
+// Called by advanceEventResolution and haunt runtime hooks.
 export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) {
   const {
     DIR,
@@ -78,8 +84,12 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
     resolveDamageEffect,
     createDamageChoice,
   } = deps;
-
-  function applyEventStatChange(players, playerIndex, statEffect, chosenStat = null) {
+  /* Applies a single stat-change effect to the players array (lose/gain/heal on a stat or all stats). */ function applyEventStatChange(
+    players,
+    playerIndex,
+    statEffect,
+    chosenStat = null
+  ) {
     const targetStat =
       statEffect.stat === "chosen"
         ? chosenStat
@@ -474,6 +484,9 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
   return { game: g };
 }
 
+// Steps through the active event's steps list until it reaches a step requiring player input
+// (roll, choice, tile-choice, etc.), applying automatic effects along the way.
+// Returns { game, cameraFloor? }. Called by GameBoard after every event interaction.
 export function advanceEventResolution(g, deps) {
   const { getEventRollButtonLabel, STAT_LABELS } = deps;
 

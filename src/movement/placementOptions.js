@@ -1,3 +1,5 @@
+// Called when exploring a new tile. Returns all valid {floor, x, y, validRotations} placement
+// slots adjacent to existing tiles that can accept at least one rotation of the incoming tile.
 export function getPlacementOptionsState(board, tile, DIR, OPPOSITE) {
   const allDirs = ["N", "E", "S", "W"];
   const placementsByCoord = new Map();

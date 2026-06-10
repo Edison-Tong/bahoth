@@ -1,3 +1,6 @@
+// Overlay rendered when game.tileEffect is set. Handles all tileEffect types:
+// junk-room, panic-room, armory, skeleton-key-result, idol-event-choice, discover-gain,
+// necklace-of-teeth-choice, collapsed-prompt/result/pending, furnace-prompt, and generic damage.
 export default function TileEffectOverlay({
   game,
   statLabels,

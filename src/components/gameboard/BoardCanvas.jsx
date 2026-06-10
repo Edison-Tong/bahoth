@@ -1,6 +1,7 @@
 import { EventTileChoiceTargets } from "../EventResolutionModal";
 import { getHauntTileTokenLabelsState } from "../../haunts/hauntDomain";
 
+// Abbreviated initials for monster token labels shown on board tiles.
 function getMonsterTokenAbbreviation(label) {
   const initials = label
     .split(/\s+/)
@@ -12,10 +13,12 @@ function getMonsterTokenAbbreviation(label) {
   return initials || "M";
 }
 
+/* Returns "X" — the single-character abbreviation used for corpse tokens on the board. */
 function getCorpseTokenAbbreviation() {
   return "X";
 }
 
+/* Main board canvas component: renders the grid of tiles, player tokens, valid-move overlays, event targets, debug placements, and dog-move options. */
 export default function BoardCanvas({
   boardRef,
   cameraFloor,

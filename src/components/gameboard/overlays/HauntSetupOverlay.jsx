@@ -1,3 +1,4 @@
+// Renders the booklet header (title, meta line, number badge) for the haunt rules viewer.
 function BookletHeader({ title, meta, number }) {
   return (
     <div className="haunt-booklet-header">
@@ -8,6 +9,7 @@ function BookletHeader({ title, meta, number }) {
   );
 }
 
+/* Renders an array of paragraphs and a bullet list for a booklet section. */
 function renderSectionContent({ paragraphs, bullets }) {
   return (
     <>
@@ -23,6 +25,7 @@ function renderSectionContent({ paragraphs, bullets }) {
   );
 }
 
+/* Extracts and normalises hauntDefinition data into the unified rulesBooklet shape used by HeroRulesPage and TraitorRulesPage. */
 function getRulesBooklet(hauntDefinition) {
   const defaultTitle = hauntDefinition?.title || "Haunt Rules";
   const heroIntro = hauntDefinition?.introduction?.heroes || hauntDefinition?.summary || "";
@@ -61,6 +64,7 @@ function getRulesBooklet(hauntDefinition) {
   };
 }
 
+/* Renders the "Read First" block: introduction text and numbered setup steps. */
 function ReadFirstBlock({ introduction, setupSteps }) {
   return (
     <section className="haunt-booklet-readfirst">
@@ -79,6 +83,7 @@ function ReadFirstBlock({ introduction, setupSteps }) {
   );
 }
 
+/* Full haunt rules page for heroes: booklet header, Read First block, sidebar, action group, and main sections. */
 export function HeroRulesPage({ hauntDefinition, onDone }) {
   const booklet = getRulesBooklet(hauntDefinition);
   const heroContent = booklet.heroes;
@@ -134,6 +139,7 @@ export function HeroRulesPage({ hauntDefinition, onDone }) {
   );
 }
 
+/* Full haunt rules page for the traitor: same layout as HeroRulesPage plus monster card and player-count scaling. */
 export function TraitorRulesPage({ hauntDefinition, playerCount, onDone }) {
   const booklet = getRulesBooklet(hauntDefinition);
   const traitorContent = booklet.traitor;
@@ -226,6 +232,7 @@ export function TraitorRulesPage({ hauntDefinition, playerCount, onDone }) {
   );
 }
 
+/* Default export: haunt setup overlay gate/rules viewer; shows prompts then the hero/traitor rules pages. */
 export default function HauntSetupOverlay({ game, hauntDefinition, onAdvanceRules, onBeginHaunt }) {
   if (!game?.hauntState || game.gamePhase !== "hauntSetup") return null;
   if (!hauntDefinition) return null;

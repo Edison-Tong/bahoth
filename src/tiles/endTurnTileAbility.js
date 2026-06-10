@@ -1,13 +1,17 @@
-export function getEndTurnTileAbilityState({
-  game,
-  player,
-  tile,
-  currentPlayerIndex,
-}) {
+// Called by resolveEndTurnActionState (turnControllerState.js) on End Turn.
+// Returns { game } with a tileEffect prompt when the current tile has an end-of-turn
+// effect (furnace / collapsed / laundry-chute), or null if none applies.
+// Guard: returns null immediately if another tileEffect is already active.
+export function getEndTurnTileAbilityState({ game, player, tile, currentPlayerIndex }) {
+  // No end-of-turn effect on this tile, or a tileEffect is already pending — do nothing.
   if (!tile?.endOfTurn || game.tileEffect) {
     return null;
   }
 
+  // Furnace Room: sets "furnace-prompt" tileEffect. Player clicks "Roll for Damage" →
+  // handleRollFurnaceDamage (GameBoard.jsx) → "furnace" diceAnimation →
+  // resolveTileDiceAnimationState (below) → "furnace" tileEffect → Continue →
+  // resolveDismissTileEffectState (tileEffectFlow.js) applies Physical damage.
   if (tile.endOfTurn === "furnace") {
     return {
       game: {
@@ -23,9 +27,12 @@ export function getEndTurnTileAbilityState({
     };
   }
 
+  // Collapsed Room: sets "collapsed-prompt" tileEffect with the player's current Speed
+  // die count. Player clicks "Roll for Stability" → handleRollCollapsedStability (GameBoard.jsx)
+  // → "collapsed" diceAnimation → resolveTileDiceAnimationState (below).
+  // 5+: floor holds, turn passes. <5: "collapsed-pending" → second damage roll.
   if (tile.endOfTurn === "collapsed") {
     const speedVal = player.character.speed[player.statIndex.speed];
-    // Show a prompt card so the player can see what they're rolling before the animation plays.
     return {
       game: {
         ...game,
@@ -34,13 +41,15 @@ export function getEndTurnTileAbilityState({
           type: "collapsed-prompt",
           tileName: tile.name,
           playerIndex: currentPlayerIndex,
-          diceCount: speedVal,
+          diceCount: speedVal, // captured now so it survives until the Roll button is pressed
           message: `Roll your Speed dice. On a 5 or higher the floor holds. On a 4 or lower, you fall to the Basement Landing and take damage.`,
         },
       },
     };
   }
 
+  // Laundry Chute: no roll needed — player is auto-moved to Basement Landing on Continue.
+  // resolveDismissTileEffectState (tileEffectFlow.js) → applyTileEffectConsequences (eventActions.js).
   if (tile.endOfTurn === "laundry-chute") {
     return {
       game: {
@@ -57,7 +66,13 @@ export function getEndTurnTileAbilityState({
   return null;
 }
 
+// Called by the diceAnimation settlement timeout in GameBoard.jsx when purpose is
+// "collapsed", "collapsed-damage", or "furnace". Converts settled dice into the
+// tileEffect the player then reads and dismisses.
 export function resolveTileDiceAnimationState({ game, animation, baseTotal, getDamageReduction, createDiceModifier }) {
+  // Stability roll for Collapsed Room.
+  // animation.resolvedTotal may differ from baseTotal when an override item (e.g. Angel's Feather) forced the result.
+  // <5 → "collapsed-pending" (prompts damage roll); ≥5 → "collapsed" safe result.
   if (animation.purpose === "collapsed") {
     const total = animation.resolvedTotal ?? baseTotal;
     const collapsed = total < 5;
@@ -93,6 +108,9 @@ export function resolveTileDiceAnimationState({ game, animation, baseTotal, getD
     };
   }
 
+  // Damage roll after a failed Collapsed Room stability check.
+  // animation.firstDice / firstTotal carry the original stability roll for display.
+  // Armor reduces Physical damage; damageResolved: true tells tileEffectFlow to skip re-resolving.
   if (animation.purpose === "collapsed-damage") {
     const player = game.players[animation.playerIndex ?? game.currentPlayerIndex];
     const baseDamage = animation.final[0];
@@ -110,11 +128,11 @@ export function resolveTileDiceAnimationState({ game, animation, baseTotal, getD
       tileEffect: {
         type: "collapsed",
         tileName: animation.tileName,
-        dice: animation.firstDice,
+        dice: animation.firstDice, // original stability roll dice shown on result card
         total: animation.firstTotal,
         collapsed: true,
         damageType: "physical",
-        damageDice: animation.final,
+        damageDice: animation.final, // damage roll dice shown beneath
         damageDiceModifier,
         damage,
         damageResolved: true,
@@ -126,6 +144,8 @@ export function resolveTileDiceAnimationState({ game, animation, baseTotal, getD
     };
   }
 
+  // Furnace Room damage roll. Armor reduces Physical damage.
+  // damageResolved: true tells resolveDismissTileEffectState (tileEffectFlow.js) to skip re-resolving.
   if (animation.purpose === "furnace") {
     const player = game.players[animation.playerIndex ?? game.currentPlayerIndex];
     const baseDamage = animation.final[0];

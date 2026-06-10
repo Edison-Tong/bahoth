@@ -59,15 +59,18 @@ import {
 
 import { DAMAGE_STATS, STAT_LABELS, DIR, OPPOSITE } from "../game/gameState";
 
+/* Returns move-cost to leave a tile: 2 for obstacle tiles, 1 otherwise. Local copy for BFS. */
 function getLeaveMoveCost(tile) {
   const hasObstacleToken = Array.isArray(tile?.tokens) && tile.tokens.some((token) => token?.type === "obstacle");
   return tile?.obstacle || hasObstacleToken ? 2 : 1;
 }
 
+/* Finds and returns the tile at a given floor/x/y position on the board. Local copy. */
 function getTileByPosition(board, floor, x, y) {
   return board?.[floor]?.find((tile) => tile.x === x && tile.y === y) || null;
 }
 
+/* Searches all floors to find and return a tile by its id. Local copy. */
 function getTileById(board, id) {
   if (!id) return null;
   for (const floor of ["ground", "upper", "basement"]) {
@@ -77,6 +80,7 @@ function getTileById(board, id) {
   return null;
 }
 
+/* Returns door-adjacent and stair-connected neighbors for BFS pathfinding (dog/mask movement). */
 function getMovementNeighbors(board, current, options = {}) {
   const { ignoreObstacles = false } = options;
   if (!current) return [];
@@ -115,6 +119,7 @@ function getMovementNeighbors(board, current, options = {}) {
   return neighbors;
 }
 
+/* Dijkstra BFS returning a map of position-key → move-cost for all tiles within maxDistance. Used by dog trade and mask push. */
 function computeReachableDistances(board, start, maxDistance, options = {}) {
   const distances = new Map();
   const queue = [{ ...start, distance: 0 }];
@@ -200,17 +205,20 @@ export function getDogMoveOptions(game, position, movesLeft) {
   return Array.from(nextByKey.values()).sort((a, b) => a.cost - b.cost || a.y - b.y || a.x - b.x);
 }
 
+/* Delegates to rollManipulationItemAbility to check if Creepy Doll can be used this turn. */
 function isCreepyDollAvailableThisTurn(game, viewedCard) {
   return isCreepyDollAvailableThisTurnFromRollAbility(game, viewedCard, {
     isTraitRollResult,
   });
 }
 
+/* Returns true if lastRoll.label matches a stat name (i.e. the roll was a trait roll). */
 function isTraitRollResult(lastRoll) {
   if (!lastRoll) return false;
   return Object.values(STAT_LABELS).includes(lastRoll.label);
 }
 
+/* Returns true if a trait roll was just completed (haunt action roll, event roll, or sequence). */
 function isTraitRollJustMadeContext(game) {
   if (game.hauntActionRoll?.status === "rolled-pending-continue") return true;
   if (isTraitRollResult(game.eventState?.lastRoll)) return true;
@@ -227,32 +235,39 @@ export function isItemAbilityTileChoiceAwaiting(eventState) {
   return eventState?.awaiting?.type === "tile-choice" && eventState.awaiting?.source === "item-active-ability";
 }
 
+/* Delegates to rollManipulationItemAbility to check if Lucky Coin can be used this turn. */
 function isLuckyCoinAvailableThisTurn(game, viewedCard) {
   return isLuckyCoinAvailableThisTurnFromRollAbility(game, viewedCard, {
     isTraitRollResult,
   });
 }
 
+/* Delegates to rollManipulationItemAbility to check if Rabbit's Foot can be used this turn. */
 function isRabbitsFootAvailableThisTurn(game, viewedCard) {
   return isRabbitsFootAvailableThisTurnFromRollAbility(game, viewedCard, {});
 }
 
+/* Delegates to movementItemAbility to check if the Dog trade action is available this turn. */
 function isDogTradeAvailableThisTurn(game, viewedCard) {
   return isDogTradeAvailableThisTurnFromAbility(game, viewedCard, getDogTradeTargets);
 }
 
+/* Delegates to movementItemAbility to check if the Mask push is available this turn. */
 function isMaskPushAvailableThisTurn(game, viewedCard) {
   return isMaskPushAvailableThisTurnFromAbility(game, viewedCard, getMovementNeighbors);
 }
 
+/* Delegates to movementItemAbility to check if the Skeleton Key wall-move is available. */
 function hasSkeletonKeyWallMoveAvailable(game, viewedCard) {
   return hasSkeletonKeyWallMoveAvailableFromMovementAbility(game, viewedCard);
 }
 
+/* Delegates to movementItemAbility to check whether normal movement is currently usable. */
 function canUseNormalMovementNow(game, viewedCard) {
   return canUseNormalMovementNowFromMovementAbility(game, viewedCard);
 }
 
+/* Returns { canApplyNow, canQueueForDrawnEvent, canUseNow } for items that require an active trait roll. */
 function getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }) {
   const awaiting = game.eventState?.awaiting;
   const hauntActionRoll = game.hauntActionRoll;
@@ -275,6 +290,7 @@ function getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedT
   };
 }
 
+/* Delegates to rollManipulationItemAbility to compute Magic Camera availability state. */
 function getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }) {
   return getMagicCameraUsageStateFromRollAbility(
     { game, drawnEventPrimaryAction, queuedTraitRollOverride },
@@ -282,6 +298,7 @@ function getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRo
   );
 }
 
+/* Delegates to bookAbility to compute Book of Hours availability state. */
 function getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTraitRollOverride }) {
   return getBookUsageStateFromAbility({
     game,
@@ -292,24 +309,29 @@ function getBookUsageState({ game, viewedCard, drawnEventPrimaryAction, queuedTr
   });
 }
 
+/* Delegates to rollManipulationItemAbility to get which sequence rolls can be rerolled by Lucky Coin. */
 function getLuckyCoinSequenceRerollOptions(game) {
   return getLuckyCoinSequenceRerollOptionsFromRollAbility(game, {
     statLabels: STAT_LABELS,
   });
 }
 
+/* Returns the heal rule for a given viewed card, delegating to turnStateItemAbility. */
 function getActiveHealRule(viewedCard) {
   return getActiveHealRuleFromTurnStateAbility(viewedCard);
 }
 
+/* Delegates to turnStateItemAbility to check if the card's heal ability is currently usable. */
 function canUseHealAbilityNow(game, viewedCard) {
   return canUseHealAbilityNowFromTurnStateAbility(game, viewedCard);
 }
 
+/* Delegates to turnStateItemAbility to get valid heal target options for the viewed card. */
 function getHealTargetOptions(game, viewedCard, healRule) {
   return getHealTargetOptionsFromTurnStateAbility(game, viewedCard, healRule);
 }
 
+/* Returns true if total satisfies a sequence-roll condition (exact/min/max bounds). */
 function matchesSequenceRollCondition(condition, total) {
   if (!condition) return false;
   if (condition.exact !== undefined) return total === condition.exact;
@@ -318,6 +340,7 @@ function matchesSequenceRollCondition(condition, total) {
   return true;
 }
 
+/* Advances the event after a roll settles: handles trait-roll-sequence-complete, damage sequences, or normal step advance. */
 export function continueEventState(g, deps) {
   const { runAdvanceEventResolution, finalizeEventState } = deps;
   if (!g.eventState) return { game: g, cameraFloor: null };
@@ -392,6 +415,7 @@ export function continueEventState(g, deps) {
   return { game: result.game, cameraFloor: result.cameraFloor || null };
 }
 
+/* Debug helper: shifts the last event roll total by delta and recomputes outcomes/pending effects. */
 export function adjustEventRollTotalState(g, delta, deps) {
   const { getMatchingOutcome, describeEventEffects } = deps;
   const eventState = g.eventState;
@@ -417,6 +441,7 @@ export function adjustEventRollTotalState(g, delta, deps) {
   };
 }
 
+/* Handles a player's response to an event awaiting.type===choice; routes roll-ready, sequence-ready, stat-choice, item-choice and tile-choice sub-types. */
 export function eventAwaitingChoiceState(g, value, deps) {
   const { runAdvanceEventResolution, runApplyResolvedEventEffect, resolveRollReadyAwaiting, eventFlowDeps } = deps;
 
@@ -600,6 +625,7 @@ export function eventAwaitingChoiceState(g, value, deps) {
   return { game: g, cameraFloor: null, diceAnimation: null };
 }
 
+/* Previews a tile-choice selection: moves the player to the chosen tile and records selectedOptionId. */
 export function eventTileChoiceState(g, option, deps) {
   const { getTileAtPosition } = deps;
   const awaiting = g.eventState?.awaiting;
@@ -646,6 +672,7 @@ export function eventTileChoiceState(g, option, deps) {
   };
 }
 
+/* Confirms the currently selected tile choice and applies the move, token placement, mask-push, or dynamite effect. */
 export function confirmEventTileChoiceState(g, deps) {
   const { getTileAtPosition, runAdvanceEventResolution } = deps;
   const awaiting = g.eventState?.awaiting;
@@ -753,6 +780,7 @@ export function confirmEventTileChoiceState(g, deps) {
   return { game: g, cameraFloor: null };
 }
 
+/* Initializes event state from a drawn card, handles queued trait-roll overrides, and optionally auto-rolls if ready. */
 export function startEventFromDrawnCardState(
   g,
   { card, initialEventChoice = null, autoRollIfReady = false, queuedTraitRollOverride = null },
@@ -894,6 +922,7 @@ export function startEventFromDrawnCardState(
   };
 }
 
+/* Routes event damage back into event resolution when caused by an event-effect or event-stat-choice source. */
 export function resolveEventDamageChoiceState(g, choice, baseState, postDamageMessage, deps) {
   const { runAdvanceEventResolution } = deps;
 
@@ -922,6 +951,7 @@ export function resolveEventDamageChoiceState(g, choice, baseState, postDamageMe
   return null;
 }
 
+/* Determines if Angel's Feather can be used now; delegates to rollManipulationItemAbility. */
 export function getAngelsFeatherUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }) {
   return getAngelsFeatherUsageStateFromRollAbility(
     { game, drawnEventPrimaryAction, queuedTraitRollOverride },
@@ -969,6 +999,7 @@ const ACTIVE_ABILITY_TRIGGER_HANDLERS = {
   attack: ({ game, viewedCard }) => viewedCard.ownerIndex === game.currentPlayerIndex,
 };
 
+/* Computes full availability state (canUseNow, requiresValueSelection, valueOptions) for any card's active ability. */
 export function getCardActiveAbilityState({
   game,
   viewedCard,
@@ -1060,14 +1091,17 @@ export function getCardActiveAbilityState({
   };
 }
 
+/* Delegates to turnStateItemAbility to apply First Aid Kit heal, optionally targeting another player. */
 export function applyFirstAidKitNowState(g, viewedCard, targetPlayerIndex = null) {
   return applyFirstAidKitNowStateFromTurnStateAbility(g, viewedCard, targetPlayerIndex);
 }
 
+/* Delegates to movementItemAbility to apply Map teleportation and return the tile-choice awaiting state. */
 export function applyMapNowState(g, viewedCard) {
   return applyMapNowStateFromMovementAbility(g, viewedCard);
 }
 
+/* Delegates to dynamiteAbility to enter Dynamite throw mode (tile-choice awaiting state). */
 export function applyDynamiteNowState(g, viewedCard) {
   return applyDynamiteNowStateFromAbility(g, viewedCard, {
     getMovementNeighbors,
@@ -1075,6 +1109,7 @@ export function applyDynamiteNowState(g, viewedCard) {
   });
 }
 
+/* Delegates to movementItemAbility to apply Mask push, passing movement helpers as deps. */
 export function applyMaskNowState(g, viewedCard) {
   return applyMaskNowStateFromAbility(g, viewedCard, {
     isMaskAvailable: isMaskPushAvailableThisTurn,
@@ -1083,10 +1118,12 @@ export function applyMaskNowState(g, viewedCard) {
   });
 }
 
+/* Delegates to turnStateItemAbility to apply Mystical Stopwatch extra-turn effect. */
 export function applyMysticalStopwatchNowState(g, viewedCard) {
   return applyMysticalStopwatchNowStateFromTurnStateAbility(g, viewedCard);
 }
 
+/* Delegates to rollManipulationItemAbility to reroll all dice with Creepy Doll. */
 export function applyCreepyDollNowState(g, viewedCard) {
   return applyCreepyDollNowStateFromRollAbility(g, viewedCard, {
     isCreepyDollAvailable: isCreepyDollAvailableThisTurn,
@@ -1094,6 +1131,7 @@ export function applyCreepyDollNowState(g, viewedCard) {
   });
 }
 
+/* Delegates to rollManipulationItemAbility to substitute a stat via Magic Camera. */
 export function applyMagicCameraNowState(
   g,
   viewedCard,
@@ -1111,6 +1149,7 @@ export function applyMagicCameraNowState(
   );
 }
 
+/* Delegates to bookAbility to substitute Knowledge for a trait roll via Book of Hours. */
 export function applyBookNowState(g, viewedCard, { drawnEventPrimaryAction, queuedTraitRollOverride = null } = {}) {
   return applyBookNowStateFromAbility(g, viewedCard, {
     drawnEventPrimaryAction,
@@ -1121,6 +1160,7 @@ export function applyBookNowState(g, viewedCard, { drawnEventPrimaryAction, queu
   });
 }
 
+/* Delegates to rollManipulationItemAbility to reroll blank dice with Lucky Coin. */
 export function applyLuckyCoinNowState(g, viewedCard, targetRollSelection = null) {
   return applyLuckyCoinNowStateFromRollAbility(g, viewedCard, targetRollSelection, {
     isLuckyCoinAvailable: isLuckyCoinAvailableThisTurn,
@@ -1130,16 +1170,19 @@ export function applyLuckyCoinNowState(g, viewedCard, targetRollSelection = null
   });
 }
 
+/* Delegates to rollManipulationItemAbility to enter Rabbit's Foot pending-reroll state. */
 export function applyRabbitsFootNowState(g, viewedCard) {
   return applyRabbitsFootNowStateFromRollAbility(g, viewedCard, {
     isRabbitsFootAvailable: isRabbitsFootAvailableThisTurn,
   });
 }
 
+/* Delegates to movementItemAbility to apply Skeleton Key wall-move ability. */
 export function applySkeletonKeyNowState(g, viewedCard) {
   return applySkeletonKeyNowStateFromMovementAbility(g, viewedCard);
 }
 
+/* Marks which die index the Rabbit's Foot will reroll; validates the selection. */
 export function chooseRabbitFootDieState(g, dieIndex) {
   const pending = g.rabbitFootPendingReroll;
   const dice =
@@ -1161,6 +1204,7 @@ export function chooseRabbitFootDieState(g, dieIndex) {
   };
 }
 
+/* Performs the actual Rabbit's Foot single-die reroll across event, haunt-action, or skeleton-key roll sources. */
 export function applyRabbitFootRerollState(g) {
   const pending = g.rabbitFootPendingReroll;
   const isSkeletonKeyRoll = pending?.sourceType === "skeleton-key-roll";
@@ -1291,6 +1335,7 @@ export function applyRabbitFootRerollState(g) {
   };
 }
 
+/* Delegates to rollManipulationItemAbility to apply the Angel's Feather chosen total override. */
 export function chooseAngelsFeatherValueState(
   g,
   total,
@@ -1311,6 +1356,7 @@ export function chooseAngelsFeatherValueState(
   );
 }
 
+/* Routes to itemActionRegistry to apply the value chosen for a card's active ability (Angel's Feather, Lucky Coin, First Aid Kit). */
 export function chooseCardActiveAbilityValueState(g, total, viewedCard, deps) {
   return chooseItemAbilityValueState(g, total, viewedCard, deps, {
     chooseAngelsFeatherValueState,
@@ -1319,6 +1365,7 @@ export function chooseCardActiveAbilityValueState(g, total, viewedCard, deps) {
   });
 }
 
+/* Routes to itemActionRegistry to immediately activate the chosen card's active ability. */
 export function chooseCardActiveAbilityNowState(g, viewedCard, deps = {}) {
   return chooseItemAbilityNowState(g, viewedCard, deps, {
     applyCreepyDollNowState,
@@ -1335,6 +1382,7 @@ export function chooseCardActiveAbilityNowState(g, viewedCard, deps = {}) {
   });
 }
 
+/* Builds the initial damageChoice object from a damage effect, including allowed stats and post-damage effects. */
 export function createDamageChoice(effect, player) {
   const damageType = effect.damageType || "physical";
   const allowedStats = DAMAGE_STATS[damageType] || DAMAGE_STATS.physical;
@@ -1365,6 +1413,7 @@ export function createDamageChoice(effect, player) {
   };
 }
 
+/* Switches the damageChoice to a different damage type, resetting allowed stats and allocation. */
 export function updateDamageChoiceType(choice, player, damageType) {
   const allowedStats = DAMAGE_STATS[damageType] || DAMAGE_STATS.physical;
   const nextChoice = {
@@ -1380,6 +1429,7 @@ export function updateDamageChoiceType(choice, player, damageType) {
   };
 }
 
+/* Maps a 2-die total (0-6+) to the Mystic Elevator floor destination. */
 export function getMysticElevatorDestination(total) {
   if (total >= 4) {
     return {
@@ -1408,6 +1458,7 @@ export function getMysticElevatorDestination(total) {
   };
 }
 
+/* Returns true if a tile effect type has a continue/queue flow (gains, armory, junk-room, elevator, skeleton-key). */
 export function isQueuedTileEffectType(type) {
   return (
     ["discover-gain", "armory", "junk-room", "panic-room", "mystic-elevator-result"].includes(type) ||
@@ -1415,6 +1466,7 @@ export function isQueuedTileEffectType(type) {
   );
 }
 
+/* Applies side effects of a tile effect: moves current player to basement landing for collapsed and laundry-chute tiles. */
 export function applyTileEffectConsequences(g, players, effect) {
   if (!effect) return players;
 
@@ -1442,6 +1494,7 @@ export function applyTileEffectConsequences(g, players, effect) {
   return updatedPlayers;
 }
 
+/* Computes all derived event UI flags (drawnEventPrimaryAction, tileChoiceOptions, modal visibility, feather state) for GameBoard. */
 export function getEventUiState(game, eventEngineDeps, queuedTraitRollOverride = null) {
   const eventState = game.eventState;
   const drawnEventPrimaryAction =
@@ -1465,6 +1518,7 @@ export function getEventUiState(game, eventEngineDeps, queuedTraitRollOverride =
   };
 }
 
+/* Rolls n d3 dice (each 0–2) and returns the array of results. */
 export function rollDice(n) {
   const results = [];
   for (let i = 0; i < n; i++) {
@@ -1473,6 +1527,7 @@ export function rollDice(n) {
   return results;
 }
 
+/* Formats an array of names as natural language: "A", "A and B", or "A, B, and C". */
 export function formatSourceNames(names) {
   if (names.length === 0) return "";
   if (names.length === 1) return names[0];
@@ -1480,10 +1535,12 @@ export function formatSourceNames(names) {
   return `${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}`;
 }
 
+/* Alias for getTileByPosition; returns the tile at board[floor] matching x/y. */
 export function getTileAtPosition(board, x, y, floor) {
   return board?.[floor]?.find((tile) => tile.x === x && tile.y === y) || null;
 }
 
+/* Returns dice bonus from blessing tokens on the player's current tile. */
 export function getBoardTraitRollDiceBonus(board, player) {
   const tile = getTileAtPosition(board, player?.x, player?.y, player?.floor);
   const blessingCount = tile?.tokens?.filter((token) => token.type === "blessing").length || 0;
@@ -1494,26 +1551,32 @@ export function getBoardTraitRollDiceBonus(board, player) {
   };
 }
 
+/* Delegates to passiveItemEffectAbility to get all passive effects for a player. */
 export function getPassiveEffects(player) {
   return getPassiveEffectsFromPassiveGroup(player);
 }
 
+/* Delegates to passiveItemEffectAbility to get flat trait roll bonus (+N) for a stat. */
 export function getTraitRollBonus(player, stat) {
   return getTraitRollBonusFromPassiveGroup(player, stat);
 }
 
+/* Delegates to passiveItemEffectAbility to get damage reduction for a damage type. */
 export function getDamageReduction(player, damageType) {
   return getDamageReductionFromPassiveGroup(player, damageType);
 }
 
+/* Delegates to passiveItemEffectAbility to get extra dice bonus for a trait roll context. */
 export function getTraitRollDiceBonus(player, context) {
   return getTraitRollDiceBonusFromPassiveGroup(player, context);
 }
 
+/* Delegates to passiveItemEffectAbility to get damage type conversion options for a player. */
 export function getDamageConversionOptions(player, damageType) {
   return getDamageConversionOptionsFromPassiveGroup(player, damageType);
 }
 
+/* Builds a modifier badge { value, label, tone } for DiceBox display from trait and dice bonuses. */
 export function createTraitRollModifier(traitBonus, diceBonus) {
   const sourceNames = [...new Set([...(traitBonus?.sourceNames || []), ...(diceBonus?.sourceNames || [])])];
   if (sourceNames.length === 0) return null;
@@ -1529,6 +1592,7 @@ export function createTraitRollModifier(traitBonus, diceBonus) {
   };
 }
 
+/* Rolls a trait with all passive bonuses (dice +N, flat +N, board blessing) applied and returns { dice, total, modifier }. */
 export function resolveTraitRoll(
   player,
   { stat, baseDiceCount, context, board = null, usePassives = true, extraDiceBonus = null }
@@ -1553,6 +1617,7 @@ export function resolveTraitRoll(
   };
 }
 
+/* Creates a modifier badge object for DiceBox display (sign, amount, label, tone). */
 export function createDiceModifier({ amount, sourceNames, sign = "+", labelPrefix = "from", tone = "positive" }) {
   if (!amount || sourceNames.length === 0) return null;
 
@@ -1563,6 +1628,7 @@ export function createDiceModifier({ amount, sourceNames, sign = "+", labelPrefi
   };
 }
 
+/* Applies damage reduction from passive effects to an unresolved damage effect; marks it as damageResolved. */
 export function resolveDamageEffect(player, effect) {
   if (!effect?.damageType || effect.damage === undefined || effect.damageResolved) return effect;
 
@@ -1584,10 +1650,12 @@ export function resolveDamageEffect(player, effect) {
   };
 }
 
+/* Delegates to passiveItemEffectAbility to get Strange Amulet-style gains triggered after allocating damage. */
 export function getPostDamageEffectsForChoice(player, choice) {
   return getPostDamageEffectsForChoiceFromPassiveGroup(player, choice);
 }
 
+/* Simulates the first event step to determine whether the primary action is roll, choice, or continue. Used by card peek UI. */
 export function getInitialEventPrimaryAction(g, card, eventEngineDeps) {
   const simulatedEvent = {
     ...g,
@@ -1647,6 +1715,7 @@ export function getInitialEventPrimaryAction(g, card, eventEngineDeps) {
   };
 }
 
+/* Processes a roll-ready awaiting state: performs the trait/dice roll and returns { game, animation } for the DiceBox. */
 export function resolveRollReadyAwaiting(g, awaiting, deps) {
   const { STAT_LABELS, rollDice: depRollDice, resolveTraitRoll: depResolveTraitRoll } = deps;
   const currentPlayerState = g.players[g.currentPlayerIndex];
@@ -1743,6 +1812,7 @@ export function resolveRollReadyAwaiting(g, awaiting, deps) {
   return { game: g, animation: null };
 }
 
+/* Handles a settled diceAnimation for events: resolves roll, partial reroll, damage roll, or damage sequence outcomes. */
 export function resolveEventAnimationSettlement(g, da) {
   if (da.purpose === "event-roll") {
     if (!g.eventState) return { handled: true, game: g };

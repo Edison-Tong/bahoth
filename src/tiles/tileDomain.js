@@ -1,3 +1,4 @@
+// Barrel re-export for all tile domain logic (discovery, end-turn effects, traversal, selectors).
 export { applyPlacedTileDiscoverEffects } from "./discoverTileAbility";
 export { getEndTurnTileAbilityState, resolveTileDiceAnimationState } from "./endTurnTileAbility";
 export { resolveDismissTileEffectState } from "./tileEffectFlow";

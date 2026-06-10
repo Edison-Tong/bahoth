@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { formatEventResultLines, getEventRollButtonLabel } from "../events/eventUtils";
 
+// Renders the textual content inside an Event card (To Do, Result lines).
 function EventCardContent({ card }) {
   const resultLines = formatEventResultLines(card.result);
 
@@ -26,6 +27,7 @@ function EventCardContent({ card }) {
   );
 }
 
+/* Renders the ability text block for a drawn item/omen/event card (passive, active, special, or event steps). */
 export function CardAbilityContent({ card }) {
   if (card.type === "event") {
     return <EventCardContent card={card} />;
@@ -56,6 +58,7 @@ export function CardAbilityContent({ card }) {
 
 const CARD_TYPE_ICON = { omen: "🔮", event: "⚡", item: "🎒" };
 
+/* Compact expandable card banner shown to non-active players while another player draws a card. */
 function CardPeek({ drawnCard, currentTurnPlayerName }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -89,6 +92,7 @@ function CardPeek({ drawnCard, currentTurnPlayerName }) {
   );
 }
 
+/* Full drawn-card modal for the active player (or compact CardPeek for spectators). */
 export function DrawnCardModal({
   drawnCard,
   drawnEventPrimaryAction,
@@ -159,6 +163,7 @@ export function DrawnCardModal({
   );
 }
 
+/* Renders the board overlay buttons for event tile-choice targets on the current floor. */
 export function EventTileChoiceTargets({
   eventTileChoiceOptions,
   selectedEventTileChoiceId,
@@ -188,6 +193,7 @@ export function EventTileChoiceTargets({
     });
 }
 
+/* Main event resolution modal: shows roll button/results, awaiting choices, and Rabbit's Foot die picker. */
 export default function EventResolutionModal({
   eventState,
   currentPlayer,

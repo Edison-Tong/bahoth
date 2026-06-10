@@ -1,5 +1,7 @@
 import { getHauntCanDeadPlayerTakeTurnState } from "../haunts/hauntDomain";
 
+// Returns the name of the player who will act after the current turn (shown in the End Turn button).
+// Accounts for extra turns, dead players, and monster turns during haunts.
 export function getEndTurnPreviewPlayerName(game, currentPlayer) {
   if (game.extraTurnAfterCurrent && currentPlayer.isAlive) {
     return `${currentPlayer.name} (extra turn)`;
@@ -21,6 +23,8 @@ export function getEndTurnPreviewPlayerName(game, currentPlayer) {
   return game.players[next]?.name || currentPlayer.name;
 }
 
+// Returns { damageAllocated, damageRemaining, canConfirmDamageChoice } for the active damage choice.
+// Used by DamageChoiceOverlay to control the Confirm button state.
 export function getDamageChoiceSummary(damageChoice, currentPlayer = null) {
   const isLethalAllocation = (player, choice) => {
     if (!player || !choice || choice.adjustmentMode === "increase") return false;
@@ -53,6 +57,7 @@ export function getDamageChoiceSummary(damageChoice, currentPlayer = null) {
   };
 }
 
+// Returns all living players on a specific floor. Used to populate per-floor player displays.
 export function getPlayersOnFloor(players, floor) {
   return players.filter((player) => player.floor === floor && player.isAlive);
 }

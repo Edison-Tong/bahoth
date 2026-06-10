@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { HeroRulesPage, TraitorRulesPage } from "./HauntSetupOverlay";
 
+// Standalone overlay for viewing haunt rules at any time (not just during setup).
+// Shows hero or traitor page based on the current player's role and allows them to dismiss.
 export default function HauntRulesViewerOverlay({ role, hauntDefinition, traitorName, onClose }) {
   const [step, setStep] = useState("prompt");
 

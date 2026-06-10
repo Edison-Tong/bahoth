@@ -1,3 +1,4 @@
+// Barrel re-export for all player domain logic (stats, damage, trade, turn control).
 export {
   adjustDamageAllocationChoiceState,
   applyDamageAllocationState,
@@ -21,4 +22,8 @@ export {
   resolveToggleTradeTargetGiveState,
   resolveToggleTradeTargetGiveOmenState,
 } from "./tradeControllerState";
-export { resolveEndTurnActionState, resolvePassTurnActionState, resolvePassTurnCoreActionState } from "./turnControllerState";
+export {
+  resolveEndTurnActionState,
+  resolvePassTurnActionState,
+  resolvePassTurnCoreActionState,
+} from "./turnControllerState";

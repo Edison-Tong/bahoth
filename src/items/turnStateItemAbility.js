@@ -2,17 +2,20 @@ import { PLAYER_STAT_ORDER, CRITICAL_STAT_INDEX } from "../game/gameState";
 const NECKLACE_OF_TEETH_ID = "necklace-of-teeth";
 const NECKLACE_OF_TEETH_CHOICE_TYPE = "necklace-of-teeth-choice";
 
+// Returns the inventory card object for the currently viewed card (null if not in inventory).
 function getInventoryCard(game, viewedCard) {
   if (!viewedCard || viewedCard.ownerCollection !== "inventory") return null;
   const owner = game.players[viewedCard.ownerIndex];
   return owner?.inventory?.[viewedCard.ownerCardIndex] || null;
 }
 
+/* Returns the stats at CRITICAL_STAT_INDEX for the player. */
 function getCriticalStats(player) {
   if (!player) return [];
   return PLAYER_STAT_ORDER.filter((stat) => player.statIndex?.[stat] === CRITICAL_STAT_INDEX);
 }
 
+/* Returns critical stats that are not yet at the max index (eligible for Necklace of Teeth gain). */
 function getNecklaceOfTeethCriticalStats(player) {
   if (!player) return [];
 
@@ -23,6 +26,7 @@ function getNecklaceOfTeethCriticalStats(player) {
   });
 }
 
+/* Increments the given stat by 1 (up to max track index) for the player at playerIndex. */
 function applyNecklaceOfTeethGain(players, playerIndex, stat) {
   return players.map((player, index) => {
     if (index !== playerIndex) return player;
@@ -48,6 +52,7 @@ export function isNecklaceOfTeethChoiceEffect(effect) {
   return effect?.type === NECKLACE_OF_TEETH_CHOICE_TYPE;
 }
 
+/* Determines the end-of-turn Necklace of Teeth action: choice (2+ critical stats), auto-gain (1), or none. */
 function resolveNecklaceOfTeethEndTurnState(game) {
   const currentPlayer = game?.players?.[game.currentPlayerIndex];
   if (!currentPlayer) return { type: "none" };
@@ -80,6 +85,7 @@ function resolveNecklaceOfTeethEndTurnState(game) {
   return { type: "none" };
 }
 
+/* Applies the player's chosen stat gain from the Necklace of Teeth choice prompt. */
 function resolveNecklaceOfTeethChoiceState(game, stat) {
   const effect = game?.tileEffect;
   if (!isNecklaceOfTeethChoiceEffect(effect)) return null;
@@ -91,6 +97,8 @@ function resolveNecklaceOfTeethChoiceState(game, stat) {
   };
 }
 
+// Checks and resolves the Necklace of Teeth end-of-turn passive: if the current player
+// has a critical stat, auto-gains it (or opens a choice prompt if multiple are critical).
 export function resolveEndTurnItemPassiveState(game) {
   const necklaceResolution = resolveNecklaceOfTeethEndTurnState(game);
   if (necklaceResolution.type === "choice") {
@@ -114,10 +122,12 @@ export function resolveEndTurnItemPassiveState(game) {
   return { type: "none" };
 }
 
+/* Returns true if the effect is any end-of-turn item choice prompt (currently only Necklace of Teeth). */
 export function isEndTurnItemChoiceEffect(effect) {
   return isNecklaceOfTeethChoiceEffect(effect);
 }
 
+/* Applies the player's end-of-turn item choice (stat selection for Necklace of Teeth). */
 export function resolveEndTurnItemPassiveChoiceState(game, choice = {}) {
   const effect = game?.tileEffect;
   if (!isEndTurnItemChoiceEffect(effect)) return null;
@@ -178,6 +188,7 @@ function getHealTargetIndexes(game, viewedCard, healRule) {
     .map(({ index }) => index);
 }
 
+// Returns the active heal rule from a card's activeAbilityRule, normalised to a common shape.
 export function getActiveHealRule(viewedCard) {
   const rule = viewedCard?.activeAbilityRule;
   if (!rule) return null;
@@ -219,6 +230,7 @@ export function getActiveHealRule(viewedCard) {
   return null;
 }
 
+// Returns true if the heal ability has at least one valid target right now.
 export function canUseHealAbilityNow(game, viewedCard) {
   const inventoryCard = getInventoryCard(game, viewedCard);
   if (!inventoryCard) return false;
@@ -235,6 +247,7 @@ export function getHealTargetOptions(game, viewedCard, healRule) {
   }));
 }
 
+// Applies the First Aid Kit (or similar heal card): heals critical stats to starting values and buries the card.
 export function applyFirstAidKitNowState(game, viewedCard, targetPlayerIndex = null) {
   if (!viewedCard) return { game, closeViewedCard: false, diceAnimation: null };
 
@@ -302,6 +315,7 @@ export function applyFirstAidKitNowState(game, viewedCard, targetPlayerIndex = n
   };
 }
 
+// Activates the Mystical Stopwatch: consumes it and grants an extra turn after the current one (haunt only).
 export function applyMysticalStopwatchNowState(game, viewedCard) {
   if (!viewedCard) return { game, closeViewedCard: false, diceAnimation: null };
   if (viewedCard.activeAbilityRule?.action !== "extra-turn-after-current") {

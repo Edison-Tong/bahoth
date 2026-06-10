@@ -1,5 +1,7 @@
 import { passTurnCoreState, passTurnWithEndTurnItemsState } from "./playerState";
 
+// Advances to the next player without checking end-of-turn item passives.
+// Called after end-of-turn sequences that have already handled passives.
 export function resolvePassTurnCoreActionState(g) {
   const result = passTurnCoreState(g);
   return {
@@ -8,6 +10,8 @@ export function resolvePassTurnCoreActionState(g) {
   };
 }
 
+// Advances to the next player after checking Necklace of Teeth (and other end-of-turn item passives).
+// Called by resolveEndTurnActionState after all tile effects are resolved.
 export function resolvePassTurnActionState(g, { resolveEndTurnItemPassiveState, statLabels }) {
   let nextPlayerFloor = null;
   const game = passTurnWithEndTurnItemsState(g, {
@@ -26,6 +30,8 @@ export function resolvePassTurnActionState(g, { resolveEndTurnItemPassiveState, 
   };
 }
 
+// Main End Turn handler: checks tile effects (furnace, collapsed, etc.) first; if none, passes the turn.
+// Returns { game, cameraFloor, diceAnimation }. Called by GameBoard handleEndTurn.
 export function resolveEndTurnActionState(
   g,
   {

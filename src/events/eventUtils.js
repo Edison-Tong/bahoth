@@ -1,15 +1,18 @@
 import { STAT_LABELS } from "../game/gameState";
 
+// Returns "Roll Die" for 1 die, "Roll Dice" for multiple.
 export function getEventRollButtonLabel(diceCount) {
   return diceCount === 1 ? "Roll Die" : "Roll Dice";
 }
 
+/* Appends text to an existing event summary string with a space separator. */
 export function appendEventSummary(summary, text) {
   if (!text) return summary || "";
   if (!summary) return text;
   return `${summary} ${text}`;
 }
 
+/* Converts a token-placement location enum to a readable English phrase. */
 export function describeTokenPlacementLocation(location) {
   switch (location) {
     case "current-tile":
@@ -33,6 +36,7 @@ export function describeTokenPlacementLocation(location) {
   }
 }
 
+/* Converts a move-destination enum to a readable English phrase. */
 export function describeMoveDestination(destination) {
   switch (destination) {
     case "adjacent-tile":
@@ -66,6 +70,7 @@ export function describeMoveDestination(destination) {
   }
 }
 
+/* Converts a single event effect object to a human-readable sentence. */
 export function describeEventEffect(effect) {
   if (!effect) return "";
 
@@ -110,6 +115,7 @@ export function describeEventEffect(effect) {
   return "Resolve effect.";
 }
 
+// Converts an event effect object to a human-readable single sentence.
 export function describeEventEffects(effects) {
   if (!effects || effects.length === 0) return "Nothing happens.";
   return effects
@@ -118,6 +124,7 @@ export function describeEventEffects(effects) {
     .join(" ");
 }
 
+/* Returns all tiles door-adjacent or stair-connected to the player's current tile. Used by mask-push and other range checks. */
 function getDoorwayAdjacentTiles(board, player, DIR, getTileAtPosition) {
   const currentTile = getTileAtPosition(board, player.x, player.y, player.floor);
   if (!currentTile) return [];
@@ -165,6 +172,8 @@ function getDoorwayAdjacentTiles(board, player, DIR, getTileAtPosition) {
   return entries;
 }
 
+// Returns all valid placement options for a move/place-token event effect destination.
+// Handles named landmarks, floor filters, adjacency, and token-type exclusions.
 export function getDiscoveredTileOptions(board, player, destination, tokenType = null, DIR, getTileAtPosition) {
   const currentTile = getTileAtPosition(board, player.x, player.y, player.floor);
   const allTiles = Object.entries(board).flatMap(([floor, tiles]) =>
@@ -214,6 +223,7 @@ export function getDiscoveredTileOptions(board, player, destination, tokenType =
   }
 }
 
+// Splits a raw event card result text into individual display lines, splitting on roll ranges and sentences.
 export function formatEventResultLines(resultText) {
   if (!resultText) return [];
 

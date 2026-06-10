@@ -1,3 +1,4 @@
+// Barrel re-export for all event domain logic (engine, actions, UI state, hooks).
 export { describeEventEffects, getEventRollButtonLabel } from "./eventUtils";
 export {
   applyTileEffectConsequences,

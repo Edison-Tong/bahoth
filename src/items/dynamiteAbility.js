@@ -5,6 +5,7 @@ const DYNAMITE_DAMAGE = 4;
 const DYNAMITE_DAMAGE_TYPE = "physical";
 const DYNAMITE_SAFE_THRESHOLD = 4;
 
+/* Returns the inventory card for the viewed card; null if not in inventory. Private local copy. */
 function getInventoryCard(game, viewedCard) {
   if (!viewedCard || viewedCard.ownerCollection !== "inventory") return null;
   const owner = game.players[viewedCard.ownerIndex];

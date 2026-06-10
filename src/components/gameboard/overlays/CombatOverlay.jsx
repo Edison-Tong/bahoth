@@ -1,3 +1,4 @@
+// Sub-component showing a single combat roll result card (label, player name, total, dice).
 function CombatRollSummary({ label, state, playerName }) {
   if (!state || state.total == null) {
     return (
@@ -31,6 +32,7 @@ function CombatRollSummary({ label, state, playerName }) {
   );
 }
 
+/* Full combat overlay: attacker/defender roll buttons, item usage, resolution display. */
 export default function CombatOverlay({
   combatState,
   diceAnimation,

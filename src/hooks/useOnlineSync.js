@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { WS_BASE_URL } from "../config/api";
 
+// Single long-lived WebSocket hook for online multiplayer sync.
+// Connects on mount, queues messages sent before open, guards against Strict Mode double-mount.
+// Returns { wsStatus, send }; callers pass onMessage to receive broadcast game updates.
 export function useOnlineSync(onMessage) {
   const [wsStatus, setWsStatus] = useState("connecting");
   const wsRef = useRef(null);

@@ -1,3 +1,7 @@
+// Handles the Continue button for any active tileEffect.
+// Queued tile-effect types (junk-room, panic-room, armory, skeleton-key) route to their next step;
+// damage effects open a damageChoice; no-damage effects apply consequences and pass the turn.
+// Returns { game, cameraFloor, clearDiceAnimation }. Called by handleDismissTileEffect in GameBoard.jsx.
 export function resolveDismissTileEffectState(
   g,
   {

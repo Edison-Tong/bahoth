@@ -1,5 +1,7 @@
 import { getMysticElevatorDestination } from "../events/eventActions";
 
+// Converts a settled 2-die elevator roll into a tileEffect showing destination choices
+// (or a "nowhere to place" message). Called by GameBoard.jsx after diceAnimation settles.
 export function resolveMysticElevatorResultState({ game, animation, total, getPlacementOptions }) {
   const player = game.players[game.currentPlayerIndex];
   const elevatorTile = game.board[player.floor]?.find((tile) => tile.x === player.x && tile.y === player.y);
@@ -79,6 +81,7 @@ export function resolveMysticElevatorResultState({ game, animation, total, getPl
   };
 }
 
+// Starts the elevator dice animation; marks the elevator as used. Called by handleRollMysticElevator.
 export function getRollMysticElevatorState(game, rollDice) {
   const player = game.players[game.currentPlayerIndex];
   const currentTile = game.board[player.floor]?.find((tile) => tile.x === player.x && tile.y === player.y);

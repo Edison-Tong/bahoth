@@ -1,3 +1,4 @@
+// Full rules content and scenario definition for Haunt 1 "Jack Is Back".\n// Contains rulesBooklet text, hero/traitor setup steps, objectives, tokens, and win conditions.
 const haunt1Definition = {
   id: "haunt_1",
   title: "Haunt 1 - Jack Is Back",

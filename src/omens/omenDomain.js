@@ -1,3 +1,4 @@
+// Barrel re-export for omen abilities (Idol, Dog trade, active omen now-abilities).
 export {
   applyDrawIdolEventCardState,
   applySkipIdolEventCardState,

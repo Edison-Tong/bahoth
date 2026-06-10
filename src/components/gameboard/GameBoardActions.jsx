@@ -1,3 +1,6 @@
+// Action button panel rendered inside the game board sidebar.
+// Shows contextual buttons: confirm move, rotate/place tile, stair/elevator/passage/special placement,
+// trade, attack, and End Turn. Each button is enabled only when appropriate per game phase.
 export default function GameBoardActions({
   eventState,
   isSpecialPlacementActive,

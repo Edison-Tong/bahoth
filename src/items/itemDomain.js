@@ -1,3 +1,4 @@
+// Barrel re-export for item abilities (end-of-turn passives, movement items).
 export {
   isEndTurnItemChoiceEffect,
   resolveEndTurnItemPassiveChoiceState,

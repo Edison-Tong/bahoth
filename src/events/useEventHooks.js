@@ -13,12 +13,14 @@ import {
 import { advanceEventResolution, applyResolvedEventEffect, finalizeEventState } from "./eventEngine";
 import { dismissHauntRollState, selectTriggeredHauntDefinition, GAME_PHASES } from "../haunts/hauntDomain";
 
+/* Returns true if the event has no remaining work: no awaiting, no summary, no lastRoll, no pendingEffects. */
 function isEventStateInert(eventState) {
   if (!eventState) return false;
   if (eventState.awaiting || eventState.summary || eventState.lastRoll) return false;
   return (eventState.pendingEffects || []).length === 0;
 }
 
+/* Starts a single dice-based damage roll animation when awaiting.type==="event-damage-roll-ready". */
 function beginEventDamageRoll(game, rollDiceFn) {
   const awaiting = game.eventState?.awaiting;
   if (!awaiting || awaiting.type !== "event-damage-roll-ready") return null;
@@ -49,6 +51,7 @@ function beginEventDamageRoll(game, rollDiceFn) {
   };
 }
 
+/* Starts the next roll in a damage sequence when awaiting.type==="event-damage-sequence-ready". */
 function beginEventDamageSequenceRoll(game, rollDiceFn) {
   const awaiting = game.eventState?.awaiting;
   if (!awaiting || awaiting.type !== "event-damage-sequence-ready") return null;
@@ -82,6 +85,7 @@ function beginEventDamageSequenceRoll(game, rollDiceFn) {
   };
 }
 
+/* Applies an Angel's Feather / similar override total to the first roll in a trait-roll-sequence. */
 function applyTraitRollSequenceOverride(game) {
   const awaiting = game.eventState?.awaiting;
   if (!awaiting || awaiting.type !== "trait-roll-sequence-rolling") return null;
@@ -136,6 +140,7 @@ function applyTraitRollSequenceOverride(game) {
   };
 }
 
+/* React hook: drives automatic dice rolls and settlements for events (damage rolls, trait sequences, inert auto-close). */
 export function useEventRuntimeEffects({
   game,
   diceAnimation,
@@ -257,6 +262,7 @@ export function useEventRuntimeEffects({
   }, [isMyTurn, game.eventState, game.message, setGame]);
 }
 
+/* React hook: returns all event action handler functions (continue, adjust total, awaiting choices, tile choices). */
 export function useEventActionHandlers({
   setGame,
   setCameraFloor,
@@ -272,6 +278,7 @@ export function useEventActionHandlers({
   const applyResolvedEvent = (nextGame, effect, selectedValue = null) =>
     applyResolvedEventEffect(nextGame, effect, selectedValue, eventEngineDeps);
 
+  /* Clears dice animation and advances the event to its next awaiting state. */
   function handleContinueEvent() {
     setDiceAnimation(null);
     let nextCameraFloor = null;
@@ -288,6 +295,7 @@ export function useEventActionHandlers({
     }
   }
 
+  /* Debug: shifts the last event roll total by ±1 and recomputes pending effects. */
   function handleAdjustEventRollTotal(delta) {
     setGame((g) =>
       adjustEventRollTotalState(g, delta, {
@@ -297,6 +305,7 @@ export function useEventActionHandlers({
     );
   }
 
+  /* Handles a player's event awaiting-choice response; routes roll-ready, stat-choice, tile-choice, etc. */
   function handleEventAwaitingChoice(value) {
     let nextCameraFloor = null;
     let nextDiceAnimation = null;
@@ -319,6 +328,7 @@ export function useEventActionHandlers({
     }
   }
 
+  /* Previews an event tile-choice selection on the board. */
   function handleEventTileChoice(option) {
     let nextCameraFloor = null;
     setGame((g) => {
@@ -333,6 +343,7 @@ export function useEventActionHandlers({
     }
   }
 
+  /* Confirms the selected event tile-choice and applies the effect. */
   function handleConfirmEventTileChoice() {
     let nextCameraFloor = null;
     setGame((g) => {
@@ -359,6 +370,7 @@ export function useEventActionHandlers({
   };
 }
 
+/* React hook: provides handleDismissCard (omen → haunt roll, item → inventory, event → start event) and handleDismissHauntRoll. */
 export function useDrawnCardHandlers({
   game,
   setGame,
@@ -371,6 +383,7 @@ export function useDrawnCardHandlers({
   resolveRollReadyAwaiting,
   eventFlowDeps,
 }) {
+  /* Dismisses the drawn card: adds omen/item to collection, or starts event resolution; triggers haunt roll for omens in pre-haunt. */
   function handleDismissCard(options = {}) {
     const { autoRollIfReady = false, initialEventChoice = null } = options;
     const card = game.drawnCard;
@@ -463,6 +476,7 @@ export function useDrawnCardHandlers({
     });
   }
 
+  /* Clears the dice animation and processes the settled haunt roll (trigger or no-trigger). */
   function handleDismissHauntRoll() {
     setDiceAnimation(null);
     setGame((g) =>

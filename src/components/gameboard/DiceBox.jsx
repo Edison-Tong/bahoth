@@ -1,8 +1,11 @@
 import { useState, useRef, useEffect } from "react";
 
+// Draggable floating dice display box. Shows rolling animation (display values) then settled final values.
+// Persists its screen position to localStorage. Renders nothing when no active or recent roll.
 const STORAGE_KEY = "dice-box-pos";
 const DEFAULT_POS = () => ({ x: window.innerWidth - 244, y: window.innerHeight - 200 });
 
+/* Loads the saved DiceBox screen position from localStorage, or falls back to bottom-right corner. */
 function loadPos() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -34,10 +37,12 @@ const PURPOSE_LABEL = {
   furnace: "Furnace Room",
 };
 
+/* Renders a single die face value (rolling adds spinning CSS class). */
 function DieFace({ value, rolling }) {
   return <div className={`die dice-box-die${rolling ? " die-rolling" : ""}`}>{value}</div>;
 }
 
+/* Draggable floating dice display: shows rolling animation then final values with modifier badge. Position is persisted to localStorage. */
 export default function DiceBox({ diceAnimation, lastSettled }) {
   const [pos, setPos] = useState(loadPos);
   const [isDragging, setIsDragging] = useState(false);

@@ -1,6 +1,8 @@
 import { backtrackPlayerState, changeFloorState, exploreState, movePlayerState } from "./playerMovementState";
 import { resolveHauntAfterMovementState } from "../haunts/hauntDomain";
 
+// Moves the current player one step, optionally rolling the Skeleton Key die.
+// After moving, runs haunt post-movement hooks. Called by resolveBoardMoveActionState and directly.
 export function resolveMovePlayerActionState(
   g,
   { nx, ny, cost, useSkeletonKey = false, rollDice, getLeaveMoveCost, canUseArmedSkeletonKeyMovement }
@@ -34,6 +36,7 @@ export function resolveMovePlayerActionState(
   return { game, cameraFloor: null, diceAnimation: null };
 }
 
+// Undoes the last move step and refunds the movement cost. Called by GameBoard.jsx handleBacktrack.
 export function resolveBacktrackActionState(g) {
   const game = resolveHauntAfterMovementState(g, backtrackPlayerState(g));
   const player = game.players[game.currentPlayerIndex];
@@ -44,6 +47,7 @@ export function resolveBacktrackActionState(g) {
   };
 }
 
+// Initiates tile exploration (places the player on an undiscovered position, enters rotate phase).
 export function resolveExploreActionState(g, { dir, nx, ny, cost, OPPOSITE, getLeaveMoveCost }) {
   const exploredGame = exploreState(g, {
     dir,
@@ -60,6 +64,7 @@ export function resolveExploreActionState(g, { dir, nx, ny, cost, OPPOSITE, getL
   };
 }
 
+// Dispatcher for board click / arrow-key moves: routes to backtrack, wall-move, normal move, or explore.
 export function resolveBoardMoveActionState(
   g,
   move,
@@ -106,6 +111,7 @@ export function resolveBoardMoveActionState(
   });
 }
 
+// Uses the stair/connected-tile link to move the player to another floor. Called by GameBoard handleChangeFloor.
 export function resolveChangeFloorActionState(g, { getConnectedMoveTarget, getLeaveMoveCost }) {
   const resolved = changeFloorState(g, {
     getConnectedMoveTarget,

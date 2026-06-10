@@ -13,11 +13,12 @@ export const SUPPORTED_COMBAT_ITEM_ACTIONS = new Set([
   "sanity-combat",
 ]);
 
+// Returns the current player's speed stat value (used as attack dice count for speed-based weapons).
 export function getPlayerSpeedDiceCount(player) {
   return player.character.speed[player.statIndex.speed] || 0;
 }
 
-// Standard targeting: all valid enemies on the attacker's current tile.
+// Returns valid melee targets for the current player: enemies on the same tile.
 export function getCombatTargetsOnCurrentTile(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return [];
   if (!game.hauntState) return [];
@@ -56,7 +57,7 @@ export function getCombatTargetsOnCurrentTile(game) {
   return [{ player: displayPlayer, playerIndex: traitorIndex }];
 }
 
-// Ranged targeting: same tile OR any door-adjacent tile (Crossbow).
+// Returns valid ranged targets for the Crossbow: enemies on the same tile or through any open doorway.
 export function getCrossboxTargets(game, getTileAtPos) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return [];
   if (!game.hauntState) return [];

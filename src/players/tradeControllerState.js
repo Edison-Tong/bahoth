@@ -8,6 +8,7 @@ import {
   toggleDogTradeTargetGiveState,
 } from "../omens/dogAbility";
 
+// Returns false if the two players are on opposite teams (heroes cannot trade with traitor).
 function canPlayersTradeAcrossTeams(game, ownerIndex, targetPlayerIndex) {
   const traitorPlayerIndex = game?.hauntState?.traitorPlayerIndex;
   if (!Number.isInteger(traitorPlayerIndex)) return true;
@@ -17,6 +18,7 @@ function canPlayersTradeAcrossTeams(game, ownerIndex, targetPlayerIndex) {
   return ownerIsTraitor === targetIsTraitor;
 }
 
+// Returns all living players on the same tile as the owner who can trade with them.
 export function getPlayerTradeTargetsOnTile(game, ownerIndex, floor, x, y) {
   return game.players
     .map((player, playerIndex) => ({ player, playerIndex }))
@@ -31,6 +33,7 @@ export function getPlayerTradeTargetsOnTile(game, ownerIndex, floor, x, y) {
     );
 }
 
+// Creates a new player-local (face-to-face) trade state between two players on the same tile.
 export function createLocalPlayerTradeState(game, ownerIndex, targetPlayerIndex) {
   const owner = game.players[ownerIndex];
   const target = game.players[targetPlayerIndex];
@@ -55,6 +58,7 @@ export function createLocalPlayerTradeState(game, ownerIndex, targetPlayerIndex)
   };
 }
 
+// Starts a Dog-ability remote trade selection and clears any existing omen selection.
 export function resolveStartTradeSelectionState(previousTradeState, targetPlayerIndex) {
   const nextState = createDogTradeSelectionState(previousTradeState, targetPlayerIndex);
   if (!nextState) return nextState;
@@ -65,6 +69,7 @@ export function resolveStartTradeSelectionState(previousTradeState, targetPlayer
   };
 }
 
+// Moves the Dog trade token one step and updates cameraFloor.
 export function resolveMoveTradeTokenState(previousTradeState, move) {
   if (!move) {
     return {
@@ -79,10 +84,12 @@ export function resolveMoveTradeTokenState(previousTradeState, move) {
   };
 }
 
+// Returns the trade state back to the token-move phase (cancels target selection).
 export function resolveBackToTradeMoveState(previousTradeState) {
   return createDogTradeBackToMoveState(previousTradeState);
 }
 
+// Toggles an item/omen index in the owner's or target's "give" list, respecting per-turn trade locks.
 export function resolveToggleTradeOwnerGiveState(previousTradeState, game, index) {
   return toggleDogTradeOwnerGiveState(previousTradeState, game, index, game.turnNumber);
 }
@@ -104,6 +111,7 @@ function toggleCardIndex(previousTradeState, key, card, index, turnNumber) {
   };
 }
 
+// Toggles an omen index in the owner's give list (blocks the Dog's own omen from being given).
 export function resolveToggleTradeOwnerGiveOmenState(previousTradeState, game, index) {
   if (!previousTradeState) return previousTradeState;
   if (previousTradeState.mode === "dog-remote" && index === previousTradeState.dogOmenIndex) {
@@ -115,6 +123,7 @@ export function resolveToggleTradeOwnerGiveOmenState(previousTradeState, game, i
   return toggleCardIndex(previousTradeState, "ownerGiveOmenIndexes", card, index, game.turnNumber);
 }
 
+// Toggles an omen index in the target's give list.
 export function resolveToggleTradeTargetGiveOmenState(previousTradeState, game, index) {
   if (!previousTradeState) return previousTradeState;
 
@@ -252,6 +261,8 @@ function resolveConfirmLocalPlayerTradeState(game, tradeState) {
   };
 }
 
+// Validates and executes a player-local trade: swaps selected items/omens between owner and target.
+// Returns { nextGame, nextTradeState }. Called by resolveConfirmTradeActionState.
 export function resolveConfirmTradeActionState(game, tradeState) {
   if (!tradeState) {
     return {

@@ -1,9 +1,11 @@
+/* Returns the inventory card for the viewed card; null if not in inventory. Private local copy. */
 function getInventoryCard(game, viewedCard) {
   if (!viewedCard || viewedCard.ownerCollection !== "inventory") return null;
   const owner = game.players[viewedCard.ownerIndex];
   return owner?.inventory?.[viewedCard.ownerCardIndex] || null;
 }
 
+/* Returns the current roll source (haunt action roll or event last roll) with its sourceType. */
 function getTraitRollSource(game) {
   const hauntRoll = game.hauntActionRoll;
   if (hauntRoll?.status === "rolled-pending-continue" && hauntRoll.lastRoll && Array.isArray(hauntRoll.lastRoll.dice)) {

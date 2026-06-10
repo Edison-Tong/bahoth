@@ -1,3 +1,4 @@
+// Returns whether the Book omen's Knowledge-substitution can be used now or queued for the next trait roll.
 export function getBookUsageState({
   game,
   viewedCard,
@@ -37,6 +38,8 @@ export function getBookUsageState({
   };
 }
 
+// Activates the Book: deducts 1 Sanity, marks it used, and substitutes Knowledge for the next trait roll.
+// Handles three contexts: queue-for-drawn-event, step-stat-choice override, and live roll-ready.
 export function applyBookNowState(game, viewedCard, deps) {
   const {
     drawnEventPrimaryAction,

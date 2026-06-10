@@ -1,5 +1,6 @@
 // Registry picks the correct handler for now or value activation.
 
+// Routes a "Use Now" activation to the correct item handler based on the card's action type.
 export function chooseItemAbilityNowState(g, viewedCard, deps = {}, handlers = {}) {
   const action = viewedCard?.activeAbilityRule?.action;
 
@@ -31,6 +32,7 @@ export function chooseItemAbilityNowState(g, viewedCard, deps = {}, handlers = {
   };
 }
 
+// Routes a value-picker confirmation to the correct handler (Angel's Feather total, Lucky Coin reroll, heal target).
 export function chooseItemAbilityValueState(g, total, viewedCard, deps = {}, handlers = {}) {
   const action = viewedCard?.activeAbilityRule?.action;
 

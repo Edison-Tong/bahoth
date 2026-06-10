@@ -1,3 +1,5 @@
+// All omen card definitions. Each card may have passiveEffects, a passiveAbility description,
+// and/or an activeAbilityRule used by the item ability system.
 export const OMEN_CARDS = [
   {
     id: "armor",
@@ -130,6 +132,7 @@ export const OMEN_CARDS = [
   },
 ];
 
+// All item card definitions. Cards marked isWeapon:true are drawn first by the Armory tile.
 export const ITEM_CARDS = [
   {
     id: "angels-feather",
@@ -374,6 +377,7 @@ const createEventCard = ({ steps, tags, ...card }) => ({
 // ];
 // // FOR TESTING ONLY
 
+// All event card definitions. Each card has steps[] consumed by advanceEventResolution.
 export const EVENT_CARDS = [
   // createEventCard({
   //   id: "test-event", // FOR TESTING ONLY
@@ -1565,6 +1569,7 @@ export const EVENT_CARDS = [
   }),
 ];
 
+// Creates shuffled decks for the start of a game.
 function shuffle(array) {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i -= 1) {
@@ -1574,14 +1579,17 @@ function shuffle(array) {
   return shuffled;
 }
 
+/* Shuffles and returns the full item card deck. */
 export function createItemDeck() {
   return shuffle(ITEM_CARDS);
 }
 
+/* Shuffles and returns the full omen card deck. */
 export function createOmenDeck() {
   return shuffle(OMEN_CARDS);
 }
 
+/* Shuffles and returns the full event card deck. */
 export function createEventDeck() {
   return shuffle(EVENT_CARDS);
 }

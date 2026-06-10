@@ -1,3 +1,4 @@
+// Returns the inventory card for the current viewedCard (null if not in inventory).
 function getInventoryCard(game, viewedCard) {
   if (!viewedCard || viewedCard.ownerCollection !== "inventory") return null;
   const owner = game.players[viewedCard.ownerIndex];
@@ -7,27 +8,33 @@ function getInventoryCard(game, viewedCard) {
 const SKELETON_KEY_ITEM_ID = "skeleton-key";
 const SKELETON_KEY_RESULT_EFFECT_TYPE = "skeleton-key-result";
 
+// Returns true if the player has the Skeleton Key in their inventory.
 export function hasSkeletonKeyInInventory(player) {
   return !!player?.inventory?.some((card) => card.id === SKELETON_KEY_ITEM_ID);
 }
 
+/* Returns true if the Skeleton Key is armed and the player has it in their inventory. */
 export function canUseArmedSkeletonKeyMovement(game, player) {
   return !!game?.skeletonKeyArmed && hasSkeletonKeyInInventory(player);
 }
 
+/* Returns true if the effect is a skeleton-key-result tile effect. */
 export function isSkeletonKeyResultEffect(effect) {
   return effect?.type === SKELETON_KEY_RESULT_EFFECT_TYPE;
 }
 
+/* Returns true if the type string matches the skeleton-key-result effect type. */
 export function isSkeletonKeyResultEffectType(type) {
   return type === SKELETON_KEY_RESULT_EFFECT_TYPE;
 }
 
+/* Returns the dice array from a skeleton-key-result effect (the wall-move roll dice). */
 export function getSkeletonKeyResultDice(effect) {
   if (!isSkeletonKeyResultEffect(effect)) return null;
   return Array.isArray(effect.dice) ? effect.dice : null;
 }
 
+// Creates the skeleton-key-result tileEffect shown after a wall-move roll (roll 0 = key breaks).
 export function createSkeletonKeyResultTileEffect(dice = [], nextMessage = "") {
   const rolled = Number(dice?.[0] ?? 0);
   const keyLost = rolled === 0;
@@ -44,6 +51,7 @@ export function createSkeletonKeyResultTileEffect(dice = [], nextMessage = "") {
   };
 }
 
+// Finalises a skeleton-key-result tileEffect: removes the key from inventory if roll was 0.
 export function resolveSkeletonKeyResultAfterDismiss(game, effect) {
   if (!isSkeletonKeyResultEffect(effect)) return game;
 
@@ -73,6 +81,7 @@ export function resolveSkeletonKeyResultAfterDismiss(game, effect) {
   };
 }
 
+// Activates the Map: removes it from inventory, then opens a tile-choice event-awaiting state.
 export function applyMapNowState(game, viewedCard) {
   if (!viewedCard) return { game, closeViewedCard: false, diceAnimation: null };
   if (viewedCard.activeAbilityRule?.action !== "teleport-any-tile") {
@@ -149,6 +158,7 @@ export function applyMapNowState(game, viewedCard) {
   };
 }
 
+// Returns true if the Skeleton Key is armed AND there is at least one wall-adjacent tile to use it on.
 export function hasSkeletonKeyWallMoveAvailable(game, viewedCard) {
   const inventoryCard = getInventoryCard(game, viewedCard);
   if (!inventoryCard || inventoryCard.id !== SKELETON_KEY_ITEM_ID) return false;
@@ -175,6 +185,7 @@ export function hasSkeletonKeyWallMoveAvailable(game, viewedCard) {
   });
 }
 
+// Returns true if the player can currently use a movement item (move phase, no blocking states).
 export function canUseNormalMovementNow(game, viewedCard) {
   const owner = game.players?.[viewedCard?.ownerIndex];
   if (!owner || !owner.isAlive) return false;
@@ -191,6 +202,7 @@ export function canUseNormalMovementNow(game, viewedCard) {
   );
 }
 
+// Activates the Skeleton Key: arms it on the player (enabling wall-move arrows on the board).
 export function applySkeletonKeyNowState(game, viewedCard) {
   if (!viewedCard) return { game, closeViewedCard: false, diceAnimation: null };
   if (viewedCard.activeAbilityRule?.action !== "move-through-walls") {

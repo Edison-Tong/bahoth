@@ -1,3 +1,5 @@
+// Whitelist of omen active-ability actions that have full implementations.
+// Used to hide "Use Now" for unsupported actions in the viewed-card UI.
 const SUPPORTED_OMEN_ACTIONS = new Set([
   "holy-symbol-bury-discovered-tile",
   "mask-push-adjacent-players",

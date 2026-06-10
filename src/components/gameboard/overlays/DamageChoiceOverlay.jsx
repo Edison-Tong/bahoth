@@ -1,3 +1,5 @@
+// Overlay for distributing incoming damage (or gains) across stat tracks.
+// Shows per-stat +/- buttons, a live preview of which stat cells will change, and a Confirm button.
 export default function DamageChoiceOverlay({
   damageChoice,
   currentPlayer,
@@ -15,6 +17,7 @@ export default function DamageChoiceOverlay({
   onConfirmDamageChoice,
   isMyDamage = true,
 }) {
+  /* Formats post-damage passive gain effects as a human-readable string (Strange Amulet, etc.). */
   function describePostDamageEffects(effects) {
     if (!effects || effects.length === 0) return "";
     return effects

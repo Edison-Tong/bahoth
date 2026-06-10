@@ -1,3 +1,5 @@
+// Uses the Holy Symbol to bury the just-discovered tile and replace it with the next valid tile
+// from the stack. Operates during the pendingExplore / rotate phase.
 export function applyHolySymbolDuringPendingExplore(game, oppositeByDir) {
   const pe = game.pendingExplore;
   if (!pe || game.turnPhase !== "rotate" || pe.holySymbolReplacement) {

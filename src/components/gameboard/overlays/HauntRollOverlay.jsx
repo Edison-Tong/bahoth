@@ -1,3 +1,5 @@
+// Overlay shown after a haunt roll is settled. Displays the roll total vs omen count and
+// announces whether the haunt was triggered. Dismissed by the active player.
 export default function HauntRollOverlay({ game, diceAnimation, onDismissHauntRoll, renderDiceRow, isMyTurn = true }) {
   if (!game?.hauntRoll) return null;
   if (!diceAnimation?.settled || diceAnimation.purpose !== "haunt") return null;

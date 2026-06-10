@@ -1,6 +1,8 @@
 import { GAME_PHASES, HAUNT_TEAMS } from "./hauntPhases";
 import { getHauntRuntimeHooksById } from "../registry";
 
+// Initialises hauntState for a just-triggered haunt: assigns teams, starting scenario state,
+// and structures the setup flow. traitorPlayerIndexOverride lets debug tools choose the traitor.
 function createInitialHauntState(game, hauntDefinition, traitorPlayerIndexOverride = null) {
   const defaultTraitorIndex = game.currentPlayerIndex;
   const traitorPlayerIndex = Number.isInteger(traitorPlayerIndexOverride)
@@ -59,6 +61,7 @@ function createInitialHauntState(game, hauntDefinition, traitorPlayerIndexOverri
   };
 }
 
+// Transitions the game into HAUNT_SETUP for a chosen haunt definition.
 export function startSelectedHauntState(game, { hauntDefinition, traitorPlayerIndex = null }) {
   if (!hauntDefinition) return game;
 
@@ -90,6 +93,7 @@ export function startSelectedHauntState(game, { hauntDefinition, traitorPlayerIn
   };
 }
 
+// Selects and starts the triggered haunt after a haunt roll succeeds.
 export function startHauntFromTriggerState(game, { selectHauntDefinition }) {
   if (game.gamePhase !== GAME_PHASES.PRE_HAUNT) {
     return game;
@@ -104,6 +108,7 @@ export function startHauntFromTriggerState(game, { selectHauntDefinition }) {
   };
 }
 
+// Clears hauntRoll, triggers the haunt if warranted, and advances to endTurn.
 export function dismissHauntRollState(game, { selectHauntDefinition }) {
   if (!game.hauntRoll) return game;
 
@@ -117,6 +122,7 @@ export function dismissHauntRollState(game, { selectHauntDefinition }) {
   };
 }
 
+// Steps through the rules-viewer sequence (heroes-prompt → heroes-rules → traitor-prompt → traitor-rules).
 export function advanceHauntRulesViewState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_SETUP) return game;
   if (!game.hauntState?.rulesView) return game;
@@ -185,6 +191,7 @@ function applyTraitorSetupBonuses(players, traitorPlayerIndex, hauntDefinition) 
   });
 }
 
+// Completes haunt setup: applies traitor bonuses, transitions to HAUNT_ACTIVE, and passes the first hero turn.
 export function completeHauntSetupState(game, { getHauntDefinitionById }) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_SETUP) return game;
   if (!game.hauntState || !game.activeHauntId) return game;
@@ -236,6 +243,7 @@ export function completeHauntSetupState(game, { getHauntDefinitionById }) {
   };
 }
 
+// Delegates to the active haunt's after-damage hook (e.g. to trigger Jack's Spirit appearance on traitor death).
 export function resolveHauntAfterDamageState(previousGame, nextGame) {
   const runtimeHooks = getHauntRuntimeHooksById(nextGame.activeHauntId);
   if (runtimeHooks?.resolveAfterDamageState) {
@@ -244,6 +252,7 @@ export function resolveHauntAfterDamageState(previousGame, nextGame) {
   return nextGame;
 }
 
+// Delegates to the active haunt's after-movement hook (e.g. to sync spirit position).
 export function resolveHauntAfterMovementState(previousGame, nextGame) {
   const runtimeHooks = getHauntRuntimeHooksById(nextGame.activeHauntId);
   if (runtimeHooks?.resolveAfterMovementState) {
@@ -252,6 +261,7 @@ export function resolveHauntAfterMovementState(previousGame, nextGame) {
   return nextGame;
 }
 
+// Delegates to the active haunt's turn-start hook (e.g. Jack's Spirit speed roll).
 export function resolveHauntTurnStartState(game, { rollDice }) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.resolveTurnStartState) {
@@ -273,6 +283,7 @@ export function resolveHauntTurnStartState(game, { rollDice }) {
   };
 }
 
+// Returns bonus dice/total added to combat rolls for the active haunt (e.g. Knowledge of Jack token).
 export function getHauntCombatBonus(game, actorIndex, defenderIndex, role) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.getCombatBonus) {
@@ -281,6 +292,7 @@ export function getHauntCombatBonus(game, actorIndex, defenderIndex, role) {
   return 0;
 }
 
+// Returns a proxy combat actor for the traitor when dead but controlling a monster (Jack's Spirit).
 export function getHauntCombatActorProxyState(game, actorIndex) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.getCombatActorProxyState) {
@@ -289,6 +301,7 @@ export function getHauntCombatActorProxyState(game, actorIndex) {
   return null;
 }
 
+/* Delegates to the haunt runtime to resolve the settled monster speed roll. */
 export function resolveHauntMonsterSpeedRollState(game, { dice, total, monsterName }) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.resolveMonsterSpeedRollState) {
@@ -297,6 +310,7 @@ export function resolveHauntMonsterSpeedRollState(game, { dice, total, monsterNa
   return game;
 }
 
+// Returns special move options for the active haunt (e.g. Jack's Spirit tile-movement when traitor is dead).
 export function getHauntMovementOptionsState(context) {
   const runtimeHooks = getHauntRuntimeHooksById(context?.game?.activeHauntId);
   if (runtimeHooks?.getSpecialMoveOptionsState) {
@@ -305,6 +319,7 @@ export function getHauntMovementOptionsState(context) {
   return null;
 }
 
+// Returns UI token labels for the active haunt at a given board position (corpse, exorcism circle, spirit).
 export function getHauntTileTokenLabelsState(game, position) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.getTileTokenLabelsState) {
@@ -313,6 +328,7 @@ export function getHauntTileTokenLabelsState(game, position) {
   return [];
 }
 
+/* Delegates to the haunt runtime to compute per-haunt action button availability (learn, study, exorcise, stalk-prey). */
 export function getHauntActionAvailabilityState(game, context) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.getActionAvailabilityState) {
@@ -326,6 +342,7 @@ export function getHauntActionAvailabilityState(game, context) {
   };
 }
 
+/* Delegates to the haunt runtime to get the list of players currently holding a knowledge token. */
 export function getHauntKnowledgeTokenHoldersState(game) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.getKnowledgeTokenHoldersState) {
@@ -334,6 +351,7 @@ export function getHauntKnowledgeTokenHoldersState(game) {
   return [];
 }
 
+// Returns whether the current haunt allows a dead player to still take a turn (Jack's Spirit traitor).
 export function getHauntCanDeadPlayerTakeTurnState(game, playerIndex) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.canDeadPlayerTakeTurn) {
@@ -342,6 +360,7 @@ export function getHauntCanDeadPlayerTakeTurnState(game, playerIndex) {
   return false;
 }
 
+// Returns the list of action button configs for the haunt UI panel.
 export function getHauntActionButtonsState(game, context) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.getActionButtonsState) {
@@ -351,6 +370,7 @@ export function getHauntActionButtonsState(game, context) {
   return [];
 }
 
+// Dispatches an action button press to the active haunt's resolveActionState hook.
 export function resolveHauntActionState(game, { actionId, resolveTraitRoll, createDamageChoice }) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.resolveActionState) {
@@ -360,6 +380,7 @@ export function resolveHauntActionState(game, { actionId, resolveTraitRoll, crea
   return game;
 }
 
+// Returns roll-result preview data for the haunt action roll overlay (success/failure description).
 export function getHauntActionRollPreviewState(game) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.getActionRollPreviewState) {
@@ -368,6 +389,7 @@ export function getHauntActionRollPreviewState(game) {
   return null;
 }
 
+// Processes the continue-button press after a completed haunt action roll.
 export function resolveHauntActionRollContinueState(game, { createDamageChoice }) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.resolveActionRollContinueState) {

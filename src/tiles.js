@@ -50,6 +50,8 @@ export const STARTING_TILES = [
   },
 ];
 
+// All discoverable tile definitions. Each tile specifies floor(s), door directions,
+// optional card type to draw on discovery, and optional discoverEffect / enterEffect.
 export const TILES = [
   {
     id: "armory",
@@ -392,6 +394,7 @@ function shuffle(array) {
   return shuffled;
 }
 
+// Returns a freshly shuffled stack of all TILES (excludes the 5 starting tiles).
 export function createTileStack() {
   return shuffle(TILES);
 }

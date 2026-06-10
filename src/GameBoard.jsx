@@ -1,3 +1,4 @@
+// GameBoard.jsx — Main game board component. See component comment near the export for full description.
 import { useState, useRef, useEffect, useMemo } from "react";
 import {
   describeEventEffects,
@@ -168,6 +169,7 @@ import {
 } from "./items/combatItemAbility";
 import "./GameBoard.css";
 
+/* Returns ☠ for 0 (dead), otherwise the stat value. Used by stat track cells. */
 function formatStatTrackValue(value) {
   return value === 0 ? "☠" : value;
 }
@@ -176,6 +178,7 @@ const ALL_DIRECTIONS = ["N", "E", "S", "W"];
 const DEBUG_TILE_CATALOG = [...STARTING_TILES, ...TILES];
 const DEBUG_HAUNT_CATALOG = getAllHauntDefinitions();
 
+/* Rotates a door direction array by N quarter-turn steps (each step: N→E→S→W→N). */
 function rotateDoors(doors, rotation) {
   return doors.map((door) => {
     const doorIndex = ALL_DIRECTIONS.indexOf(door);
@@ -183,6 +186,7 @@ function rotateDoors(doors, rotation) {
   });
 }
 
+/* Returns which rotation indexes produce door sets that are compatible with a given placement slot. */
 function getValidRotationIndexesForPlacement(tile, placement) {
   if (!tile || !placement) return [];
 
@@ -199,6 +203,7 @@ function getValidRotationIndexesForPlacement(tile, placement) {
   return rotationIndexes;
 }
 
+/* Deduplicates a deck into { id, name, count } entries sorted by name, used by the debug grant UI. */
 function getCardPoolOptions(deck) {
   const countsById = new Map();
   for (const card of deck) {
@@ -216,14 +221,17 @@ function getCardPoolOptions(deck) {
   return Array.from(countsById.values()).sort((a, b) => a.name.localeCompare(b.name));
 }
 
+/* Returns the player's current Might stat value as a dice count. */
 function getPlayerMightDiceCount(player) {
   return player.character.might[player.statIndex.might] || 0;
 }
 
+/* Returns the player's current Sanity stat value as a dice count. */
 function getPlayerSanityDiceCount(player) {
   return player.character.sanity[player.statIndex.sanity] || 0;
 }
 
+/* Sums all defense-roll-dice-bonus passive effects for a player (e.g. Knight's Shield). */
 function getDefenseRollDiceBonus(player) {
   const effects = getPassiveEffects(player).filter((effect) => effect.type === "defense-roll-dice-bonus");
   return {
@@ -232,6 +240,7 @@ function getDefenseRollDiceBonus(player) {
   };
 }
 
+/* Builds the list of usable non-weapon combat item options for a player, filtering already-used keys. */
 function getCombatItemOptionsForPlayer(player, usedItemKeys) {
   const options = [];
 
@@ -266,6 +275,7 @@ function getCombatItemOptionsForPlayer(player, usedItemKeys) {
   return options;
 }
 
+/* Renders a row of die face values with an optional modifier badge. */
 function DiceRow({ dice, modifier = null, rolling = false }) {
   return (
     <div className="dice-row">
@@ -286,6 +296,9 @@ function DiceRow({ dice, modifier = null, rolling = false }) {
   );
 }
 
+// Main game board component (~3600 lines). Owns all client-side game state and is the single
+// point of dispatch for every player action. Renders the board canvas, all overlays, sidebar,
+// and action buttons. Online mode: syncs state via onlineConfig.send + receives via onlineConfig.
 export default function GameBoard({ players, onQuit, onlineConfig, initialGameState }) {
   const [game, setGame] = useState(() => initialGameState ?? initGameState(players));
   const [cameraFloor, setCameraFloor] = useState("ground");
@@ -706,6 +719,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
 
   // Keyboard controls
   useEffect(() => {
+    /* Arrow keys and R key handler: delegates to resolveKeyboardMoveAction for move/rotate/place. */
     function handleKeyDown(e) {
       const target = e.target;
       const isInputFocused =
@@ -782,10 +796,12 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
 
   const getLeaveMoveCost = getLeaveMoveCostState;
 
+  /* Thin wrapper around getPlacementOptionsState, passing DIR/OPPOSITE. */
   function getPlacementOptions(board, tile) {
     return getPlacementOptionsState(board, tile, DIR, OPPOSITE);
   }
 
+  /* Debug: directly sets a player's stat track index and updates movesLeft for the current player. */
   function setDebugPlayerStat(playerIndex, stat, nextIndex) {
     setGame((g) => {
       if (!g.players[playerIndex]) return g;
@@ -816,6 +832,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Debug: places the selected tile at the chosen placement spot, validating rotation compatibility. */
   function placeDebugTile() {
     if (!debugPlacementModeActive) return;
     if (!debugSelectedPlacementKey) return;
@@ -887,6 +904,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     setDebugSelectedPlacementKey("");
   }
 
+  /* Debug: enters tile placement mode for the selected tile, computing valid placement options. */
   function startDebugPlacementMode() {
     if (!selectedDebugTile) return;
 
@@ -917,11 +935,13 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }));
   }
 
+  /* Debug: cancels tile placement mode and clears the selected placement key. */
   function cancelDebugPlacementMode() {
     setDebugPlacementModeActive(false);
     setDebugSelectedPlacementKey("");
   }
 
+  /* Debug: triggers a specific event card for the chosen player, removing it from the event deck. */
   function activateDebugEvent() {
     if (!debugEventCardId) return;
 
@@ -959,6 +979,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Debug: adds a specific item or omen card to the chosen player's inventory/omens. */
   function grantDebugCard() {
     if (!debugGrantCardId) return;
 
@@ -994,6 +1015,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Debug: removes a card from a player's inventory or omens and returns it to the deck. */
   function removeDebugCard() {
     if (!debugRemoveCardKey) return;
 
@@ -1034,6 +1056,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Debug: starts a specific haunt with the chosen traitor player. */
   function startDebugHaunt() {
     if (!debugSelectedHauntId) return;
 
@@ -1370,6 +1393,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }
   }
 
+  /* Uses a secret passage to move the current player to the target tile. */
   function handleUseSecretPassage(target) {
     if (hasUnconfirmedMovePathState(game)) return;
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP || game.gamePhase === GAME_PHASES.GAME_OVER)
@@ -1410,18 +1434,22 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }
   }
 
+  /* Local wrapper for applyStatChangeState. Used as a callback by combat, event, and haunt resolution. */
   function applyStatChange(players, playerIndex, stat, amount, options = {}) {
     return applyStatChangeState(players, playerIndex, stat, amount, options);
   }
 
+  /* Local wrapper for applyDamageAllocationState. Used by damage confirmation logic. */
   function applyDamageAllocation(players, playerIndex, allocation, adjustmentMode = "decrease", options = {}) {
     return applyDamageAllocationState(players, playerIndex, allocation, adjustmentMode, options);
   }
 
+  /* Initiates combat against the chosen defender using no source card (melee). */
   function handleStartCombat(defenderIndex) {
     handleStartCombatWithSource(defenderIndex, null);
   }
 
+  /* Initiates combat against a defender, optionally using a weapon card as the source. */
   function handleStartCombatWithSource(defenderIndex, sourceCard) {
     if (hasUnconfirmedMovePathState(game)) return;
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
@@ -1486,6 +1514,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Rolls dice for the attacker or defender, applying trait bonuses, haunt bonuses, and pre-roll item bonuses. */
   function handleRollCombat(role) {
     const combatState = game.combatState;
     if (!combatState) return;
@@ -1580,6 +1609,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Applies a combat item bonus (extra die, flat bonus, or Speed-for-dice trade) during the item phase. */
   function handleUseCombatItem(role, itemKey) {
     setGame((g) => {
       const combatState = g.combatState;
@@ -1648,6 +1678,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Advances combat after the attacker's item phase; transitions to defender-roll. */
   function handleContinueCombatAttacker() {
     setGame((g) => {
       if (!g.combatState || g.combatState.phase !== "attacker-item") return g;
@@ -1661,6 +1692,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Computes combat outcome after defender's item phase and transitions to resolution. */
   function handleContinueCombatDefender() {
     setGame((g) => {
       if (!g.combatState || g.combatState.phase !== "defender-item") return g;
@@ -1707,6 +1739,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Applies combat damage and clears combatState; ties or zero-damage outcomes skip damage choice. */
   function handleAdvanceCombatResolution() {
     setGame((g) => {
       const combatState = g.combatState;
@@ -1840,6 +1873,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     handleDismissCard({ autoRollIfReady: true });
   }, [queuedTraitRollOverride, game.drawnCard, handleDismissCard]);
 
+  /* Increments or decrements a stat in the damage allocation by delta. */
   function handleAdjustDamageAllocation(stat, delta) {
     setGame((g) =>
       adjustDamageAllocationChoiceState(g, stat, delta, {
@@ -1848,6 +1882,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     );
   }
 
+  /* Toggles damage conversion between physical and general (e.g. Brooch of Blood). */
   function handleToggleDamageConversion() {
     setGame((g) =>
       toggleDamageConversionChoiceState(g, {
@@ -1860,6 +1895,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     );
   }
 
+  /* Local wrapper for applyPostDamagePassiveEffectsState (Strange Amulet, etc.). */
   function applyPostDamagePassiveEffects(players, playerIndex, choice) {
     return applyPostDamagePassiveEffectsState(players, playerIndex, choice, {
       applyStatChange,
@@ -1867,6 +1903,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Confirms damage allocation: applies stat changes, post-damage effects, and optionally passes the turn. */
   function handleConfirmDamageChoice() {
     let nextCameraFloor = null;
     let shouldClearDiceAnimation = false;
@@ -1902,10 +1939,12 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }
   }
 
+  /* Local wrapper for getDamagePreviewState; returns projected stat values for the damage allocation UI. */
   function getDamagePreview(player, choice) {
     return getDamagePreviewState(player, choice);
   }
 
+  /* Starts the 3-die Skull omen death-intercept roll animation. */
   function handleSkullRoll() {
     if (!game.skullChallenge || game.skullChallenge.roll !== null) return;
     const dice = rollDice(3);
@@ -1918,6 +1957,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Revives the player after passing the Skull omen challenge, setting all stats to Critical. */
   function handleSkullRevive() {
     setGame((g) => {
       const skullChallenge = g.skullChallenge;
@@ -1935,6 +1975,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Kills the player after failing the Skull omen challenge, applying the queued damage choice. */
   function handleSkullFinalizeDeath() {
     let nextCameraFloor = null;
     let shouldClearDiceAnimation = false;
@@ -1968,10 +2009,12 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     if (nextCameraFloor) setCameraFloor(nextCameraFloor);
   }
 
+  /* Local wrapper for getStatTrackCellClassState; returns CSS class for a stat track cell. */
   function getStatTrackCellClass(index, currentIndex, previewIndex, adjustmentMode = "decrease") {
     return getStatTrackCellClassState(index, currentIndex, previewIndex, adjustmentMode);
   }
 
+  /* Rolls Speed dice (with defense bonus) for the next player in the Dynamite queue. */
   function handleDynamiteRoll() {
     if (!game.dynamiteState || game.dynamiteState.queue.length === 0) return;
     const playerIndex = game.dynamiteState.queue[0];
@@ -2012,6 +2055,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Processes the settled Dynamite roll result and advances to the next target or clears state. */
   function handleConfirmDynamiteRoll() {
     setGame((g) => {
       const ds = g.dynamiteState;
@@ -2034,10 +2078,12 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Clears the dynamite state (e.g. after all targets have rolled). */
   function handleClearDynamiteState() {
     setGame((g) => ({ ...g, dynamiteState: null }));
   }
 
+  /* Continue button for tile effects: dismisses and optionally passes the turn. */
   function handleDismissTileEffect() {
     let nextCameraFloor = null;
     let shouldClearDiceAnimation = false;
@@ -2075,6 +2121,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }
   }
 
+  /* Picks a stat for the Necklace of Teeth end-of-turn critical stat gain. */
   function handleChooseNecklaceOfTeethStat(stat) {
     let nextCameraFloor = null;
 
@@ -2104,14 +2151,17 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }
   }
 
+  /* Draws the event card queued by the Idol omen tile effect. */
   function handleDrawIdolEventCard() {
     setGame((g) => applyDrawIdolEventCardState(g));
   }
 
+  /* Skips the Idol-queued event card draw (player chooses not to use it). */
   function handleSkipIdolEventCard() {
     setGame((g) => applySkipIdolEventCardState(g));
   }
 
+  /* Skips the Necklace of Teeth end-of-turn critical stat gain and passes the turn. */
   function handleSkipNecklaceOfTeethGain() {
     let nextCameraFloor = null;
 
@@ -2137,6 +2187,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }
   }
 
+  /* Rolls two dice for Mystic Elevator floor selection and shows the result. */
   function handleRollMysticElevator() {
     if (hasUnconfirmedMovePathState(game)) return;
     const rollState = getRollMysticElevatorState(game, rollDice);
@@ -2146,6 +2197,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     setDiceAnimation(rollState.diceAnimation);
   }
 
+  /* Rolls Speed to check Collapsed Room stability; supports Book/Magic Camera stat substitutions and Angel's Feather overrides. */
   function handleRollCollapsedStability() {
     const te = game.tileEffect;
     if (!te || te.type !== "collapsed-prompt") return;
@@ -2198,6 +2250,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Processes the settled Collapsed stability roll: advances turn on pass, shows collapsed-pending on fail. */
   function handleContinueCollapsedRoll() {
     const hauntRoll = game.hauntActionRoll;
     if (!hauntRoll?.isCollapsedRoll) return;
@@ -2246,6 +2299,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Rolls 1 die for Furnace Room physical damage and starts the damage animation. */
   function handleRollFurnaceDamage() {
     const te = game.tileEffect;
     if (!te || te.type !== "furnace-prompt") return;
@@ -2271,6 +2325,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Rolls 1 die for Collapsed Room damage after failing the stability check. */
   function handleStartCollapsedDamage() {
     const te = game.tileEffect;
     if (!te || te.type !== "collapsed-pending") return;
@@ -2296,6 +2351,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Selects the placement slot for a pending special tile (e.g. Spirit Board). */
   function handlePlacePendingSpecialTile(placement) {
     if (!placement) return;
     const placementId = `${placement.floor}:${placement.x}:${placement.y}`;
@@ -2314,6 +2370,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Cycles the rotation of the pending special tile in the chosen direction. */
   function handleRotatePendingSpecialPlacement(direction) {
     setGame((g) => {
       const pendingPlacement = g.pendingSpecialPlacement;
@@ -2337,6 +2394,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Confirms the pending special tile placement and adds the tile to the board. */
   function handleConfirmPendingSpecialPlacement() {
     let nextCameraFloor = null;
 
@@ -2353,6 +2411,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }
   }
 
+  /* Expands or collapses a player's entry in the sidebar. */
   function toggleSidebarPlayer(index) {
     setExpandedSidebarPlayers((prev) => {
       const next = new Set(prev);
@@ -2365,6 +2424,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Opens the viewed-card panel for an owned item or omen card. */
   function handleViewOwnedCard(card, ownerName, ownerIndex, ownerCollection, ownerCardIndex) {
     setViewedCard({
       ...card,
@@ -2376,6 +2436,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Triggers the "Use Now" flow for the currently viewed card's active ability. */
   function handleUseViewedCardActiveAbilityNow() {
     if (hasUnconfirmedMovePathState(game)) return;
     const resolved = resolveUseViewedCardActiveAbilityNowState({
@@ -2418,6 +2479,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }
   }
 
+  /* Confirms a value selection for an active ability that requires a value (Angel's Feather total, Lucky Coin target). */
   function handleChooseActiveAbilityValue(total) {
     if (hasUnconfirmedMovePathState(game)) return;
     const resolved = resolveChooseViewedCardActiveAbilityValueState({
@@ -2443,10 +2505,12 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }
   }
 
+  /* Closes the viewed card panel. */
   function handleCloseViewedCard() {
     setViewedCard(null);
   }
 
+  /* Starts combat from the weapon card viewer, closing the viewer afterward. */
   function handleStartCombatFromViewedCard(defenderIndex) {
     if (!viewedCard) return;
     if (viewedCard.ownerIndex !== game.currentPlayerIndex) return;
@@ -2456,12 +2520,14 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     setViewedCard(null);
   }
 
+  /* Starts a Dog-mediated remote trade with a target player. */
   function handleStartDogTrade(targetPlayerIndex) {
     if (hasUnconfirmedMovePathState(game)) return;
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => resolveStartTradeSelectionState(prev, targetPlayerIndex));
   }
 
+  /* Starts a direct local player-to-player trade for players on the same tile. */
   function handleStartPlayerTrade(targetPlayerIndex) {
     if (hasUnconfirmedMovePathState(game)) return;
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
@@ -2471,6 +2537,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Moves the dog token one step during the trade movement phase. */
   function handleMoveDogToken(move) {
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => {
@@ -2482,37 +2549,44 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Returns to the dog movement phase from the trade item selection phase. */
   function handleBackToDogMove() {
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => resolveBackToTradeMoveState(prev));
   }
 
+  /* Toggles an item in the trade owner's give list. */
   function handleToggleDogOwnerGive(index) {
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => resolveToggleTradeOwnerGiveState(prev, game, index));
   }
 
+  /* Toggles an item in the trade target's give list. */
   function handleToggleDogTargetGive(index) {
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => resolveToggleTradeTargetGiveState(prev, game, index));
   }
 
+  /* Toggles an omen in the trade owner's give list. */
   function handleToggleDogOwnerGiveOmen(index) {
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => resolveToggleTradeOwnerGiveOmenState(prev, game, index));
   }
 
+  /* Toggles an omen in the trade target's give list. */
   function handleToggleDogTargetGiveOmen(index) {
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState((prev) => resolveToggleTradeTargetGiveOmenState(prev, game, index));
   }
 
+  /* Cancels the in-progress dog trade and resets trade state. */
   function handleCancelDogTrade() {
     if (hasUnconfirmedMovePathState(game)) return;
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     setTradeState(null);
   }
 
+  /* Confirms the dog trade, transferring items between players. */
   function handleConfirmDogTrade() {
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
     const result = resolveConfirmTradeActionState(game, tradeState);
@@ -2520,10 +2594,12 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     setTradeState(result.nextTradeState);
   }
 
+  /* Advances to the next page of the haunt rules booklet. */
   function handleAdvanceHauntRules() {
     setGame((g) => advanceHauntRulesViewState(g));
   }
 
+  /* Closes the haunt rules overlay and begins the haunt phase. */
   function handleBeginHauntAfterRules() {
     let nextCameraFloor = null;
 
@@ -2539,6 +2615,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }
   }
 
+  /* Dispatches a haunt action button press, rolling dice if the action requires a trait roll. */
   function handleUseHauntAction(actionId) {
     if (debugModeEnabled || game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return;
     const nextGame = resolveHauntActionState(game, {
@@ -2582,6 +2659,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     });
   }
 
+  /* Continue button after a haunt action roll settles; applies roll outcome and advances haunt state. */
   function handleContinueHauntActionRoll() {
     setGame((g) =>
       resolveHauntActionRollContinueState(g, {
@@ -2590,10 +2668,12 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     );
   }
 
+  /* Selects which die index will be rerolled by the Rabbit's Foot. */
   function handleSelectRabbitFootDie(dieIndex) {
     setGame((g) => chooseRabbitFootDieState(g, dieIndex));
   }
 
+  /* Applies the Rabbit's Foot reroll for the selected die and starts the dice animation. */
   function handleConfirmRabbitFootReroll() {
     const result = applyRabbitFootRerollState(game);
     setGame(result.game);
@@ -2748,6 +2828,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
   const selectedBoardTileChoiceId = isEventTileChoiceActive ? selectedEventTileChoiceId : selectedStalkPreyTileChoiceId;
   const isBoardTileChoiceActive = isEventTileChoiceActive || isStalkPreyTileChoiceActive;
 
+  /* Handles clicking a board tile-choice target (event tile-choice or stalk-prey placement). */
   function handleBoardTileChoice(option) {
     if (isEventTileChoiceActive) {
       handleEventTileChoice(option);
@@ -2758,6 +2839,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }
   }
 
+  /* Confirms the selected board tile choice (event or stalk-prey). */
   function handleConfirmBoardTileChoice() {
     if (isEventTileChoiceActive) {
       handleConfirmEventTileChoice();

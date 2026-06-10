@@ -1,3 +1,4 @@
+// Base URLs for HTTP API and WebSocket — auto-selects localhost in dev, Render in prod.
 const IS_LOCAL_DEV =
   typeof window !== "undefined" &&
   (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
