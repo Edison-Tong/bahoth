@@ -1,7 +1,6 @@
 import { getHauntActionAvailabilityState, getHauntKnowledgeTokenHoldersState } from "../../../haunts/hauntDomain";
 
-// Overlay panel shown during the haunt phase that renders haunt-specific action buttons
-// (Learn about Jack, Study Exorcism, Exorcise, Stalk Prey) and pending-choice sub-buttons.
+/* [HAUNT-ACTION] [OVERLAY] Overlay panel shown during the haunt phase that renders haunt-specific action buttons (Learn about Jack, Study Exorcism, Exorcise, Stalk Prey) and pending-choice sub-buttons. */
 export default function HauntActionOverlay({ game, hauntDefinition, canUseLearnAboutJack, onUseLearnAboutJack }) {
   if (!game?.hauntState || game.gamePhase !== "hauntActive") return null;
   if (!hauntDefinition) return null;

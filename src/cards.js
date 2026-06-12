@@ -1569,7 +1569,7 @@ export const EVENT_CARDS = [
   }),
 ];
 
-// Creates shuffled decks for the start of a game.
+/* [CARD-DECK] Creates shuffled decks for the start of a game. */
 function shuffle(array) {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i -= 1) {
@@ -1579,17 +1579,17 @@ function shuffle(array) {
   return shuffled;
 }
 
-/* Shuffles and returns the full item card deck. */
+/* [CARD-DECK] Shuffles and returns the full item card deck. */
 export function createItemDeck() {
   return shuffle(ITEM_CARDS);
 }
 
-/* Shuffles and returns the full omen card deck. */
+/* [CARD-DECK] [OMEN] Shuffles and returns the full omen card deck. */
 export function createOmenDeck() {
   return shuffle(OMEN_CARDS);
 }
 
-/* Shuffles and returns the full event card deck. */
+/* [CARD-DECK] [EVENT] Shuffles and returns the full event card deck. */
 export function createEventDeck() {
   return shuffle(EVENT_CARDS);
 }

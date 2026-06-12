@@ -1,4 +1,4 @@
-// Returns true if the Dog omen can initiate a remote trade right now (valid targets within 4 steps).
+/* [TRADE] [VALIDATION] Returns true if the Dog omen can initiate a remote trade right now (valid targets within 4 steps). */
 export function isDogTradeAvailableThisTurn(game, viewedCard, getDogTradeTargets) {
   if (!viewedCard || viewedCard.ownerCollection !== "omens") return false;
   if (game.postDiscovery) return false;
@@ -19,6 +19,7 @@ export function isDogTradeAvailableThisTurn(game, viewedCard, getDogTradeTargets
   return ownerHasItems || ownerHasTradableOmens || anyTargetHasTradableCards;
 }
 
+/* [TRADE] [VALIDATION] Returns false if the two players are on opposing haunt teams (heroes cannot trade with traitor). */
 function canPlayersTradeAcrossTeams(game, ownerIndex, targetPlayerIndex) {
   const traitorPlayerIndex = game?.hauntState?.traitorPlayerIndex;
   if (!Number.isInteger(traitorPlayerIndex)) return true;
@@ -28,7 +29,7 @@ function canPlayersTradeAcrossTeams(game, ownerIndex, targetPlayerIndex) {
   return ownerIsTraitor === targetIsTraitor;
 }
 
-// Returns true if a card was used on this turn and therefore cannot be traded.
+/* [TRADE] [VALIDATION] Returns true if a card was used on this turn and therefore cannot be traded. */
 export function isItemTradeLockedThisTurn(card, turnNumber) {
   if (!card) return false;
   return (
@@ -38,7 +39,7 @@ export function isItemTradeLockedThisTurn(card, turnNumber) {
   );
 }
 
-// Initialises dogTradeState with 4 movement points, positioned on the Dog owner's tile.
+/* [TRADE] Initialises dogTradeState with 4 movement points, positioned on the Dog owner's tile. */
 export function createDogTradeStartState(game, viewedCard, getDogTradeTargets) {
   if (!viewedCard || viewedCard.activeAbilityRule?.action !== "dog-remote-trade") {
     return { ok: false, reason: "not-dog-action" };
@@ -72,7 +73,7 @@ export function createDogTradeStartState(game, viewedCard, getDogTradeTargets) {
   };
 }
 
-// Transitions the dog trade from move phase to target-selection phase for a specific explorer.
+/* [TRADE] Transitions the dog trade from move phase to target-selection phase for a specific player. */
 export function createDogTradeSelectionState(previousDogTradeState, targetPlayerIndex) {
   if (!previousDogTradeState) return previousDogTradeState;
   return {
@@ -85,7 +86,7 @@ export function createDogTradeSelectionState(previousDogTradeState, targetPlayer
   };
 }
 
-// Moves the Dog token one step in the move phase, deducting movement cost.
+/* [TRADE] [MOVEMENT] Moves the Dog token one step in the move phase, deducting movement cost. */
 export function applyDogTradeMoveState(previousDogTradeState, move) {
   if (!previousDogTradeState || previousDogTradeState.phase !== "move") return previousDogTradeState;
 
@@ -101,7 +102,7 @@ export function applyDogTradeMoveState(previousDogTradeState, move) {
   };
 }
 
-// Returns the dog trade to the move phase (cancels a previously selected target).
+/* [TRADE] Returns the dog trade to the move phase, cancelling any previously selected target. */
 export function createDogTradeBackToMoveState(previousDogTradeState) {
   if (!previousDogTradeState) return previousDogTradeState;
   return {
@@ -115,6 +116,7 @@ export function createDogTradeBackToMoveState(previousDogTradeState) {
   };
 }
 
+/* [TRADE] Toggles an item index in the trade owner's give list, skipping locked cards. */
 export function toggleDogTradeOwnerGiveState(previousDogTradeState, game, index, turnNumber) {
   if (!previousDogTradeState) return previousDogTradeState;
   const owner = game.players[previousDogTradeState.ownerIndex];
@@ -130,6 +132,7 @@ export function toggleDogTradeOwnerGiveState(previousDogTradeState, game, index,
   };
 }
 
+/* [TRADE] Toggles an item index in the trade target's give list, skipping locked cards. */
 export function toggleDogTradeTargetGiveState(previousDogTradeState, game, index, turnNumber) {
   if (!previousDogTradeState) return previousDogTradeState;
   const target = game.players[previousDogTradeState.targetPlayerIndex];
@@ -145,7 +148,7 @@ export function toggleDogTradeTargetGiveState(previousDogTradeState, game, index
   };
 }
 
-// Validates and executes the dog trade: swaps selected items/omens, marks the Dog card as used this turn.
+/* [TRADE] Validates and executes the dog trade: swaps selected items/omens, marks the Dog card as used this turn. */
 export function resolveConfirmDogTradeState(game, dogTradeState, turnNumber) {
   if (!dogTradeState) {
     return {
@@ -284,7 +287,7 @@ export function resolveConfirmDogTradeState(game, dogTradeState, turnNumber) {
   };
 }
 
-// Returns the move/target/selection UI data for the dog-trade overlay.
+/* [TRADE] [OVERLAY] Returns the move/target/selection UI data for the dog-trade overlay. */
 export function getDogTradeUiState(game, dogTradeState, cameraFloor, getDogMoveOptions, getTileAtPosition) {
   if (!dogTradeState || dogTradeState.phase !== "move") {
     return {

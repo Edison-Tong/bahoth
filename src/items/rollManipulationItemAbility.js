@@ -1,11 +1,11 @@
-/* Returns the inventory card for the viewed card; null if not in inventory. Private local copy. */
+/* [LOOKUP] Returns the inventory card for the viewed card; null if not in inventory. Private local copy. */
 function getInventoryCard(game, viewedCard) {
   if (!viewedCard || viewedCard.ownerCollection !== "inventory") return null;
   const owner = game.players[viewedCard.ownerIndex];
   return owner?.inventory?.[viewedCard.ownerCardIndex] || null;
 }
 
-/* Returns the current roll source (haunt action roll or event last roll) with its sourceType. */
+/* [DICE-ROLL] [ITEM-REROLL] Returns the current roll source (haunt action roll or event last roll) with its sourceType. */
 function getTraitRollSource(game) {
   const hauntRoll = game.hauntActionRoll;
   if (hauntRoll?.status === "rolled-pending-continue" && hauntRoll.lastRoll && Array.isArray(hauntRoll.lastRoll.dice)) {
@@ -26,6 +26,7 @@ function getTraitRollSource(game) {
   return null;
 }
 
+/* [ITEM-REROLL] [VALIDATION] Returns the availability state for Angel's Feather: whether it can be applied now, queued, or used on a haunt action roll. */
 export function getAngelsFeatherUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride }, deps) {
   const { getTraitRollRequiredUsageState } = deps;
   const base = getTraitRollRequiredUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride });
@@ -41,6 +42,7 @@ export function getAngelsFeatherUsageState({ game, drawnEventPrimaryAction, queu
   };
 }
 
+/* [ITEM-REROLL] [VALIDATION] Returns true if Creepy Doll can be used this turn (trait roll just completed, not already used). */
 export function isCreepyDollAvailableThisTurn(game, viewedCard, deps) {
   const { isTraitRollResult } = deps;
   const inventoryCard = getInventoryCard(game, viewedCard);
@@ -52,6 +54,7 @@ export function isCreepyDollAvailableThisTurn(game, viewedCard, deps) {
   return !!lastRoll && Array.isArray(lastRoll.dice) && Array.isArray(lastRoll.outcomes) && isTraitRollResult(lastRoll);
 }
 
+/* [ITEM-REROLL] [VALIDATION] Returns true if Lucky Coin can be used this turn (blank dice present in last roll or sequence). */
 export function isLuckyCoinAvailableThisTurn(game, viewedCard, deps) {
   const { isTraitRollResult } = deps;
   const inventoryCard = getInventoryCard(game, viewedCard);
@@ -70,6 +73,7 @@ export function isLuckyCoinAvailableThisTurn(game, viewedCard, deps) {
   return lastRoll.dice.some((value) => value === 0);
 }
 
+/* [ITEM-REROLL] [VALIDATION] Returns true if Rabbit's Foot can be used this turn (trait roll or skeleton-key roll just settled). */
 export function isRabbitsFootAvailableThisTurn(game, viewedCard) {
   const inventoryCard = getInventoryCard(game, viewedCard);
   if (!inventoryCard || inventoryCard.id !== "rabbits-foot") return false;
@@ -88,6 +92,7 @@ export function isRabbitsFootAvailableThisTurn(game, viewedCard) {
   );
 }
 
+/* [ITEM-REROLL] [LOOKUP] Returns selectable roll options for Lucky Coin when used after a trait-roll sequence (one option per roll result). */
 export function getLuckyCoinSequenceRerollOptions(game, deps) {
   const { statLabels } = deps;
   const awaiting = game.eventState?.awaiting;
@@ -102,6 +107,7 @@ export function getLuckyCoinSequenceRerollOptions(game, deps) {
     }));
 }
 
+/* [ITEM-REROLL] [DICE-ROLL] Activates Creepy Doll: rerolls all dice in the current trait roll. */
 export function applyCreepyDollNowState(game, viewedCard, deps) {
   const { isCreepyDollAvailable, rollDice } = deps;
 
@@ -179,6 +185,7 @@ export function applyCreepyDollNowState(game, viewedCard, deps) {
   };
 }
 
+/* [ITEM-REROLL] [DICE-ROLL] Activates Lucky Coin: rerolls all blank dice in the current trait roll, or a chosen sequence roll. */
 export function applyLuckyCoinNowState(game, viewedCard, targetRollSelection = null, deps) {
   const { isLuckyCoinAvailable, getLuckyCoinSequenceRerollOptions, rollDice, statLabels } = deps;
 
@@ -286,6 +293,7 @@ export function applyLuckyCoinNowState(game, viewedCard, targetRollSelection = n
   };
 }
 
+/* [ITEM-REROLL] Activates Rabbit's Foot: enters pending-reroll state, waiting for the player to select which die to reroll. */
 export function applyRabbitsFootNowState(game, viewedCard, deps) {
   const { isRabbitsFootAvailable } = deps;
 
@@ -340,6 +348,7 @@ export function applyRabbitsFootNowState(game, viewedCard, deps) {
   };
 }
 
+/* [ITEM-REROLL] [VALIDATION] Returns the availability state for Magic Camera: whether it can substitute Sanity for Knowledge now or be queued. */
 export function getMagicCameraUsageState(params, deps) {
   const { game, drawnEventPrimaryAction, queuedTraitRollOverride } = params;
   const { getTraitRollRequiredUsageState } = deps;
@@ -364,6 +373,7 @@ export function getMagicCameraUsageState(params, deps) {
   };
 }
 
+/* [ITEM-REROLL] [DICE-ROLL] Activates Magic Camera: substitutes Sanity for Knowledge in the current or queued trait roll. */
 export function applyMagicCameraNowState(game, viewedCard, args = {}, deps) {
   const { drawnEventPrimaryAction, queuedTraitRollOverride = null } = args;
   const { getMagicCameraUsageState, getEventRollButtonLabel, statLabels } = deps;
@@ -468,6 +478,7 @@ export function applyMagicCameraNowState(game, viewedCard, args = {}, deps) {
   };
 }
 
+/* [ITEM-REROLL] [DICE-ROLL] Applies the Angel's Feather chosen total override to the current or queued trait roll. */
 export function chooseAngelsFeatherValueState(g, total, viewedCard, deps, helpers) {
   const { getMatchingOutcome, describeEventEffects, statLabels, getAngelsFeatherUsageState } = helpers;
 

@@ -13,12 +13,12 @@ export const SUPPORTED_COMBAT_ITEM_ACTIONS = new Set([
   "sanity-combat",
 ]);
 
-// Returns the current player's speed stat value (used as attack dice count for speed-based weapons).
+/* [COMBAT-ROLL] [PLAYER-STATE] Returns the current player's speed stat value (used as attack dice count for speed-based weapons). */
 export function getPlayerSpeedDiceCount(player) {
   return player.character.speed[player.statIndex.speed] || 0;
 }
 
-// Returns valid melee targets for the current player: enemies on the same tile.
+/* [COMBAT] [LOOKUP] Returns valid melee targets for the current player: enemies on the same tile. */
 export function getCombatTargetsOnCurrentTile(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return [];
   if (!game.hauntState) return [];
@@ -57,7 +57,7 @@ export function getCombatTargetsOnCurrentTile(game) {
   return [{ player: displayPlayer, playerIndex: traitorIndex }];
 }
 
-// Returns valid ranged targets for the Crossbow: enemies on the same tile or through any open doorway.
+/* [COMBAT] [LINE-OF-SIGHT] Returns valid ranged targets for the Crossbow: enemies on the same tile or through any open doorway. */
 export function getCrossboxTargets(game, getTileAtPos) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return [];
   if (!game.hauntState) return [];
@@ -101,8 +101,7 @@ export function getCrossboxTargets(game, getTileAtPos) {
     .filter(({ player, playerIndex }) => isValidTarget(player, playerIndex));
 }
 
-// Line-of-sight targeting: same tile + all tiles reachable in a straight line through
-// connected doorways in any cardinal direction, on the same floor (Gun).
+/* [COMBAT] [LINE-OF-SIGHT] Returns valid Gun targets: same tile plus all tiles reachable in a straight line through connected doorways (same floor). */
 export function getGunTargets(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return [];
   if (!game.hauntState) return [];
@@ -152,7 +151,7 @@ export function getGunTargets(game) {
     .filter(({ player, playerIndex }) => isValidTarget(player, playerIndex));
 }
 
-// Dispatcher: picks the right target function based on the item action.
+/* [COMBAT] [LOOKUP] Dispatcher: picks the right target function (melee, crossbow, gun, or none) based on the item action. */
 export function getCombatItemTargets(game, action, getTileAtPos) {
   if (action === "ranged-attack-speed") return getCrossboxTargets(game, getTileAtPos);
   if (action === "gun-ranged-attack") return getGunTargets(game);
@@ -171,6 +170,7 @@ export function getCombatItemTargets(game, action, getTileAtPos) {
  *             preRollBonusDice, preRollFlatBonus, preRollItemMessages,
  *             usedItemKeys, nextPlayers }}
  */
+/* [COMBAT] [ITEM-ABILITY] Applies the combat source item's pre-roll effects (bonus dice, flat bonus, Speed cost). Returns updated rollStat, combatDamageType, pre-roll bonuses, and usedItemKeys. */
 export function applyCombatItemSource(sourceRule, sourceCard, attackerIndex, currentPlayers) {
   let rollStat = "might";
   let combatDamageType = "physical";

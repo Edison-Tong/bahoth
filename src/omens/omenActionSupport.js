@@ -7,6 +7,7 @@ const SUPPORTED_OMEN_ACTIONS = new Set([
   "substitute-knowledge-for-trait",
 ]);
 
+/* [ITEM-ABILITY] [VALIDATION] Returns true if the omen action has a full "Use Now" implementation. */
 export function isSupportedOmenAction(action) {
   return SUPPORTED_OMEN_ACTIONS.has(action);
 }

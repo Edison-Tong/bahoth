@@ -1,4 +1,4 @@
-// Collects all passiveEffects from every card (items + omens) the player holds.
+/* [ITEM-PASSIVE] [LOOKUP] Collects all passiveEffects from every card (items + omens) the player holds. */
 export function getPassiveEffects(player) {
   const ownedCards = [...(player?.omens ?? []), ...(player?.inventory ?? [])];
 
@@ -10,7 +10,7 @@ export function getPassiveEffects(player) {
   );
 }
 
-// Returns the total bonus dice/amount and source names for a stat roll from passive effects.
+/* [ITEM-PASSIVE] [DICE-MODIFIER] Returns the total bonus dice/amount and source names for a stat roll from passive effects. */
 export function getTraitRollBonus(player, stat) {
   const matchingEffects = getPassiveEffects(player).filter(
     (effect) => effect.type === "trait-roll-bonus" && effect.stat === stat
@@ -22,7 +22,7 @@ export function getTraitRollBonus(player, stat) {
   };
 }
 
-// Returns flat damage reduction from passive effects for a given damage type.
+/* [ITEM-PASSIVE] [DAMAGE] Returns flat damage reduction from passive effects for a given damage type. */
 export function getDamageReduction(player, damageType) {
   const matchingEffects = getPassiveEffects(player).filter(
     (effect) => effect.type === "damage-reduction" && effect.damageTypes?.includes(damageType)
@@ -34,7 +34,7 @@ export function getDamageReduction(player, damageType) {
   };
 }
 
-// Returns bonus dice for trait rolls in specific contexts (e.g. combat only).
+/* [ITEM-PASSIVE] [DICE-MODIFIER] Returns bonus dice for trait rolls in specific contexts (e.g. combat only). */
 export function getTraitRollDiceBonus(player, context) {
   const matchingEffects = getPassiveEffects(player).filter(
     (effect) =>
@@ -48,7 +48,7 @@ export function getTraitRollDiceBonus(player, context) {
   };
 }
 
-// Returns whether any passive effect allows the player to convert damage to "general" type (Brooch).
+/* [ITEM-PASSIVE] [DAMAGE] Returns whether any passive effect allows the player to convert damage to "general" type (Brooch). */
 export function getDamageConversionOptions(player, damageType) {
   const matchingEffects = getPassiveEffects(player).filter(
     (effect) =>
@@ -63,7 +63,7 @@ export function getDamageConversionOptions(player, damageType) {
   };
 }
 
-/* Extracts the unique damage types covered by a damage choice allocation (for Strange Amulet post-damage gain checks). */
+/* [ITEM-PASSIVE] [DAMAGE] Extracts the unique damage types covered by a damage choice allocation (for Strange Amulet post-damage gain checks). */
 function getDamageTypesFromAllocation(choice) {
   if (!choice) return [];
 
@@ -81,7 +81,7 @@ function getDamageTypesFromAllocation(choice) {
   return [...damageTypes];
 }
 
-/* Returns passive stat-gain-on-damage effects (e.g. Strange Amulet) that apply given the damage type allocation. */
+/* [ITEM-PASSIVE] [DAMAGE] Returns passive stat-gain-on-damage effects (e.g. Strange Amulet) that apply given the damage type allocation. */
 export function getPostDamageEffectsForChoice(player, choice) {
   const damageTypes = getDamageTypesFromAllocation(choice);
   if (damageTypes.length === 0) return [];

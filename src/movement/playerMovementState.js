@@ -1,7 +1,6 @@
 import { getHauntMovementOptionsState, getHauntCombatActorProxyState } from "../haunts/hauntDomain";
 
-// Returns the extra move cost imposed by enemies on the current tile.
-// Heroes pay +1 per traitor/monster on tile; the traitor pays +1 per hero on tile.
+/* [MOVEMENT] [COMBAT] Returns the extra move cost imposed by enemies on the current tile. Heroes pay +1 per traitor/monster on tile; the traitor pays +1 per hero on tile. */
 function getEnemyObstacleCost(game, playerIndex) {
   if (game.gamePhase !== "hauntActive" || !game.hauntState) return 0;
 
@@ -28,8 +27,7 @@ function getEnemyObstacleCost(game, playerIndex) {
   }
 }
 
-// Returns the list of legal moves for the current player this step (type: move/backtrack/explore/wall-move).
-// Called by resolveBoardMoveActionState and the keyboard handler.
+/* [MOVEMENT] Returns the list of legal moves for the current player this step (type: move/backtrack/explore/wall-move). */
 export function getValidMovesState({
   game,
   currentPlayer,
@@ -125,8 +123,7 @@ export function getValidMovesState({
   return moves;
 }
 
-// Applies a single movement step: deducts move cost, updates player position, sets message.
-// Called by resolveMovePlayerActionState.
+/* [MOVEMENT] Applies a single movement step: deducts move cost, updates player position, sets message. */
 export function movePlayerState(
   g,
   { nx, ny, cost, useSkeletonKey, skeletonKeyRoll, getLeaveMoveCost, canUseArmedSkeletonKeyMovement }
@@ -179,8 +176,7 @@ export function movePlayerState(
   };
 }
 
-// Undoes the last step in movePath, refunds the cost, and returns the player to the previous position.
-// Called by resolveBacktrackActionState.
+/* [MOVEMENT] Undoes the last step in movePath, refunds the cost, and returns the player to the previous position. */
 export function backtrackPlayerState(g) {
   const path = g.movePath;
   if (path.length < 2) return g;
@@ -202,8 +198,7 @@ export function backtrackPlayerState(g) {
   };
 }
 
-// Starts an exploration attempt: moves the player onto an unknown position and calculates valid
-// tile rotations, entering pendingExplore state. Called by resolveExploreActionState.
+/* [MOVEMENT] [TILE-PLACEMENT] Starts an exploration attempt: moves the player onto an unknown position and calculates valid tile rotations, entering pendingExplore state. */
 export function exploreState(g, { dir, nx, ny, cost, OPPOSITE, getLeaveMoveCost }) {
   const player = g.players[g.currentPlayerIndex];
   const floor = player.floor;
@@ -254,8 +249,7 @@ export function exploreState(g, { dir, nx, ny, cost, OPPOSITE, getLeaveMoveCost 
   };
 }
 
-// Transitions to the tile rotation phase (for pendingExplore) or resets the movePath (for normal moves).
-// Called by GameBoard handleConfirmMove.
+/* [MOVEMENT] [TILE-PLACEMENT] Transitions to the tile rotation phase (for pendingExplore) or resets the movePath (for normal moves). */
 export function confirmMoveState(g) {
   const p = g.players[g.currentPlayerIndex];
 
@@ -274,9 +268,7 @@ export function confirmMoveState(g) {
   };
 }
 
-// Moves the current player through a stair/connected link to another floor tile.
-// Handles both forward (cost deducted) and backtrack (cost refunded) cases.
-// Called by resolveChangeFloorActionState.
+/* [MOVEMENT] Moves the current player through a stair/connected link to another floor. Handles both forward (cost deducted) and backtrack (cost refunded) cases. */
 export function changeFloorState(g, { getConnectedMoveTarget, getLeaveMoveCost }) {
   const p = g.players[g.currentPlayerIndex];
   const currentTile = g.board[p.floor]?.find((t) => t.x === p.x && t.y === p.y);
@@ -326,9 +318,7 @@ export function changeFloorState(g, { getConnectedMoveTarget, getLeaveMoveCost }
   };
 }
 
-// Places a tile from pendingSpecialPlacement (Panic Room staircase, dog move, etc.) onto the board.
-// Handles move-existing (relocates an already-placed tile) and new placements.
-// Offers Idol choice if the placed tile triggers an event symbol.
+/* [TILE-PLACEMENT] [MOVEMENT] Places a tile from pendingSpecialPlacement (Panic Room staircase, dog move, etc.) onto the board. Handles move-existing and new placements; offers Idol choice when the tile triggers an event symbol. */
 export function placePendingSpecialTileState(g, placement, { getIdolChoiceStateForQueuedEvent }) {
   const pendingPlacement = g.pendingSpecialPlacement;
   if (!pendingPlacement) return { game: g, cameraFloor: null };

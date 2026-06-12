@@ -45,24 +45,24 @@ const HAUNT_RUNTIME_REGISTRY = {
   },
 };
 
-// Look up a haunt's static definition (scenario text, win conditions, etc.) by ID.
+/* [HAUNT-SETUP] [LOOKUP] Look up a haunt's static definition (scenario text, win conditions, etc.) by ID. */
 export function getHauntDefinitionById(id) {
   if (!id) return null;
   return HAUNT_REGISTRY[id] || null;
 }
 
-// Returns all registered haunt definitions (used to build the haunt-selection list, if any).
+/* [HAUNT-SETUP] [LOOKUP] Returns all registered haunt definitions (used to build the haunt-selection list). */
 export function getAllHauntDefinitions() {
   return Object.values(HAUNT_REGISTRY);
 }
 
-// Returns the runtime hook bundle for a haunt (movement overrides, combat hooks, etc.) by ID.
+/* [HAUNT-SETUP] [LOOKUP] Returns the runtime hook bundle for a haunt (movement overrides, combat hooks, etc.) by ID. */
 export function getHauntRuntimeHooksById(id) {
   if (!id) return null;
   return HAUNT_RUNTIME_REGISTRY[id] || null;
 }
 
-// Temporary behavior: always pick Haunt 1 after a triggered haunt roll.
+/* [HAUNT-SETUP] Temporary behavior: always picks Haunt 1 after a triggered haunt roll. */
 export function selectTriggeredHauntDefinition() {
   return haunt1Definition;
 }

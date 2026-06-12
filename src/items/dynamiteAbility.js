@@ -5,7 +5,7 @@ const DYNAMITE_DAMAGE = 4;
 const DYNAMITE_DAMAGE_TYPE = "physical";
 const DYNAMITE_SAFE_THRESHOLD = 4;
 
-/* Returns the inventory card for the viewed card; null if not in inventory. Private local copy. */
+/* [LOOKUP] Returns the inventory card for the viewed card; null if not in inventory. Private local copy. */
 function getInventoryCard(game, viewedCard) {
   if (!viewedCard || viewedCard.ownerCollection !== "inventory") return null;
   const owner = game.players[viewedCard.ownerIndex];
@@ -18,6 +18,7 @@ function getInventoryCard(game, viewedCard) {
  *
  * deps: { getMovementNeighbors, getTileByPosition }
  */
+/* [ITEM-ABILITY] [TILE-EFFECT] Activates the Dynamite: marks it used, clears inventory, and opens a tile-choice event state for the target tile. */
 export function applyDynamiteNowState(g, viewedCard, deps = {}) {
   const { getMovementNeighbors, getTileByPosition } = deps;
 
@@ -97,6 +98,7 @@ export function applyDynamiteNowState(g, viewedCard, deps = {}) {
  * Used to make pre-roll items (Angel's Feather) and post-roll items
  * (Lucky Coin, Creepy Doll, Rabbit's Foot) available during dynamite rolls.
  */
+/* [DICE-ROLL] [ITEM-ABILITY] Builds an event state that signals "Speed roll required" for a given player, enabling pre-roll and post-roll items during dynamite rolls. */
 export function buildDynamiteRollReadyEventState(g, playerIndex) {
   const player = g.players[playerIndex];
   if (!player) return null;
@@ -126,6 +128,7 @@ export function buildDynamiteRollReadyEventState(g, playerIndex) {
  * Returns { dynamiteState, rollReadyEventState } where rollReadyEventState
  * enables pre-roll and post-roll items for the first player in the queue.
  */
+/* [ITEM-ABILITY] [TILE-EFFECT] Builds the dynamite roll queue (attacker first, then others in turn order) after the player picks a target tile. Returns { dynamiteState, rollReadyEventState }. */
 export function buildDynamiteThrowState(g, floor, x, y) {
   const attackerPlayerIndex = g.currentPlayerIndex;
   const numPlayers = g.players.length;
@@ -157,6 +160,7 @@ export function buildDynamiteThrowState(g, floor, x, y) {
  * the queue advanced for a safe roll). Clears dynamiteState if queue
  * becomes empty after a safe roll.
  */
+/* [DICE-ANIMATION] [TILE-EFFECT] [DAMAGE] Processes a single Speed roll result for the first player in the dynamite queue. Applies damage or advances the queue. */
 export function advanceDynamiteRollState(g, playerIndex, rollArray, precomputedTotal = null) {
   const dynamiteState = g.dynamiteState;
   if (!dynamiteState) return g;

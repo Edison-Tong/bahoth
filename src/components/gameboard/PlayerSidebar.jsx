@@ -1,5 +1,4 @@
-// Collapsible sidebar listing all players' stats, inventory, and omens.
-// Also shows haunt-specific UI (Jack's Spirit tracker, knowledge tokens) when haunt is active.
+/* [SIDEBAR] [OVERLAY] Collapsible sidebar listing all players' stats, inventory, and omens. Also shows haunt-specific UI (Jack's Spirit tracker, knowledge tokens) when haunt is active. */
 export default function PlayerSidebar({
   game,
   expandedSidebarPlayers,
@@ -33,7 +32,7 @@ export default function PlayerSidebar({
       ? `${spirit.speedRoll.join(", ")} (${spirit.speedTotal ?? spirit.movesLeft ?? 0})`
       : "-";
 
-  /* Renders the Jack's Spirit monster stat card in the sidebar when the spirit is active. */
+  /* [SIDEBAR] [SPIRIT] Renders the Jack's Spirit monster stat card in the sidebar when the spirit is active. */
   function renderMonsterCard() {
     if (!spiritIsActive) return null;
 

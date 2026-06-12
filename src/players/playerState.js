@@ -1,7 +1,6 @@
 import { buildDynamiteRollReadyEventState } from "../items/dynamiteAbility";
 
-// Adjusts a single stat by `amount` index steps (clamped to track bounds).
-// Pass options.preventDeath=true to stop the index at 1 instead of 0. Called widely.
+/* [STAT-CHANGE] [PLAYER-STATE] Adjusts a single stat by `amount` index steps (clamped to track bounds). Pass options.preventDeath=true to stop the index at 1 instead of 0. */
 export function applyStatChangeState(players, playerIndex, stat, amount, options = {}) {
   if (!amount) return players;
 
@@ -18,8 +17,7 @@ export function applyStatChangeState(players, playerIndex, stat, amount, options
   });
 }
 
-// Applies a full allocation map to multiple stats at once (increase or decrease mode).
-// Same preventDeath option as applyStatChangeState. Called by confirmDamageChoiceState.
+/* [DAMAGE] [PLAYER-STATE] Applies a full allocation map to multiple stats at once (increase or decrease mode). Accepts the same preventDeath option as applyStatChangeState. */
 export function applyDamageAllocationState(
   players,
   playerIndex,
@@ -48,7 +46,7 @@ export function applyDamageAllocationState(
 
 import { getHauntCanDeadPlayerTakeTurnState } from "../haunts/hauntDomain";
 
-// Returns true if applying the choice allocation would reduce any stat to 0 (lethal).
+/* [DAMAGE] [VALIDATION] Returns true if applying the choice allocation would reduce any stat to 0 (lethal). */
 function isLethalDamageAllocation(player, choice) {
   if (!player || !choice || choice.adjustmentMode === "increase") return false;
 
@@ -61,13 +59,12 @@ function isLethalDamageAllocation(player, choice) {
   return Object.values(previewStatIndex).some((value) => value <= 0);
 }
 
-// Returns true if the player is carrying the Skull omen (in inventory or omens).
+/* [PLAYER-STATE] [OMEN] Returns true if the player is carrying the Skull omen (in inventory or omens). */
 function playerHasSkull(player) {
   return [...(player?.omens ?? []), ...(player?.inventory ?? [])].some((card) => card.id === "skull");
 }
 
-// Core turn-pass: advances currentPlayerIndex to the next living player (skips dead, supports
-// haunt dead-turns and extra turns), resets all per-turn state, and sets the new player's movesLeft.
+/* [PLAYER-STATE] Core turn-pass: advances currentPlayerIndex to the next living player (skips dead, supports haunt dead-turns and extra turns), resets per-turn state, and sets the new player's movesLeft. */
 export function passTurnCoreState(g) {
   const shouldTakeExtraTurn = !!g.extraTurnAfterCurrent && !!g.players[g.currentPlayerIndex]?.isAlive;
   let next = shouldTakeExtraTurn ? g.currentPlayerIndex : (g.currentPlayerIndex + 1) % g.players.length;
@@ -117,8 +114,7 @@ export function passTurnCoreState(g) {
   };
 }
 
-// Wraps passTurnCore to first check for end-of-turn item passives (Necklace of Teeth).
-// If a choice is required, blocks the turn pass and shows the item's tileEffect prompt instead.
+/* [PLAYER-STATE] [ITEM-PASSIVE] Wraps passTurnCore to first check for end-of-turn item passives (Necklace of Teeth). If a choice is required, blocks the turn pass and shows the item's tileEffect prompt instead. */
 export function passTurnWithEndTurnItemsState(g, { resolveEndTurnItemPassiveState, passTurnCore, statLabels }) {
   const currentPlayer = g.players[g.currentPlayerIndex];
   const endTurnItemResolution = resolveEndTurnItemPassiveState(g);
@@ -147,8 +143,7 @@ export function passTurnWithEndTurnItemsState(g, { resolveEndTurnItemPassiveStat
   return passTurnCore(g);
 }
 
-// Increments or decrements a single stat inside the active damageChoice allocation.
-// Respects the total-damage cap and per-stat bounds. Called by DamageChoiceOverlay +/- buttons.
+/* [DAMAGE] Increments or decrements a single stat inside the active damageChoice allocation. Respects the total-damage cap and per-stat bounds. */
 export function adjustDamageAllocationChoiceState(g, stat, delta, { getPostDamageEffectsForChoice }) {
   const choice = g.damageChoice;
   if (!choice || !choice.allowedStats.includes(stat)) return g;
@@ -187,7 +182,7 @@ export function adjustDamageAllocationChoiceState(g, stat, delta, { getPostDamag
   };
 }
 
-// Toggles the active damageChoice between its original damage type and "general" (Brooch item).
+/* [DAMAGE] [ITEM-PASSIVE] Toggles the active damageChoice between its original damage type and "general" (Brooch of Blood item). */
 export function toggleDamageConversionChoiceState(g, { updateDamageChoiceType }) {
   const choice = g.damageChoice;
   if (!choice?.canConvertToGeneral) return g;
@@ -199,8 +194,7 @@ export function toggleDamageConversionChoiceState(g, { updateDamageChoiceType })
   };
 }
 
-// Applies Strange Amulet-style "gain stat after taking damage" passive effects.
-// Returns { players, message }. Called by confirmDamageChoiceState.
+/* [DAMAGE] [ITEM-PASSIVE] Applies Strange Amulet-style "gain stat after taking damage" passive effects. Returns { players, message }. */
 export function applyPostDamagePassiveEffectsState(players, playerIndex, choice, { applyStatChange, statLabels }) {
   if (!choice || choice.amount <= 0 || !choice.postDamageEffects?.length) {
     return { players, message: "" };
@@ -227,9 +221,7 @@ export function applyPostDamagePassiveEffectsState(players, playerIndex, choice,
   };
 }
 
-// Validates the allocation, applies damage, runs passives, then routes by choice.source:
-// combat (may pass turn on death), haunt-exorcise, dynamite, event, or default (pass turn).
-// Also intercepts Skull omen before-death challenge. Called by resolveConfirmDamageChoiceActionState.
+/* [DAMAGE] [STAT-CHANGE] Validates the allocation, applies damage, runs passives, then routes by choice.source: combat (may pass turn on death), haunt-exorcise, dynamite, event, or default. Also intercepts Skull omen before-death challenge. */
 export function confirmDamageChoiceState(
   g,
   {
@@ -396,8 +388,7 @@ export function confirmDamageChoiceState(
   };
 }
 
-// Returns a preview of what statIndex will look like after the current damageChoice is applied.
-// Used by stat-track UI to highlight the pending gain/loss cell.
+/* [DAMAGE] [FORMAT] Returns a preview of what statIndex will look like after the current damageChoice is applied. Used by stat-track UI to highlight the pending gain/loss cell. */
 export function getDamagePreviewState(player, choice) {
   const preview = { ...player.statIndex };
   if (!choice) return preview;
@@ -413,8 +404,7 @@ export function getDamagePreviewState(player, choice) {
   return preview;
 }
 
-// Returns the CSS class for a stat track cell given its position relative to current and preview.
-// Used by DamageChoiceOverlay and the stat track component.
+/* [PLAYER-STATE] [FORMAT] Returns the CSS class for a stat track cell given its position relative to current and preview. */
 export function getStatTrackCellClassState(index, currentIndex, previewIndex, adjustmentMode = "decrease") {
   if (index === currentIndex && index === previewIndex) {
     return "stat-track-cell stat-track-cell-current";

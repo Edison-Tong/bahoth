@@ -1,5 +1,4 @@
-// Finds the linked tile for Grand Staircase / Upper Landing / Secret Staircase connections.
-// Returns { targetTile, targetFloor, isBacktrack } or null if no link exists from the current tile.
+/* [MOVEMENT] [LOOKUP] Finds the linked tile for Grand Staircase / Upper Landing / Secret Staircase connections. Returns { targetTile, targetFloor, isBacktrack } or null if no link exists. */
 export function getConnectedMoveTarget(board, currentTile, path) {
   if (!currentTile) return null;
 
@@ -32,13 +31,12 @@ export function getConnectedMoveTarget(board, currentTile, path) {
   return null;
 }
 
-// Returns true if the tile has a secret-passage token placed on it.
+/* [MOVEMENT] [LOOKUP] Returns true if the tile has a secret-passage token placed on it. */
 export function hasSecretPassageToken(tile) {
   return (tile?.tokens || []).some((token) => token.type === "secret-passage");
 }
 
-// Teleports the current player through a Secret Passage to `target`.
-// Handles backtrack (refunds cost) and forward move (costs 1). Called by GameBoard handleSecretPassage.
+/* [MOVEMENT] Teleports the current player through a Secret Passage to `target`. Handles backtrack (refunds cost) and forward move (costs 1). */
 export function resolveSecretPassageMoveState({ game, target, getTileAtPosition }) {
   const player = game.players[game.currentPlayerIndex];
   if (game.turnPhase !== "move") return game;

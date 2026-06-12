@@ -11,7 +11,7 @@ import { useOnlineSync } from "./hooks/useOnlineSync";
 // Handles WebSocket messages for online mode and passes game state down to <GameBoard>.
 const PLAYER_COLORS = ["#c0392b", "#2980b9", "#27ae60", "#f39c12", "#8e44ad", "#e67e22"];
 
-// Generates a short random 5-character room code for online games.
+/* [LOBBY] [ONLINE-SYNC] Generates a short random 5-character room code for online games. */
 function generateGameCode() {
   const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   let code = "";
@@ -21,7 +21,7 @@ function generateGameCode() {
   return code;
 }
 
-/* Root component. Manages pre-game screens (mode, lobby, char-select) and WebSocket setup for online play. */
+/* [LOBBY] [ONLINE-SYNC] Root component. Manages pre-game screens (mode, lobby, char-select) and WebSocket setup for online play. */
 function App() {
   // Screens: 'mode' | 'online-name' | 'online-menu' | 'online-lobby'
   //        | 'local-count' | 'local-names' | 'local-lobby'
@@ -188,7 +188,7 @@ function App() {
     });
   }, [charPicks, players, gameCode, isHost, screen]);
 
-  /* Renders a small backend connectivity badge (Connected / Offline / Checking…). */
+  /* [LOBBY] [ONLINE-SYNC] Renders a small backend connectivity badge (Connected / Offline / Checking…). */
   function renderBackendStatus() {
     const statusLabel =
       backendStatus === "connected"
@@ -212,7 +212,7 @@ function App() {
     if (playerName.trim()) setScreen("online-menu");
   }
 
-  /* Generates a game code, registers as host, and sends create-room WS message; transitions to online-lobby. */
+  /* [LOBBY] [ONLINE-SYNC] Generates a game code, registers as host, and sends create-room WS message; transitions to online-lobby. */
   function handleCreateGame() {
     const code = generateGameCode();
     setGameCode(code);
@@ -224,7 +224,7 @@ function App() {
     send({ type: "create-room", code, playerName, color: PLAYER_COLORS[0] });
   }
 
-  /* Sends join-room WS message and transitions to online-lobby. */
+  /* [LOBBY] [ONLINE-SYNC] Sends join-room WS message and transitions to online-lobby. */
   function handleJoinGame(e) {
     e.preventDefault();
     if (!joinCode.trim()) return;
@@ -238,7 +238,7 @@ function App() {
     send({ type: "join-room", code, playerName, color: PLAYER_COLORS[1] });
   }
 
-  /* Sends leave-room WS message, resets all online state, and returns to online-menu. */
+  /* [LOBBY] [ONLINE-SYNC] Sends leave-room WS message, resets all online state, and returns to online-menu. */
   function handleLeaveGame() {
     if (gameCode) send({ type: "leave-room", code: gameCode });
     setGameCode("");
@@ -263,7 +263,7 @@ function App() {
     setScreen("local-names");
   }
 
-  /* Collects player names one at a time for pass-and-play; transitions to local-lobby once all are entered. */
+  /* [LOBBY] Collects player names one at a time for pass-and-play; transitions to local-lobby once all are entered. */
   function handleLocalNameSubmit(e) {
     e.preventDefault();
     if (!currentNameInput.trim()) return;
@@ -287,7 +287,7 @@ function App() {
     }
   }
 
-  /* Resets all local pass-and-play state and returns to the mode selection screen. */
+  /* [LOBBY] Resets all local pass-and-play state and returns to the mode selection screen. */
   function handleLocalLeave() {
     setLocalNames([]);
     setCurrentNameIndex(0);
@@ -311,7 +311,7 @@ function App() {
     setScreen("char-select");
   }
 
-  /* Handles character selection: online sends pick to server; pass-and-play cycles through each player locally. */
+  /* [LOBBY] [ONLINE-SYNC] Handles character selection: online sends pick to server; pass-and-play cycles through each player locally. */
   function handlePickCharacter(character) {
     if (gameCode) {
       // Online mode: send this player's pick to the server
@@ -335,7 +335,7 @@ function App() {
     }
   }
 
-  /* Returns an array of already-chosen character names to prevent duplicate picks in char-select. */
+  /* [LOBBY] [VALIDATION] Returns an array of already-chosen character names to prevent duplicate picks in char-select. */
   function getChosenCharacterNames() {
     return Object.values(characterChoices).map((c) => c.name);
   }

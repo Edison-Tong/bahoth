@@ -3,7 +3,7 @@ import { OPPOSITE, STAT_LABELS } from "../../game/gameState";
 
 const JACKS_SPIRIT_SPEED_DICE = 3;
 
-// Creates the clean starting scenario state for Haunt 1 (Jack Is Back).
+/* [HAUNT-SETUP] Creates the clean starting scenario state for Haunt 1 (Jack Is Back). */
 export function createInitialScenarioState() {
   return {
     traitorCorpsePosition: null,
@@ -24,19 +24,19 @@ export function createInitialScenarioState() {
   };
 }
 
-/* Shorthand: returns the current player object. */
+/* [PLAYER-STATE] Shorthand: returns the current player object. */
 function getCurrentPlayer(game) {
   return game.players[game.currentPlayerIndex] || null;
 }
 
-/* Returns the tile occupied by the current player. */
+/* [LOOKUP] Returns the tile occupied by the current player. */
 function getCurrentTile(game) {
   const player = getCurrentPlayer(game);
   if (!player) return null;
   return (game.board[player.floor] || []).find((tile) => tile.x === player.x && tile.y === player.y) || null;
 }
 
-/* Marks a haunt action key as used this turn (once-per-turn gate). */
+/* [HAUNT-ACTION] [VALIDATION] Marks a haunt action key as used this turn (once-per-turn gate). */
 function markHauntActionUsed(hauntState, actionKey) {
   return {
     ...hauntState,
@@ -47,12 +47,12 @@ function markHauntActionUsed(hauntState, actionKey) {
   };
 }
 
-/* Creates a "turnNumber:playerIndex:actionId" string used as the once-per-turn usage key. */
+/* [HAUNT-ACTION] Creates a "turnNumber:playerIndex:actionId" string used as the once-per-turn usage key. */
 function createUsageKey(game, actionId) {
   return `${game.turnNumber}:${game.currentPlayerIndex}:${actionId}`;
 }
 
-/* Merges hauntState.scenarioState with defaults to ensure all expected fields are present. */
+/* [HAUNT-ACTION] Merges hauntState.scenarioState with defaults to ensure all expected fields are present. */
 function getScenarioState(hauntState) {
   const scenarioState = hauntState?.scenarioState || {};
   const defaults = createInitialScenarioState();
@@ -68,7 +68,7 @@ function getScenarioState(hauntState) {
   };
 }
 
-/* Returns "Tile Name (floor)" or "(x, y) floor" for display in action messages. */
+/* [FORMAT] [BOARD-LAYOUT] Returns "Tile Name (floor)" or "(x, y) floor" for display in action messages. */
 function formatTileReference(game, placement) {
   const tile = (game.board?.[placement.floor] || []).find(
     (candidate) => candidate.x === placement.x && candidate.y === placement.y
@@ -77,14 +77,13 @@ function formatTileReference(game, placement) {
   return `(${placement.x}, ${placement.y}) ${placement.floor}`;
 }
 
-/* Returns hero player indexes who do not already hold the Knowledge of Jack token. */
+/* [HAUNT-COMBAT] [VALIDATION] Returns hero player indexes who do not already hold the Knowledge of Jack token. */
 function getKnowledgeEligibleHeroIndexes(game, tokenHolders = []) {
   const holderSet = new Set(tokenHolders);
   return getHeroIndexes(game).filter((playerIndex) => !holderSet.has(playerIndex));
 }
 
-// Returns the Jack's Spirit proxy actor for the traitor when the traitor is dead and the spirit is active.
-// Used by the combat system and movement system to locate/target the spirit instead of the corpse.
+/* [SPIRIT] Returns the Jack's Spirit proxy actor for the traitor when the traitor is dead and the spirit is active. Used by the combat and movement systems to locate/target the spirit instead of the corpse. */
 export function getCombatActorProxyState(game, actorIndex) {
   if (game.activeHauntId !== "haunt_1" || !game.hauntState) return null;
 
@@ -104,8 +103,7 @@ export function getCombatActorProxyState(game, actorIndex) {
   };
 }
 
-// Returns the spirit's valid move options when the traitor is dead and controlling Jack's Spirit.
-// Replaces the normal movement list (each hero on the tile costs +1 extra to leave).
+/* [SPIRIT] [MOVEMENT] Returns the spirit's valid move options when the traitor is dead and controlling Jack's Spirit. Replaces the normal movement list. */
 export function getSpecialMoveOptionsState({ game, currentPlayer, DIR, getTileAt, backtrackPos }) {
   if (game.activeHauntId !== "haunt_1" || game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || !game.hauntState) {
     return null;
@@ -152,7 +150,7 @@ export function getSpecialMoveOptionsState({ game, currentPlayer, DIR, getTileAt
   return spiritMoves;
 }
 
-// Returns visual token labels for a board tile position (corpse, exorcism circles, Jack's Spirit).
+/* [SPIRIT] [BOARD-LAYOUT] Returns visual token labels for a board tile position (corpse, exorcism circles, Jack's Spirit). */
 export function getTileTokenLabelsState(game, { floor, x, y }) {
   if (game.activeHauntId !== "haunt_1" || !game.hauntState) return [];
 
@@ -180,13 +178,13 @@ export function getTileTokenLabelsState(game, { floor, x, y }) {
   return labels;
 }
 
-// Returns player indexes who currently hold the Knowledge of Jack token.
+/* [HAUNT-COMBAT] [LOOKUP] Returns player indexes who currently hold the Knowledge of Jack token. */
 export function getKnowledgeTokenHoldersState(game) {
   if (game.activeHauntId !== "haunt_1" || !game.hauntState) return [];
   return getScenarioState(game.hauntState).revealedKnowledgeOfJackHolders;
 }
 
-// Returns which haunt action buttons are currently enabled for the current player.
+/* [HAUNT-ACTION] [VALIDATION] Returns which haunt action buttons are currently enabled for the current player. */
 export function getActionAvailabilityState(game, { hauntActionLocked }) {
   if (game.activeHauntId !== "haunt_1" || game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || !game.hauntState) {
     return {
@@ -240,7 +238,7 @@ export function getActionAvailabilityState(game, { hauntActionLocked }) {
   };
 }
 
-// Returns true if a dead player (traitor with active Jack's Spirit) can still take a turn.
+/* [SPIRIT] [PLAYER-STATE] Returns true if a dead player (traitor with active Jack's Spirit) can still take a turn. */
 export function canDeadPlayerTakeTurn(game, playerIndex) {
   if (game.activeHauntId !== "haunt_1" || !game.hauntState) return false;
   const traitorIndex = game.hauntState.traitorPlayerIndex;
@@ -250,7 +248,7 @@ export function canDeadPlayerTakeTurn(game, playerIndex) {
   return !traitor?.isAlive && !!spirit?.active;
 }
 
-// Returns the list of action buttons to show in the haunt panel (pending choices take priority).
+/* [HAUNT-ACTION] [OVERLAY] Returns the list of action buttons to show in the haunt panel (pending choices take priority). */
 export function getActionButtonsState(game, context) {
   const scenarioState = getScenarioState(game.hauntState);
   const pendingChoice = scenarioState.pendingChoice;
@@ -301,7 +299,7 @@ export function getActionButtonsState(game, context) {
   ].filter((action) => action.enabled);
 }
 
-// Main action dispatcher: routes actionId to the correct handler (learn, study, exorcise, stalk-prey).
+/* [HAUNT-ACTION] Main action dispatcher: routes actionId to the correct handler (learn, study, exorcise, stalk-prey). */
 export function resolveActionState(game, { actionId }) {
   if (typeof actionId === "string" && actionId.startsWith("pending-assign-knowledge:")) {
     const playerIndex = Number(actionId.replace("pending-assign-knowledge:", ""));
@@ -335,12 +333,12 @@ export function resolveActionState(game, { actionId }) {
   return game;
 }
 
-/* Returns the current stat dice count for a player's stat (character track value). */
+/* [PLAYER-STATE] [DICE-ROLL] Returns the current stat dice count for a player's stat (character track value). */
 function getTraitDiceCount(player, stat) {
   return player?.character?.[stat]?.[player?.statIndex?.[stat]] ?? 0;
 }
 
-/* Creates an empty lastRoll object for a haunt action roll (before dice are resolved). */
+/* [HAUNT-ACTION] [DICE-ROLL] Creates an empty lastRoll object for a haunt action roll (before dice are resolved). */
 function getEmptyLastRoll(stat, total = null) {
   return {
     label: STAT_LABELS[stat] || "Trait",
@@ -352,7 +350,7 @@ function getEmptyLastRoll(stat, total = null) {
   };
 }
 
-/* Builds the hauntActionRoll awaiting-roll state for a haunt action that requires a trait roll. */
+/* [HAUNT-ACTION] [DICE-ROLL] Builds the hauntActionRoll awaiting-roll state for a haunt action that requires a trait roll. */
 function buildPendingActionRoll(game, actionId, stat, options = {}) {
   const currentPlayer = getCurrentPlayer(game);
   if (!currentPlayer) return game;
@@ -382,12 +380,12 @@ function buildPendingActionRoll(game, actionId, stat, options = {}) {
   };
 }
 
-/* Returns the current hauntActionRoll state, or null. */
+/* [HAUNT-ACTION] Returns the current hauntActionRoll state, or null. */
 function getActionRoll(game) {
   return game.hauntActionRoll || null;
 }
 
-/* Computes { actionId, rollTotal, bonus, effectiveTotal, threshold, success } from the settled haunt action roll. */
+/* [HAUNT-ACTION] [DICE-ROLL] Computes { actionId, rollTotal, bonus, effectiveTotal, threshold, success } from the settled haunt action roll. */
 function getActionRollResult(game) {
   const rollState = getActionRoll(game);
   const rollTotal = Number(rollState?.lastRoll?.total);
@@ -406,7 +404,7 @@ function getActionRollResult(game) {
   };
 }
 
-// Returns the roll-preview summary for the haunt action roll overlay.
+/* [HAUNT-ACTION] [OVERLAY] Returns the roll-preview summary for the haunt action roll overlay. */
 export function getActionRollPreviewState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1") {
     return null;
@@ -452,7 +450,7 @@ export function getActionRollPreviewState(game) {
   return null;
 }
 
-/* Removes hauntActionRoll from game state after the roll has been processed. */
+/* [HAUNT-ACTION] Removes hauntActionRoll from game state after the roll has been processed. */
 function clearHauntActionRoll(game) {
   if (!game.hauntActionRoll) return game;
   return {
@@ -461,7 +459,7 @@ function clearHauntActionRoll(game) {
   };
 }
 
-/* Syncs Jack's Spirit position to match the dead traitor's position when the traitor moves. */
+/* [SPIRIT] [MOVEMENT] Syncs Jack's Spirit position to match the dead traitor's position when the traitor moves. */
 function syncSpiritWithTraitorPosition(previousGame, nextGame) {
   if (nextGame.activeHauntId !== "haunt_1" || !nextGame.hauntState) return nextGame;
   const traitorIndex = nextGame.hauntState.traitorPlayerIndex;
@@ -501,22 +499,22 @@ function syncSpiritWithTraitorPosition(previousGame, nextGame) {
   };
 }
 
-/* Exported: syncs spirit position after any movement action. Delegates to syncSpiritWithTraitorPosition. */
+/* [SPIRIT] [MOVEMENT] Exported: syncs spirit position after any movement action. Delegates to syncSpiritWithTraitorPosition. */
 export function resolveAfterMovementState(previousGame, nextGame) {
   return syncSpiritWithTraitorPosition(previousGame, nextGame);
 }
 
-/* Returns true if the player at playerIndex is on the heroes team (not the traitor). */
+/* [PLAYER-STATE] [VALIDATION] Returns true if the player at playerIndex is on the heroes team (not the traitor). */
 function isHero(game, playerIndex) {
   return playerIndex !== game.hauntState?.traitorPlayerIndex;
 }
 
-/* Returns all hero player indexes from hauntState.teams. */
+/* [PLAYER-STATE] Returns all hero player indexes from hauntState.teams. */
 function getHeroIndexes(game) {
   return game.hauntState?.teams?.[HAUNT_TEAMS.HEROES]?.playerIndexes || [];
 }
 
-/* Builds a physical damageChoice (1 damage, might/speed) for haunt actions like Exorcise failure. */
+/* [DAMAGE] [HAUNT-ACTION] Builds a physical damageChoice (1 damage, might/speed) for haunt actions like Exorcise failure. */
 function createHauntPhysicalDamageChoice(game, playerIndex, sourceName) {
   const player = game.players[playerIndex];
   const allocation = {
@@ -542,17 +540,17 @@ function createHauntPhysicalDamageChoice(game, playerIndex, sourceName) {
   };
 }
 
-/* Returns indexes of hero players who are still alive. */
+/* [PLAYER-STATE] Returns indexes of hero players who are still alive. */
 function getLivingHeroIndexes(game) {
   return getHeroIndexes(game).filter((index) => game.players[index]?.isAlive);
 }
 
-/* Returns the tile at a given floor/x/y position. Local copy for line-of-sight checks. */
+/* [LOOKUP] [LINE-OF-SIGHT] Returns the tile at a given floor/x/y position. Local copy for line-of-sight checks. */
 function getTileAt(board, floor, x, y) {
   return (board?.[floor] || []).find((tile) => tile.x === x && tile.y === y) || null;
 }
 
-/* Returns { dir, dx, dy, steps } for straight-line travel between two same-floor positions; null if not axis-aligned. */
+/* [LINE-OF-SIGHT] Returns { dir, dx, dy, steps } for straight-line travel between two same-floor positions; null if not axis-aligned. */
 function getAxisTravel(from, target) {
   if (!from || !target) return null;
   if (from.floor !== target.floor) return null;
@@ -582,7 +580,7 @@ function getAxisTravel(from, target) {
   return null;
 }
 
-/* Returns true if from and target are connected by a continuous chain of open doorways in a straight line. */
+/* [LINE-OF-SIGHT] Returns true if from and target are connected by a continuous chain of open doorways in a straight line. */
 function hasDoorwayLineOfSight(board, from, target) {
   const travel = getAxisTravel(from, target);
   if (!travel) return false;
@@ -612,7 +610,7 @@ function hasDoorwayLineOfSight(board, from, target) {
   return true;
 }
 
-/* Returns true if fromIndex has doorway line-of-sight to targetIndex on the same floor. */
+/* [LINE-OF-SIGHT] Returns true if fromIndex has doorway line-of-sight to targetIndex on the same floor. */
 function hasLineOfSightSimple(game, fromIndex, targetIndex) {
   const from = game.players[fromIndex];
   const target = game.players[targetIndex];
@@ -620,7 +618,7 @@ function hasLineOfSightSimple(game, fromIndex, targetIndex) {
   return hasDoorwayLineOfSight(game.board, from, target);
 }
 
-/* Returns the omen-symbol tile farthest (by Manhattan distance + floor penalty) from origin; used to place Jack's Spirit. */
+/* [SPIRIT] [LOOKUP] Returns the omen-symbol tile farthest (by Manhattan distance + floor penalty) from origin; used to place Jack's Spirit. */
 function getFarthestOmenTileFrom(board, origin) {
   const omenTiles = Object.entries(board).flatMap(([floor, tiles]) =>
     (tiles || [])
@@ -647,7 +645,7 @@ function getFarthestOmenTileFrom(board, origin) {
   return scored[0];
 }
 
-/* Resets a player's stats to starting-index values and marks them alive. */
+/* [PLAYER-STATE] [STAT-CHANGE] Resets a player's stats to starting-index values and marks them alive. */
 function restoreStartingTraits(player) {
   const nextStatIndex = {
     might: player.character?.startIndex?.might ?? player.statIndex.might,
@@ -662,7 +660,7 @@ function restoreStartingTraits(player) {
   };
 }
 
-/* Gives the Knowledge of Jack token to the chosen hero; clears the assign-knowledge pending choice. */
+/* [HAUNT-ACTION] [HAUNT-COMBAT] Gives the Knowledge of Jack token to the chosen hero; clears the assign-knowledge pending choice. */
 function resolvePendingAssignKnowledgeState(game, recipientIndex) {
   if (game.activeHauntId !== "haunt_1" || !game.hauntState) return game;
   const scenarioState = getScenarioState(game.hauntState);
@@ -707,7 +705,7 @@ function resolvePendingAssignKnowledgeState(game, recipientIndex) {
   };
 }
 
-/* Moves an Exorcism Circle token to the target tile; clears the move-exorcism-token pending choice. */
+/* [HAUNT-ACTION] [SPIRIT] Moves an Exorcism Circle token to the target tile; clears the move-exorcism-token pending choice. */
 function resolvePendingMoveExorcismState(game, placementIndex) {
   if (game.activeHauntId !== "haunt_1" || !game.hauntState) return game;
   const scenarioState = getScenarioState(game.hauntState);
@@ -740,7 +738,7 @@ function resolvePendingMoveExorcismState(game, placementIndex) {
   };
 }
 
-/* Records the traitor's selected stalk-prey target tile; updates player/spirit position for preview. */
+/* [HAUNT-ACTION] [SPIRIT] Records the traitor's selected stalk-prey target tile; updates player/spirit position for preview. */
 function resolvePendingSelectStalkPreyState(game, optionId) {
   if (game.activeHauntId !== "haunt_1" || !game.hauntState) return game;
   const scenarioState = getScenarioState(game.hauntState);
@@ -794,7 +792,7 @@ function resolvePendingSelectStalkPreyState(game, optionId) {
   };
 }
 
-/* Confirms the stalk-prey placement, moving the traitor (and spirit if dead) to the chosen tile. */
+/* [HAUNT-ACTION] [SPIRIT] [MOVEMENT] Confirms the stalk-prey placement, moving the traitor (and spirit if dead) to the chosen tile. */
 function resolveConfirmStalkPreyPlacementState(game) {
   if (game.activeHauntId !== "haunt_1" || !game.hauntState) return game;
   const scenarioState = getScenarioState(game.hauntState);
@@ -853,7 +851,7 @@ function resolveConfirmStalkPreyPlacementState(game) {
   };
 }
 
-/* Sets up the Learn about Jack haunt action roll (Knowledge, threshold 5) from the Library. */
+/* [HAUNT-ACTION] [DICE-ROLL] Sets up the Learn about Jack haunt action roll (Knowledge, threshold 5) from the Library. */
 function resolveLearnAboutJackState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
     return game;
@@ -900,7 +898,7 @@ function resolveLearnAboutJackState(game) {
   };
 }
 
-/* Sets up the Study Exorcism haunt action roll (Knowledge, threshold 5) from an Event tile. */
+/* [HAUNT-ACTION] [DICE-ROLL] Sets up the Study Exorcism haunt action roll (Knowledge, threshold 5) from an Event tile. */
 function resolveStudyExorcismState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
     return game;
@@ -947,7 +945,7 @@ function resolveStudyExorcismState(game) {
   };
 }
 
-/* Sets up the Exorcise Jack's Spirit haunt action roll (Sanity, threshold 7 + exorcism bonus). */
+/* [HAUNT-ACTION] [SPIRIT] [DICE-ROLL] Sets up the Exorcise Jack's Spirit haunt action roll (Sanity, threshold 7 + exorcism bonus). */
 function resolveExorciseJacksSpiritState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
     return game;
@@ -1008,7 +1006,7 @@ function resolveExorciseJacksSpiritState(game) {
   };
 }
 
-/* Exported: processes Continue after a haunt action roll for learn-about-jack, study-the-exorcism, and exorcise-jacks-spirit. */
+/* [HAUNT-ACTION] [SPIRIT] Exported: processes Continue after a haunt action roll for learn-about-jack, study-the-exorcism, and exorcise-jacks-spirit. */
 export function resolveActionRollContinueState(game, { createDamageChoice }) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
     return game;
@@ -1195,7 +1193,7 @@ export function resolveActionRollContinueState(game, { createDamageChoice }) {
   return clearHauntActionRoll(game);
 }
 
-/* Starts the Stalk Prey action: computes candidate tiles not in line-of-sight of any hero and sets up the tile-choice pending choice. */
+/* [HAUNT-ACTION] [LINE-OF-SIGHT] Starts the Stalk Prey action: computes candidate tiles not in line-of-sight of any hero and sets up the tile-choice pending choice. */
 function resolveStalkPreyState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
     return game;
@@ -1288,7 +1286,7 @@ function resolveStalkPreyState(game) {
   };
 }
 
-/* Exported: handles traitor death → places corpse and spawns Jack's Spirit at the farthest omen tile; also chains exorcism-failure damage queue. */
+/* [SPIRIT] [DEATH] [DAMAGE] Exported: handles traitor death → places corpse and spawns Jack's Spirit at the farthest omen tile; also chains exorcism-failure damage queue. */
 export function resolveAfterDamageState(previousGame, nextGame) {
   if (nextGame.activeHauntId !== "haunt_1" || !nextGame.hauntState) return nextGame;
 
@@ -1378,7 +1376,7 @@ export function resolveAfterDamageState(previousGame, nextGame) {
   };
 }
 
-/* Rolls JACKS_SPIRIT_SPEED_DICE dice and returns { dice, total, moves }. */
+/* [SPIRIT] [DICE-ROLL] Rolls JACKS_SPIRIT_SPEED_DICE dice and returns { dice, total, moves }. */
 function rollSpiritSpeed(rollDice) {
   const dice = rollDice(JACKS_SPIRIT_SPEED_DICE);
   const total = dice.reduce((sum, value) => sum + value, 0);
@@ -1389,7 +1387,7 @@ function rollSpiritSpeed(rollDice) {
   };
 }
 
-/* Exported: at the start of the dead traitor's turn, checks if spirit is on corpse (revive) or rolls spirit speed. */
+/* [SPIRIT] [DICE-ROLL] Exported: at the start of the dead traitor's turn, checks if spirit is on corpse (revive) or rolls spirit speed. */
 export function resolveTurnStartState(game, { rollDice }) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1" || !game.hauntState) {
     return { game, diceAnimation: null };
@@ -1491,7 +1489,7 @@ export function resolveTurnStartState(game, { rollDice }) {
   };
 }
 
-/* Exported: applies the settled monster speed roll to Jack's Spirit, setting movesLeft for this turn. */
+/* [SPIRIT] [DICE-ANIMATION] Exported: applies the settled monster speed roll to Jack's Spirit, setting movesLeft for this turn. */
 export function resolveMonsterSpeedRollState(game, { dice, total, monsterName }) {
   if (game.activeHauntId !== "haunt_1" || !game.hauntState) return game;
   const scenarioState = getScenarioState(game.hauntState);
@@ -1522,7 +1520,7 @@ export function resolveMonsterSpeedRollState(game, { dice, total, monsterName })
   };
 }
 
-/* Exported: returns +2 if the attacker (hero) holds Knowledge of Jack and is fighting the traitor/spirit. */
+/* [HAUNT-COMBAT] [SPIRIT] Exported: returns +2 if the attacker (hero) holds Knowledge of Jack and is fighting the traitor/spirit. */
 export function getCombatKnowledgeBonus(game, actorIndex, defenderIndex, role) {
   if (game.activeHauntId !== "haunt_1" || !game.hauntState) return 0;
 

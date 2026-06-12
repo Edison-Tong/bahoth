@@ -1,7 +1,4 @@
-// Called by resolveEndTurnActionState (turnControllerState.js) on End Turn.
-// Returns { game } with a tileEffect prompt when the current tile has an end-of-turn
-// effect (furnace / collapsed / laundry-chute), or null if none applies.
-// Guard: returns null immediately if another tileEffect is already active.
+/* [TILE-EFFECT] Returns { game } with a tileEffect prompt when the current tile has an end-of-turn effect (furnace/collapsed/laundry-chute), or null if none applies. */
 export function getEndTurnTileAbilityState({ game, player, tile, currentPlayerIndex }) {
   // No end-of-turn effect on this tile, or a tileEffect is already pending — do nothing.
   if (!tile?.endOfTurn || game.tileEffect) {
@@ -66,9 +63,7 @@ export function getEndTurnTileAbilityState({ game, player, tile, currentPlayerIn
   return null;
 }
 
-// Called by the diceAnimation settlement timeout in GameBoard.jsx when purpose is
-// "collapsed", "collapsed-damage", or "furnace". Converts settled dice into the
-// tileEffect the player then reads and dismisses.
+/* [TILE-EFFECT] [DICE-ANIMATION] Called after the diceAnimation settles for "collapsed", "collapsed-damage", or "furnace": converts settled dice into the tileEffect the player then reads and dismisses. */
 export function resolveTileDiceAnimationState({ game, animation, baseTotal, getDamageReduction, createDiceModifier }) {
   // Stability roll for Collapsed Room.
   // animation.resolvedTotal may differ from baseTotal when an override item (e.g. Angel's Feather) forced the result.

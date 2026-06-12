@@ -1,9 +1,9 @@
-// Formats remaining moves into a readable string (e.g. "3 moves left.").
+/* [FORMAT] [MOVEMENT] Formats remaining moves into a readable string (e.g. "3 moves left."). */
 function formatMovesLeft(player) {
   return `${player.movesLeft} move${player.movesLeft !== 1 ? "s" : ""} left.`;
 }
 
-// Finds and removes the first weapon card from the item deck. Used by the Armory discover effect.
+/* [CARD-DECK] Finds and removes the first weapon card from the item deck. Used by the Armory discover effect. */
 export function drawWeaponItem(itemDeck) {
   const weaponIndex = itemDeck.findIndex((card) => card.isWeapon);
   if (weaponIndex === -1) {
@@ -21,9 +21,7 @@ export function drawWeaponItem(itemDeck) {
   };
 }
 
-// Applies all discover effects when a tile is placed: junk-room (obstacle token), panic-room
-// (Secret Staircase placement), armory (draw weapon), Mystic Elevator entry, and stat-gain tiles.
-// Returns the updated board, tileStack, itemDeck, players, drawnCard, turnPhase, message, and tileEffect.
+/* [TILE-PLACEMENT] [TILE-EFFECT] Applies all discover effects when a tile is placed: junk-room (obstacle token), panic-room (Secret Staircase placement), armory (draw weapon), Mystic Elevator entry, and stat-gain tiles. */
 export function applyPlacedTileDiscoverEffects({
   placedTile,
   player,

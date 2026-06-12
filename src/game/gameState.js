@@ -41,8 +41,7 @@ export const CRITICAL_STAT_INDEX = 1;
 export const TILE_SIZE = 150;
 export const GAP = 4;
 
-// Builds the full initial game state: shuffles decks, places starting tiles, and
-// initialises each player at the Entrance with their starting speed as movesLeft.
+/* [PLAYER-STATE] [BOARD-LAYOUT] Builds the full initial game state: shuffles decks, places starting tiles, and initialises each player at the Entrance with their starting speed as movesLeft. */
 export function initGameState(players) {
   const tileStack = createTileStack();
   const itemDeck = createItemDeck();
@@ -109,22 +108,22 @@ export function initGameState(players) {
   };
 }
 
-// Wrap a raw card object with a 'type' discriminator for the drawn-card display.
+/* [CARD-DISPLAY] Wraps a raw card object with a 'type' discriminator for the drawn-card display. */
 export function createDrawnItemCard(card) {
   return { type: "item", ...card };
 }
 
-/* Wraps a raw omen card with { type: "omen" } for use in player.omens. */
+/* [CARD-DECK] [OMEN] Wraps a raw omen card with { type: "omen" } for use in player.omens. */
 export function createDrawnOmenCard(card) {
   return { type: "omen", ...card };
 }
 
-/* Wraps a raw event card with { type: "event" } for use as drawnCard. */
+/* [CARD-DECK] [EVENT] Wraps a raw event card with { type: "event" } for use as drawnCard. */
 export function createDrawnEventCard(card) {
   return { type: "event", ...card };
 }
 
-// Returns false for routine move/rotate messages so the floating bubble stays hidden.
+/* [OVERLAY] [FORMAT] Returns false for routine move/rotate messages so the floating bubble stays hidden. */
 export function shouldShowMessageBubble(message) {
   if (!message || !String(message).trim()) return false;
 
@@ -138,7 +137,7 @@ export function shouldShowMessageBubble(message) {
   return !routinePatterns.some((pattern) => pattern.test(message));
 }
 
-// Returns true for "Now moving" messages that should linger longer in the bubble.
+/* [OVERLAY] [FORMAT] Returns true for "Now moving" messages that should linger longer in the bubble. */
 export function isStickyMessageBubble(message) {
   if (!message || !String(message).trim()) return false;
   return /^Now moving\b/i.test(String(message).trim());

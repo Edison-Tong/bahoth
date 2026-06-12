@@ -1,6 +1,6 @@
 import { appendEventSummary, describeTokenPlacementLocation, getDiscoveredTileOptions } from "./eventUtils";
 
-// Checks whether an event step's conditional matches the current game/event state.
+/* [EVENT] [VALIDATION] Checks whether an event step's conditional matches the current game/event state. */
 function matchesEventCondition(condition, g, eventState) {
   if (!condition) return true;
 
@@ -45,7 +45,7 @@ function matchesEventCondition(condition, g, eventState) {
   return true;
 }
 
-/* Returns true if total satisfies a roll condition (exact/min/max). Private helper. */
+/* [VALIDATION] [EVENT] Returns true if total satisfies a roll condition (exact/min/max). Private helper. */
 function matchesRollCondition(rollCondition, total) {
   if (!rollCondition) return true;
   if (rollCondition.exact !== undefined) return total === rollCondition.exact;
@@ -54,12 +54,12 @@ function matchesRollCondition(rollCondition, total) {
   return true;
 }
 
-// Returns the first outcome whose "when.roll" range includes `total`.
+/* [EVENT] [VALIDATION] Returns the first outcome whose "when.roll" range includes `total`. */
 export function getMatchingOutcome(outcomes, total) {
   return outcomes.find((outcome) => matchesRollCondition(outcome.when?.roll, total)) || null;
 }
 
-// Closes the active eventState and transitions to card or endTurn phase.
+/* [EVENT] Closes the active eventState and transitions to card or endTurn phase. */
 export function finalizeEventState(g, message) {
   return {
     game: {
@@ -71,8 +71,7 @@ export function finalizeEventState(g, message) {
   };
 }
 
-// Applies a single resolved event effect (stat change, damage, move, draw-card, etc.) to the game state.
-// Called by advanceEventResolution and haunt runtime hooks.
+/* [EVENT] [STAT-CHANGE] Applies a single resolved event effect (stat change, damage, move, draw-card, etc.) to the game state. */
 export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) {
   const {
     DIR,
@@ -84,7 +83,7 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
     resolveDamageEffect,
     createDamageChoice,
   } = deps;
-  /* Applies a single stat-change effect to the players array (lose/gain/heal on a stat or all stats). */ function applyEventStatChange(
+  /* [STAT-CHANGE] [EVENT] Applies a single stat-change effect to the players array (lose/gain/heal on a stat or all stats). */ function applyEventStatChange(
     players,
     playerIndex,
     statEffect,
@@ -484,9 +483,7 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
   return { game: g };
 }
 
-// Steps through the active event's steps list until it reaches a step requiring player input
-// (roll, choice, tile-choice, etc.), applying automatic effects along the way.
-// Returns { game, cameraFloor? }. Called by GameBoard after every event interaction.
+/* [EVENT] Steps through the active event's steps list until it reaches a step requiring player input (roll, choice, tile-choice, etc.), applying automatic effects along the way. Returns { game, cameraFloor? }. */
 export function advanceEventResolution(g, deps) {
   const { getEventRollButtonLabel, STAT_LABELS } = deps;
 

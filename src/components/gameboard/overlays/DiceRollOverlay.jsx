@@ -1,5 +1,4 @@
-// Overlay that blocks the board and shows dice during an unsettled diceAnimation.
-// Hidden once the animation settles (DiceBox takes over for the settled display).
+/* [DICE-ANIMATION] [OVERLAY] Overlay that blocks the board and shows dice during an unsettled diceAnimation. Hidden once the animation settles (DiceBox takes over for the settled display). */
 export default function DiceRollOverlay({ diceAnimation, renderDiceRow, isMyTurn = true }) {
   if (!diceAnimation || diceAnimation.settled) return null;
   if (diceAnimation.purpose === "event-damage-sequence" || diceAnimation.purpose === "event-trait-sequence-roll")

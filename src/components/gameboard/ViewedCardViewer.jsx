@@ -1,7 +1,6 @@
 import { CardAbilityContent } from "../EventResolutionModal";
 
-// Sidebar panel that shows the details and active-ability button(s) for a card the player
-// has clicked on (inventory item or omen). Closes when the player dismisses it.
+/* [CARD-DISPLAY] [OVERLAY] Sidebar panel that shows the details and active-ability button(s) for a card the player has clicked on (inventory item or omen). Closes when the player dismisses it. */
 export default function ViewedCardViewer({
   viewedCard,
   viewedCardActiveAbilityState,

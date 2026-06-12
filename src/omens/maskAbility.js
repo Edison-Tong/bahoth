@@ -1,4 +1,4 @@
-// Returns true if the Mask can push at least one explorer to an adjacent tile right now.
+/* [ITEM-MOVEMENT] [VALIDATION] Returns true if the Mask can push at least one explorer to an adjacent tile right now. */
 export function isMaskPushAvailableThisTurn(game, viewedCard, getMovementNeighbors) {
   if (!viewedCard || viewedCard.ownerCollection !== "omens") return false;
   if (game.postDiscovery) return false;
@@ -29,8 +29,7 @@ export function isMaskPushAvailableThisTurn(game, viewedCard, getMovementNeighbo
   return adjacent.length > 0;
 }
 
-// Activates the Mask: marks it used, then opens a tile-choice event state to push all co-located
-// explorers to an adjacent tile one at a time. Called by viewedCardAbilityController.
+/* [ITEM-MOVEMENT] [ITEM-ABILITY] Activates the Mask: marks it used, then opens a tile-choice event state to push all co-located explorers to an adjacent tile one at a time. */
 export function applyMaskNowState(game, viewedCard, deps) {
   const { isMaskAvailable, getDogMoveOptions, getTileByPosition } = deps;
 
@@ -147,7 +146,7 @@ export function applyMaskNowState(game, viewedCard, deps) {
   };
 }
 
-// Previews moving a specific player to the chosen tile (highlights destination before confirming).
+/* [ITEM-MOVEMENT] [TILE-PLACEMENT] Previews moving a specific player to the chosen tile (highlights destination before confirming). */
 export function previewMaskTileChoiceState(game, option, getTileAtPosition) {
   const awaiting = game.eventState?.awaiting;
   if (awaiting?.type !== "tile-choice") return null;
@@ -191,8 +190,7 @@ export function previewMaskTileChoiceState(game, option, getTileAtPosition) {
   };
 }
 
-// Confirms moving the current target player to the selected tile, then advances to the next target
-// (or clears the event state when all targets have been pushed).
+/* [ITEM-MOVEMENT] [TILE-PLACEMENT] Confirms moving the current target player to the selected tile, then advances to the next target (or clears event state when all targets have been pushed). */
 export function confirmMaskTileChoiceState(game, selectedOption, tile) {
   const awaiting = game.eventState?.awaiting;
   if (awaiting?.type !== "tile-choice") return null;

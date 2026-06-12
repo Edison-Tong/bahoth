@@ -1,8 +1,7 @@
 import { createDogTradeStartState } from "./dogAbility";
 import { applyHolySymbolDuringPendingExplore } from "./holySymbolAbility";
 
-// Dispatcher for omen "Use Now" actions that have their own bespoke flow.
-// Returns { handled, game?, dogTradeState?, closeViewedCard }. Called by viewedCardAbilityController.
+/* [ITEM-ABILITY] [OMEN] Dispatcher for omen "Use Now" actions that have their own bespoke flow. Returns { handled, game?, dogTradeState?, closeViewedCard }. */
 export function resolveSpecialOmenNowAbilityState(game, viewedCard, { oppositeByDirection, getDogTradeTargets }) {
   const action = viewedCard?.activeAbilityRule?.action;
 

@@ -1,5 +1,4 @@
-// Overlay that shows the haunt action roll result and preview (success/failure) after the dice settle,
-// waiting for the active player to click Continue.
+/* [HAUNT-ACTION] [OVERLAY] Overlay that shows the haunt action roll result and preview (success/failure) after the dice settle, waiting for the active player to click Continue. */
 export default function HauntActionRollOverlay({
   game,
   diceAnimation,

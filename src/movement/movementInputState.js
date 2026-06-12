@@ -1,8 +1,6 @@
 import { getValidMovesState } from "./playerMovementState";
 
-// Translates a raw keyboard keypress into a typed move action ({ type, dir/nx/ny/cost })
-// for the current player. Returns null if the key is not a valid move in the current phase.
-// Called by GameBoard.jsx onKeyDown handler.
+/* [MOVEMENT] [TILE-PLACEMENT] Translates a raw keyboard keypress into a typed move action for the current player. Returns null if the key is not valid in the current phase. */
 export function resolveKeyboardMoveAction({
   game,
   cameraFloor,

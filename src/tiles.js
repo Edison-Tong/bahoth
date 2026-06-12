@@ -384,7 +384,7 @@ export const TILES = [
   },
 ];
 
-// Shuffle an array (Fisher-Yates)
+/* [LOOKUP] Shuffles an array in place using Fisher-Yates. */
 function shuffle(array) {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -394,7 +394,7 @@ function shuffle(array) {
   return shuffled;
 }
 
-// Returns a freshly shuffled stack of all TILES (excludes the 5 starting tiles).
+/* [BOARD-LAYOUT] Returns a freshly shuffled stack of all TILES (excludes the 5 starting tiles). */
 export function createTileStack() {
   return shuffle(TILES);
 }

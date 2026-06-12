@@ -1,5 +1,4 @@
-// Determines availability, value options, and whether a value picker is needed for a card's active ability.
-// Called by the viewed-card UI to control the Use Now / value-picker flow.
+/* [ITEM-ABILITY] [VALIDATION] Determines availability, value options, and whether a value picker is needed for a card's active ability. Controls the Use Now / value-picker flow. */
 export function getItemAbilitySelectionState({
   game,
   viewedCard,

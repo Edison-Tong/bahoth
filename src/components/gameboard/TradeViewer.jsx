@@ -1,7 +1,6 @@
 import { isItemTradeLockedThisTurn } from "../../omens/dogAbility";
 
-// Sidebar panel showing the card-selection UI for a player-local or Dog remote trade.
-// Renders when tradeState.phase === "trade". Card rows highlight items locked this turn.
+/* [TRADE] [OVERLAY] Sidebar panel showing the card-selection UI for a player-local or Dog remote trade. Renders when tradeState.phase === "trade". Card rows highlight items locked this turn. */
 export default function TradeViewer({ game, tradeState, handlers, actionsDisabled = false }) {
   const {
     handleToggleDogOwnerGive,

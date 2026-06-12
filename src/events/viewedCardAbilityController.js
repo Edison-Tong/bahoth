@@ -1,6 +1,4 @@
-// Controller for the "Use Now" button on a viewed card.
-// First tries special omen handlers (Holy Symbol, Dog), then falls through to the
-// generic item ability dispatcher. Returns { handled, game, dogTradeState, closeViewedCard, ... }.
+/* [ITEM-ABILITY] Controller for the "Use Now" button: first tries special omen handlers (Holy Symbol, Dog), then falls through to the generic item ability dispatcher. Returns { handled, game, dogTradeState, closeViewedCard, ... }. */
 export function resolveUseViewedCardActiveAbilityNowState({
   game,
   viewedCard,
@@ -59,7 +57,7 @@ export function resolveUseViewedCardActiveAbilityNowState({
   };
 }
 
-// Handles the value-picker confirmation (e.g. Angel's Feather total, Lucky Coin reroll target).
+/* [ITEM-ABILITY] Handles the value-picker confirmation (e.g. Angel's Feather total, Lucky Coin reroll target). */
 export function resolveChooseViewedCardActiveAbilityValueState({
   game,
   total,
