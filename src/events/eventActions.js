@@ -51,7 +51,7 @@ import {
 } from "../items/passiveItemEffectAbility";
 import { getItemAbilitySelectionState } from "../items/itemAvailability";
 import { chooseItemAbilityNowState, chooseItemAbilityValueState } from "../items/itemActionRegistry";
-import { isUnsupportedItemAction } from "../items/unsupportedItemAbility";
+
 import {
   applyDynamiteNowState as applyDynamiteNowStateFromAbility,
   buildDynamiteThrowState,
@@ -1059,8 +1059,7 @@ export function getCardActiveAbilityState({
     rule.action === "heal-might-speed" ||
     rule.action === "dynamite-aoe-attack";
   const hasSupportedAction = hasSupportedItemAction || isSupportedOmenAction(rule.action);
-  const isSupportedInventoryAction =
-    viewedCard.ownerCollection !== "inventory" || !isUnsupportedItemAction(rule.action);
+  const isSupportedInventoryAction = true;
   const itemAbilitySelectionState = getItemAbilitySelectionState({
     game,
     viewedCard,

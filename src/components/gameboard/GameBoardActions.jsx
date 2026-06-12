@@ -124,7 +124,6 @@ export default function GameBoardActions({
         </button>
       )}
       {!tradeState &&
-        !isPathTracking &&
         canUseSecretPassage &&
         secretPassageTargets.map((target) => (
           <button

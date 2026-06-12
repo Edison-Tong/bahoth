@@ -1393,7 +1393,6 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
 
   /* [MOVEMENT] Uses a secret passage to move the current player to the target tile. */
   function handleUseSecretPassage(target) {
-    if (hasUnconfirmedMovePathState(game)) return;
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP || game.gamePhase === GAME_PHASES.GAME_OVER)
       return;
     setGame((g) => resolveSecretPassageMoveState({ game: g, target, getTileAtPosition }));
@@ -1475,6 +1474,8 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         nextPlayers,
       } = applyCombatItemSource(sourceRule, sourceCard, g.currentPlayerIndex, g.players);
 
+      const defenderDefenseBonus = defenderProxy ? { amount: 0, sourceNames: [] } : getDefenseRollDiceBonus(defender);
+
       return {
         ...g,
         players: nextPlayers,
@@ -1503,6 +1504,12 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
             total: null,
             itemMessages: [],
             usedItemKeys: [],
+            preRollBonusDice: defenderDefenseBonus.amount,
+            preRollFlatBonus: 0,
+            preRollItemMessages:
+              defenderDefenseBonus.amount > 0
+                ? [`${defenderDefenseBonus.sourceNames.join(", ")}: +${defenderDefenseBonus.amount} defense die`]
+                : [],
             bonusDiceIndexes: [],
           },
           outcome: null,
@@ -1526,12 +1533,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     if (!actor?.isAlive && !actorProxy) return;
 
     const rollStat = combatState.rollStat || "might";
-    const defenseBonus =
-      actorProxy || rollStat !== "might"
-        ? { amount: 0, sourceNames: [] }
-        : role === "defender"
-          ? getDefenseRollDiceBonus(actor)
-          : { amount: 0, sourceNames: [] };
+    const defenseBonus = { amount: 0, sourceNames: [] };
     const baseStatDiceCount =
       rollStat === "sanity"
         ? getPlayerSanityDiceCount(actor)
