@@ -418,6 +418,7 @@ export function useDrawnCardHandlers({
         final: finalDice,
         display: Array.from({ length: numDice }, () => Math.floor(Math.random() * 3)),
         omenCount: game.omenCount,
+        triggeringOmenId: card.id,
         settled: false,
       });
       return;

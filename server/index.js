@@ -152,7 +152,7 @@ wss.on("connection", (socket, request) => {
       const room = rooms.get(code);
       if (!room) return;
       room.charPicks = {};
-      room.reasonCardPicks = {};
+      room.scenarioCardPicks = {};
       // Broadcast to ALL players including host
       for (const p of room.players) safeSend(p.ws, { type: "char-select-started" });
       return;
@@ -171,34 +171,34 @@ wss.on("connection", (socket, request) => {
       return;
     }
 
-    if (type === "reason-card-select-started") {
+    if (type === "scenario-card-select-started") {
       const meta = socketMeta.get(socket);
       if (!meta || meta.playerIndex !== 0) return; // host only
       const room = rooms.get(code);
       if (!room) return;
-      room.reasonCardPicks = {};
+      room.scenarioCardPicks = {};
       // Broadcast to non-host players (host already transitioned locally)
-      broadcastRoom(code, { type: "reason-card-select-started", players: msg.players }, socket);
+      broadcastRoom(code, { type: "scenario-card-select-started", players: msg.players }, socket);
       return;
     }
 
-    if (type === "reason-card-pick") {
+    if (type === "scenario-card-pick") {
       const meta = socketMeta.get(socket);
       if (!meta) return;
       const room = rooms.get(code);
       if (!room) return;
       const { cardId } = msg;
-      if (!room.reasonCardPicks) room.reasonCardPicks = {};
-      room.reasonCardPicks[meta.playerIndex] = cardId;
-      for (const p of room.players) safeSend(p.ws, { type: "reason-card-picks-update", picks: room.reasonCardPicks });
+      if (!room.scenarioCardPicks) room.scenarioCardPicks = {};
+      room.scenarioCardPicks[meta.playerIndex] = cardId;
+      for (const p of room.players) safeSend(p.ws, { type: "scenario-card-picks-update", picks: room.scenarioCardPicks });
       return;
     }
 
-    if (type === "reason-card-selected") {
+    if (type === "scenario-card-selected") {
       const room = rooms.get(code);
       if (!room) return;
       const { cardId } = msg;
-      broadcastRoom(code, { type: "reason-card-selected", cardId });
+      broadcastRoom(code, { type: "scenario-card-selected", cardId });
       return;
     }
 

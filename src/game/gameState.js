@@ -104,7 +104,7 @@ export function initGameState(players, options = {}) {
     extraTurnAfterCurrent: false,
     eventState: null,
     turnNumber: 1,
-    selectedReasonCardId: options.selectedReasonCardId ?? null,
+    selectedScenarioCardId: options.selectedScenarioCardId ?? null,
     message: `${players[0].name}'s turn — ${players[0].character.speed[players[0].character.startIndex.speed]} moves`,
   };
 }

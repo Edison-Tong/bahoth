@@ -447,6 +447,14 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
   }
 
   if (effect.type === "start-haunt") {
+    const { getHauntDefinitionById, startSelectedHauntState } = deps;
+    const hauntId = `haunt_${effect.hauntNumber}`;
+    const hauntDefinition = getHauntDefinitionById?.(hauntId);
+    if (hauntDefinition && startSelectedHauntState) {
+      const launched = startSelectedHauntState({ ...g, eventState: null }, { hauntDefinition });
+      return { game: launched };
+    }
+    // Haunt not yet implemented — surface a message and mark triggered
     return {
       game: {
         ...g,

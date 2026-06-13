@@ -5,7 +5,7 @@ import GameBoard from "./GameBoard";
 import { API_BASE_URL } from "./config/api";
 import { initGameState } from "./game/gameState";
 import { useOnlineSync } from "./hooks/useOnlineSync";
-import { REASON_CARDS } from "./haunts/reasonCards";
+import { SCENARIO_CARDS } from "./haunts/scenarioCards";
 
 // Top-level application component. Manages the pre-game flow:
 // mode select → online lobby / pass-and-play setup → character select → game board.
@@ -50,8 +50,8 @@ function App() {
   const [pickingPlayerIndex, setPickingPlayerIndex] = useState(0);
   const [characterChoices, setCharacterChoices] = useState({}); // { playerIndex: character }
   const [charPicks, setCharPicks] = useState({}); // online: { playerIndex: character }
-  const [reasonCardPicks, setReasonCardPicks] = useState({}); // online: { playerIndex: cardId }
-  const [pendingSelectedReasonCardId, setPendingSelectedReasonCardId] = useState(null);
+  const [scenarioCardPicks, setScenarioCardPicks] = useState({}); // online: { playerIndex: cardId }
+  const [pendingSelectedScenarioCardId, setPendingSelectedScenarioCardId] = useState(null);
   const [localInitialGameState, setLocalInitialGameState] = useState(null);
   const [backendStatus, setBackendStatus] = useState("checking");
 
@@ -125,7 +125,7 @@ function App() {
 
       case "char-select-started":
         setCharPicks({});
-        setReasonCardPicks({});
+        setScenarioCardPicks({});
         setScreen("char-select");
         break;
 
@@ -138,7 +138,7 @@ function App() {
         setPlayers(msg.players.map((p) => ({ ...p, isHost: p.playerIndex === 0 })));
         setOnlineInitialGameState(msg.gameState);
         setCharPicks({});
-        setReasonCardPicks({});
+        setScenarioCardPicks({});
         setScreen("game");
         break;
 
@@ -155,19 +155,19 @@ function App() {
         setRemoteDiceResult(msg.roll);
         break;
 
-      case "reason-card-select-started":
+      case "scenario-card-select-started":
         setPlayers(msg.players.map((p) => ({ ...p, isHost: p.playerIndex === 0 })));
         setCharPicks({});
-        setReasonCardPicks({});
-        setScreen("reason-card");
+        setScenarioCardPicks({});
+        setScreen("scenario-card");
         break;
 
-      case "reason-card-picks-update":
-        setReasonCardPicks(msg.picks);
+      case "scenario-card-picks-update":
+        setScenarioCardPicks(msg.picks);
         break;
 
-      case "reason-card-selected":
-        setPendingSelectedReasonCardId(msg.cardId);
+      case "scenario-card-selected":
+        setPendingSelectedScenarioCardId(msg.cardId);
         break;
 
       case "error":
@@ -187,7 +187,7 @@ function App() {
     sendRef.current = send;
   });
 
-  // Online char-select: once all players have picked characters, move to reason-card screen
+  // Online char-select: once all players have picked characters, move to scenario-card screen
   useEffect(() => {
     if (!gameCode || !isHost) return;
     if (screen !== "char-select") return;
@@ -199,29 +199,29 @@ function App() {
       character: charPicks[i],
       color: charPicks[i].color,
     }));
-    // Tell non-host players to move to reason-card screen with finalized players
-    sendRef.current({ type: "reason-card-select-started", code: gameCode, players: finalPlayers });
+    // Tell non-host players to move to scenario-card screen with finalized players
+    sendRef.current({ type: "scenario-card-select-started", code: gameCode, players: finalPlayers });
     React.startTransition(() => {
       setPlayers(finalPlayers);
-      setReasonCardPicks({});
-      setScreen("reason-card");
+      setScenarioCardPicks({});
+      setScreen("scenario-card");
     });
   }, [charPicks, players, gameCode, isHost, screen]);
 
-  // Online reason-card: once all players have picked, host does weighted random selection and shows result
+  // Online scenario-card: once all players have picked, host does weighted random selection and shows result
   useEffect(() => {
     if (!gameCode || !isHost) return;
-    if (screen !== "reason-card") return;
-    if (pendingSelectedReasonCardId) return; // already resolved
+    if (screen !== "scenario-card") return;
+    if (pendingSelectedScenarioCardId) return; // already resolved
     if (players.length === 0) return;
-    if (Object.keys(reasonCardPicks).length < players.length) return;
+    if (Object.keys(scenarioCardPicks).length < players.length) return;
 
-    const pickedIds = Object.values(reasonCardPicks);
+    const pickedIds = Object.values(scenarioCardPicks);
     const selectedId = pickedIds[Math.floor(Math.random() * pickedIds.length)];
     // Broadcast result to non-host players so they also see the reveal
-    sendRef.current({ type: "reason-card-selected", code: gameCode, cardId: selectedId });
-    setPendingSelectedReasonCardId(selectedId);
-  }, [reasonCardPicks, players, gameCode, isHost, screen, pendingSelectedReasonCardId]);
+    sendRef.current({ type: "scenario-card-selected", code: gameCode, cardId: selectedId });
+    setPendingSelectedScenarioCardId(selectedId);
+  }, [scenarioCardPicks, players, gameCode, isHost, screen, pendingSelectedScenarioCardId]);
 
   /* [LOBBY] [ONLINE-SYNC] Renders a small backend connectivity badge (Connected / Offline / Checking…). */
   function renderBackendStatus() {
@@ -284,8 +284,8 @@ function App() {
     setRemoteGameState(null);
     setOnlineInitialGameState(null);
     setCharPicks({});
-    setReasonCardPicks({});
-    setPendingSelectedReasonCardId(null);
+    setScenarioCardPicks({});
+    setPendingSelectedScenarioCardId(null);
     setWsError(null);
     setScreen("online-menu");
   }
@@ -333,7 +333,7 @@ function App() {
     setCharacterChoices({});
     setPickingPlayerIndex(0);
     setLocalInitialGameState(null);
-    setPendingSelectedReasonCardId(null);
+    setPendingSelectedScenarioCardId(null);
     setScreen("mode");
   }
 
@@ -368,28 +368,28 @@ function App() {
         color: updated[i].color,
       }));
       setPlayers(finalPlayers);
-      setScreen("reason-card");
+      setScreen("scenario-card");
     } else {
       setPickingPlayerIndex(pickingPlayerIndex + 1);
     }
   }
 
-  /* [LOBBY] Handles reason-card selection: online sends pick to server; pass-and-play shows the result. */
-  function handlePickReasonCard(cardId) {
+  /* [LOBBY] Handles scenario-card selection: online sends pick to server; pass-and-play shows the result. */
+  function handlePickScenarioCard(cardId) {
     if (gameCode) {
-      if (reasonCardPicks[myPlayerIndex]) return; // already picked
-      send({ type: "reason-card-pick", code: gameCode, cardId });
+      if (scenarioCardPicks[myPlayerIndex]) return; // already picked
+      send({ type: "scenario-card-pick", code: gameCode, cardId });
       return;
     }
     // Pass & play: show the selected card, wait for Begin
-    setPendingSelectedReasonCardId(cardId);
+    setPendingSelectedScenarioCardId(cardId);
   }
 
-  /* [LOBBY] Confirms the selected reason card and starts the game. */
+  /* [LOBBY] Confirms the selected scenario card and starts the game. */
   function handleBeginGame() {
     if (gameCode) {
       // Only host can begin
-      const initialState = initGameState(players, { selectedReasonCardId: pendingSelectedReasonCardId });
+      const initialState = initGameState(players, { selectedScenarioCardId: pendingSelectedScenarioCardId });
       sendRef.current({ type: "start-game", code: gameCode, players, gameState: initialState });
       React.startTransition(() => {
         setOnlineInitialGameState(initialState);
@@ -397,7 +397,7 @@ function App() {
       });
       return;
     }
-    const initialState = initGameState(players, { selectedReasonCardId: pendingSelectedReasonCardId });
+    const initialState = initGameState(players, { selectedScenarioCardId: pendingSelectedScenarioCardId });
     setLocalInitialGameState(initialState);
     setScreen("game");
   }
@@ -839,10 +839,10 @@ function App() {
     );
   }
 
-  // --- Reason Card Select ---
-  if (screen === "reason-card") {
-    const resolvedCard = pendingSelectedReasonCardId
-      ? REASON_CARDS.find((c) => c.id === pendingSelectedReasonCardId)
+  // --- Scenario Card Select ---
+  if (screen === "scenario-card") {
+    const resolvedCard = pendingSelectedScenarioCardId
+      ? SCENARIO_CARDS.find((c) => c.id === pendingSelectedScenarioCardId)
       : null;
 
     // Result reveal: show the selected card to everyone
@@ -852,12 +852,12 @@ function App() {
           {renderBackendStatus()}
           <h1 className="title">Why Are You Here?</h1>
           <p className="subtitle">The fates have decided your reason for being at the house.</p>
-          <div className="reason-card-result">
-            <div className="reason-card-result-name">{resolvedCard.name}</div>
-            <div className="reason-card-result-desc">{resolvedCard.description}</div>
+          <div className="scenario-card-result">
+            <div className="scenario-card-result-name">{resolvedCard.name}</div>
+            <div className="scenario-card-result-desc">{resolvedCard.description}</div>
           </div>
           {!gameCode || isHost ? (
-            <button className="btn btn-primary reason-card-begin" onClick={handleBeginGame}>
+            <button className="btn btn-primary scenario-card-begin" onClick={handleBeginGame}>
               Begin
             </button>
           ) : (
@@ -874,9 +874,9 @@ function App() {
 
     // Picker UI
     if (gameCode) {
-      const myPick = reasonCardPicks[myPlayerIndex];
-      const pickedCount = Object.keys(reasonCardPicks).length;
-      const stillWaiting = players.filter((_, i) => !reasonCardPicks[i]);
+      const myPick = scenarioCardPicks[myPlayerIndex];
+      const pickedCount = Object.keys(scenarioCardPicks).length;
+      const stillWaiting = players.filter((_, i) => !scenarioCardPicks[i]);
       return (
         <div className="app app-wide">
           {renderBackendStatus()}
@@ -895,19 +895,19 @@ function App() {
               Still choosing: {stillWaiting.map((p) => p.name).join(", ")}
             </p>
           )}
-          <div className="reason-card-grid">
-            {REASON_CARDS.map((card) => {
+          <div className="scenario-card-grid">
+            {SCENARIO_CARDS.map((card) => {
               const isMyPick = myPick === card.id;
               return (
                 <button
-                  className={`reason-card-btn${isMyPick ? " reason-card-selected" : ""}`}
+                  className={`scenario-card-btn${isMyPick ? " scenario-card-selected" : ""}`}
                   key={card.id}
-                  onClick={() => !myPick && handlePickReasonCard(card.id)}
+                  onClick={() => !myPick && handlePickScenarioCard(card.id)}
                   disabled={!!myPick && !isMyPick}
                 >
-                  <div className="reason-card-name">{card.name}</div>
-                  <div className="reason-card-desc">{card.description}</div>
-                  {isMyPick && <div className="reason-card-badge">✓ Your pick</div>}
+                  <div className="scenario-card-name">{card.name}</div>
+                  <div className="scenario-card-desc">{card.description}</div>
+                  {isMyPick && <div className="scenario-card-badge">✓ Your pick</div>}
                 </button>
               );
             })}
@@ -924,11 +924,11 @@ function App() {
         {renderBackendStatus()}
         <h1 className="title">Why Are You Here?</h1>
         <p className="subtitle">Choose a reason for visiting the house</p>
-        <div className="reason-card-grid">
-          {REASON_CARDS.map((card) => (
-            <button className="reason-card-btn" key={card.id} onClick={() => handlePickReasonCard(card.id)}>
-              <div className="reason-card-name">{card.name}</div>
-              <div className="reason-card-desc">{card.description}</div>
+        <div className="scenario-card-grid">
+          {SCENARIO_CARDS.map((card) => (
+            <button className="scenario-card-btn" key={card.id} onClick={() => handlePickScenarioCard(card.id)}>
+              <div className="scenario-card-name">{card.name}</div>
+              <div className="scenario-card-desc">{card.description}</div>
             </button>
           ))}
         </div>

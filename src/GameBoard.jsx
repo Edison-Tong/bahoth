@@ -511,6 +511,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
             total: baseTotal,
             omenCount: da.omenCount,
             hauntTriggered,
+            triggeringOmenId: da.triggeringOmenId ?? null,
           },
           hauntTriggered: g.hauntTriggered || hauntTriggered,
           message: hauntTriggered
@@ -1818,6 +1819,8 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     createDamageChoice,
     getEventRollButtonLabel,
     STAT_LABELS,
+    getHauntDefinitionById,
+    startSelectedHauntState,
   };
   const eventFlowDeps = {
     STAT_LABELS,

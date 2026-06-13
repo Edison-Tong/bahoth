@@ -1,4 +1,5 @@
 import haunt1Definition from "./haunt_1/definition";
+import { SCENARIO_CARDS } from "./scenarioCards";
 import {
   createInitialScenarioState,
   resolveAfterDamageState,
@@ -62,7 +63,19 @@ export function getHauntRuntimeHooksById(id) {
   return HAUNT_RUNTIME_REGISTRY[id] || null;
 }
 
-/* [HAUNT-SETUP] Temporary behavior: always picks Haunt 1 after a triggered haunt roll. */
-export function selectTriggeredHauntDefinition() {
+/* [HAUNT-SETUP] Picks the correct haunt after a triggered omen haunt roll using the selected reason card's omen→haunt mapping. Falls back to haunt 1 if no mapping is found. */
+export function selectTriggeredHauntDefinition(game) {
+  const scenarioCardId = game?.selectedScenarioCardId;
+  const omenId = game?.hauntRoll?.triggeringOmenId;
+
+  if (scenarioCardId && omenId) {
+    const scenarioCard = SCENARIO_CARDS.find((c) => c.id === scenarioCardId);
+    const hauntId = scenarioCard?.hauntsByOmen?.[omenId];
+    if (hauntId && HAUNT_REGISTRY[hauntId]) {
+      return HAUNT_REGISTRY[hauntId];
+    }
+  }
+
+  // Fallback until all mappings are filled in
   return haunt1Definition;
 }
