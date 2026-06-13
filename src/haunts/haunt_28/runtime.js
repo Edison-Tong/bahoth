@@ -94,17 +94,23 @@ function isHero(game, playerIndex) {
   return getHeroIndexes(game).includes(playerIndex);
 }
 
-/* [HAUNT-SETUP] Called once when the haunt begins: floods the traitor's starting tile. */
+/* [HAUNT-SETUP] Called once when the haunt begins: floods the traitor's starting tile and positions the shark there. */
 export function onHauntBegin(game) {
   const scenarioState = getScenarioState(game.hauntState);
   const traitorIndex = game.hauntState.traitorPlayerIndex;
   const traitor = game.players[traitorIndex];
   if (!traitor) return scenarioState;
   const { floor, x, y } = traitor;
-  if (isTileFlooded(scenarioState.floodedTiles, floor, x, y)) return scenarioState;
+  const alreadyFlooded = isTileFlooded(scenarioState.floodedTiles, floor, x, y);
   return {
     ...scenarioState,
-    floodedTiles: [...scenarioState.floodedTiles, { floor, x, y }],
+    ghostShark: {
+      ...scenarioState.ghostShark,
+      floor,
+      x,
+      y,
+    },
+    floodedTiles: alreadyFlooded ? scenarioState.floodedTiles : [...scenarioState.floodedTiles, { floor, x, y }],
   };
 }
 
@@ -302,7 +308,7 @@ export function getSpecialMoveOptionsState() {
 // Exported hook: getTileTokenLabelsState
 // ---------------------------------------------------------------------------
 
-/* [BOARD-LAYOUT] Returns token labels for haunt 28: flooded tiles and Ghost Shark position. */
+/* [BOARD-LAYOUT] Returns token labels for haunt 28: flooded tile indicator only. The shark is rendered directly by BoardCanvas. */
 export function getTileTokenLabelsState(game, { floor, x, y }) {
   if (game.activeHauntId !== "haunt_28" || !game.hauntState) return [];
 
@@ -311,11 +317,6 @@ export function getTileTokenLabelsState(game, { floor, x, y }) {
 
   if (isTileFlooded(scenarioState.floodedTiles, floor, x, y)) {
     labels.push({ label: "Flooded", variant: "flooded" });
-  }
-
-  const shark = scenarioState.ghostShark;
-  if (shark?.active && shark.floor === floor && shark.x === x && shark.y === y) {
-    labels.push({ label: "Great White Ghost Shark", variant: "monster" });
   }
 
   return labels;
@@ -406,14 +407,9 @@ export function getActionButtonsState(game, context) {
     return [];
   }
 
-  // Pending tile selection for Cue Ominous Music
+  // Cue Ominous Music tile selection: handled via board tile highlighting, not buttons
   if (pendingChoice?.type === "cue-ominous-music-placement") {
-    return (pendingChoice.options || []).map((option) => ({
-      id: `pending-cue-ominous-music:${option.id}`,
-      label: `Move Shark to ${option.label}`,
-      tone: "secondary",
-      enabled: true,
-    }));
+    return [];
   }
 
   // Pending explosive count selection for Force Explosives
@@ -505,10 +501,11 @@ export function getActionRollPreviewState(game) {
 
 /* [HAUNT-ACTION] Main action dispatcher for haunt 28. */
 export function resolveActionState(game, { actionId }) {
-  if (typeof actionId === "string" && actionId.startsWith("pending-cue-ominous-music:")) {
-    const optionId = actionId.replace("pending-cue-ominous-music:", "");
-    return resolvePendingCueOminousMusicState(game, optionId);
+  if (typeof actionId === "string" && actionId.startsWith("pending-select-cue-ominous-music:")) {
+    const optionId = actionId.replace("pending-select-cue-ominous-music:", "");
+    return resolveSelectCueOminousMusicOptionState(game, optionId);
   }
+  if (actionId === "confirm-cue-ominous-music") return resolvePendingCueOminousMusicState(game);
   if (typeof actionId === "string" && actionId.startsWith("pending-force-explosives-discard:")) {
     const value = Number(actionId.replace("pending-force-explosives-discard:", ""));
     return resolvePendingForceExplosivesDiscardState(game, value);
@@ -720,16 +717,44 @@ function resolveCueOminousMusicState(game) {
   };
 }
 
+/* [HAUNT-ACTION] Previews the Cue Ominous Music tile selection by storing the selectedOptionId on the pendingChoice. */
+function resolveSelectCueOminousMusicOptionState(game, optionId) {
+  if (game.activeHauntId !== "haunt_28" || !game.hauntState) return game;
+  const scenarioState = getScenarioState(game.hauntState);
+  const pendingChoice = scenarioState.pendingChoice;
+  if (pendingChoice?.type !== "cue-ominous-music-placement") return game;
+
+  const selectedOption = (pendingChoice.options || []).find((opt) => opt.id === optionId);
+  if (!selectedOption) return game;
+
+  return {
+    ...game,
+    hauntState: {
+      ...game.hauntState,
+      scenarioState: {
+        ...scenarioState,
+        pendingChoice: {
+          ...pendingChoice,
+          selectedOptionId: optionId,
+        },
+      },
+    },
+    message: `Select Confirm Placement to move the Shark to ${selectedOption.label}.`,
+  };
+}
+
 /* [HAUNT-ACTION] Moves the Ghost Shark to the selected Flooded tile. */
-function resolvePendingCueOminousMusicState(game, optionId) {
+function resolvePendingCueOminousMusicState(game) {
   if (game.activeHauntId !== "haunt_28" || !game.hauntState) return game;
   const scenarioState = getScenarioState(game.hauntState);
   const pendingChoice = scenarioState.pendingChoice;
   if (pendingChoice?.type !== "cue-ominous-music-placement") return game;
   if (pendingChoice.actorIndex !== game.currentPlayerIndex) return game;
 
-  const selectedOption = (pendingChoice.options || []).find((opt) => opt.id === optionId);
-  if (!selectedOption) return game;
+  const selectedOption = (pendingChoice.options || []).find((opt) => opt.id === pendingChoice.selectedOptionId);
+  if (!selectedOption) {
+    return { ...game, message: "Choose a highlighted tile before confirming." };
+  }
 
   const nextShark = {
     ...scenarioState.ghostShark,
@@ -881,9 +906,30 @@ export function resolveAfterDamageState(previousGame, nextGame) {
 // actual attacks happen via the normal combat flow).
 // ---------------------------------------------------------------------------
 
-/* [MOVEMENT] No special post-movement hooks needed for haunt 28. */
+/* [MOVEMENT] After traitor moves, sync the ghost shark position to the traitor's new position. */
 export function resolveAfterMovementState(_previousGame, nextGame) {
-  return nextGame;
+  if (!nextGame.hauntState || nextGame.activeHauntId !== "haunt_28") return nextGame;
+  const traitorIndex = nextGame.hauntState.traitorPlayerIndex;
+  if (nextGame.currentPlayerIndex !== traitorIndex) return nextGame;
+  const traitor = nextGame.players[traitorIndex];
+  if (!traitor) return nextGame;
+  const scenarioState = getScenarioState(nextGame.hauntState);
+  if (!scenarioState.ghostShark?.active) return nextGame;
+  return {
+    ...nextGame,
+    hauntState: {
+      ...nextGame.hauntState,
+      scenarioState: {
+        ...scenarioState,
+        ghostShark: {
+          ...scenarioState.ghostShark,
+          floor: traitor.floor,
+          x: traitor.x,
+          y: traitor.y,
+        },
+      },
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -26,6 +26,7 @@ export default function BoardCanvas({
   currentPlayer,
   floorTiles,
   playersOnFloor,
+  sharkToken = null,
   tradeState,
   validMoves,
   pendingSpecialPlacementTargets,
@@ -88,6 +89,9 @@ export default function BoardCanvas({
                 floodedTiles?.some((f) => f.floor === cameraFloor && f.x === tile.x && f.y === tile.y) ?? false;
 
               if (isFlooded) {
+                const sharkHere =
+                  sharkToken && sharkToken.floor === cameraFloor && sharkToken.x === tile.x && sharkToken.y === tile.y;
+                const visiblePlayers = tilePlayersHere.filter((p) => !(sharkToken && p.index === traitorPlayerIndex));
                 return (
                   <div
                     key={tile.id + tile.x + tile.y}
@@ -95,21 +99,18 @@ export default function BoardCanvas({
                     style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
                   >
                     <div className="flooded-wave" aria-hidden="true" />
-                    {tilePlayersHere.length > 0 && (
+                    {(sharkHere || visiblePlayers.length > 0) && (
                       <div className="tile-players tile-players-flooded">
-                        {tilePlayersHere.map((p) => {
-                          const isTraitor = traitorPlayerIndex === p.index;
-                          return (
-                            <div
-                              key={p.index}
-                              className={`player-token ${isTraitor ? "player-token-traitor" : ""}`}
-                              style={{ background: p.color }}
-                              title={isTraitor ? `${p.name} (Traitor)` : p.name}
-                            >
-                              {p.name.charAt(0)}
-                            </div>
-                          );
-                        })}
+                        {sharkHere && (
+                          <div className="shark-token" title="Great White Ghost Shark">
+                            🦈
+                          </div>
+                        )}
+                        {visiblePlayers.map((p) => (
+                          <div key={p.index} className="player-token" style={{ background: p.color }} title={p.name}>
+                            {p.name.charAt(0)}
+                          </div>
+                        ))}
                       </div>
                     )}
                   </div>
@@ -199,24 +200,32 @@ export default function BoardCanvas({
                     ))}
                   </div>
 
-                  {/* Player tokens */}
-                  {tilePlayersHere.length > 0 && (
-                    <div className="tile-players">
-                      {tilePlayersHere.map((p) => {
-                        const isTraitor = traitorPlayerIndex === p.index;
-                        return (
-                          <div
-                            key={p.index}
-                            className={`player-token ${isTraitor ? "player-token-traitor" : ""}`}
-                            style={{ background: p.color }}
-                            title={isTraitor ? `${p.name} (Traitor)` : p.name}
-                          >
+                  {/* Player tokens + shark token */}
+                  {(() => {
+                    const visiblePlayers = tilePlayersHere.filter(
+                      (p) => !(sharkToken && p.index === traitorPlayerIndex)
+                    );
+                    const sharkHere =
+                      sharkToken &&
+                      sharkToken.floor === cameraFloor &&
+                      sharkToken.x === tile.x &&
+                      sharkToken.y === tile.y;
+                    if (!visiblePlayers.length && !sharkHere) return null;
+                    return (
+                      <div className="tile-players">
+                        {sharkHere && (
+                          <div className="shark-token" title="Great White Ghost Shark">
+                            🦈
+                          </div>
+                        )}
+                        {visiblePlayers.map((p) => (
+                          <div key={p.index} className="player-token" style={{ background: p.color }} title={p.name}>
                             {p.name.charAt(0)}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                        ))}
+                      </div>
+                    );
+                  })()}
 
                   {tradeState?.mode === "dog-remote" &&
                     tradeState.floor === cameraFloor &&

@@ -402,7 +402,8 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
   const gameplayLockedByHauntPendingChoice =
     hauntPendingChoiceType === "assign-knowledge-token" ||
     hauntPendingChoiceType === "move-exorcism-token" ||
-    hauntPendingChoiceType === "flood-tile-selection";
+    hauntPendingChoiceType === "flood-tile-selection" ||
+    hauntPendingChoiceType === "cue-ominous-music-placement";
   const gameIsOver = game.gamePhase === GAME_PHASES.GAME_OVER;
   const gameplayUiLocked =
     debugModeEnabled ||
@@ -2835,14 +2836,26 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     : null;
   const isFloodTileChoiceActive = hauntPendingChoice?.type === "flood-tile-selection";
   const floodTileChoiceOptions = isFloodTileChoiceActive ? hauntPendingChoice.options || [] : [];
+  const isCueOminousMusicChoiceActive = hauntPendingChoice?.type === "cue-ominous-music-placement";
+  const cueOminousMusicTileChoiceOptions = isCueOminousMusicChoiceActive ? hauntPendingChoice.options || [] : [];
+  const selectedCueOminousMusicTileChoiceId = isCueOminousMusicChoiceActive
+    ? hauntPendingChoice.selectedOptionId || null
+    : null;
   const isEventTileChoiceActive = eventState?.awaiting?.type === "tile-choice";
   const boardTileChoiceOptions = isEventTileChoiceActive
     ? eventTileChoiceOptions
     : isStalkPreyTileChoiceActive
       ? stalkPreyTileChoiceOptions
-      : floodTileChoiceOptions;
-  const selectedBoardTileChoiceId = isEventTileChoiceActive ? selectedEventTileChoiceId : selectedStalkPreyTileChoiceId;
-  const isBoardTileChoiceActive = isEventTileChoiceActive || isStalkPreyTileChoiceActive || isFloodTileChoiceActive;
+      : isCueOminousMusicChoiceActive
+        ? cueOminousMusicTileChoiceOptions
+        : floodTileChoiceOptions;
+  const selectedBoardTileChoiceId = isEventTileChoiceActive
+    ? selectedEventTileChoiceId
+    : isCueOminousMusicChoiceActive
+      ? selectedCueOminousMusicTileChoiceId
+      : selectedStalkPreyTileChoiceId;
+  const isBoardTileChoiceActive =
+    isEventTileChoiceActive || isStalkPreyTileChoiceActive || isFloodTileChoiceActive || isCueOminousMusicChoiceActive;
 
   /* [EVENT-TILE-CHOICE] [HAUNT-ACTION] Handles clicking a board tile-choice target (event tile-choice, stalk-prey, or flood tile). */
   function handleBoardTileChoice(option) {
@@ -2854,12 +2867,16 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
       handleUseHauntAction(`pending-select-stalk-prey:${option.id}`);
       return;
     }
+    if (isCueOminousMusicChoiceActive && option?.id) {
+      handleUseHauntAction(`pending-select-cue-ominous-music:${option.id}`);
+      return;
+    }
     if (isFloodTileChoiceActive && option?.id) {
       handleUseHauntAction(`pending-flood-tile:${option.id}`);
     }
   }
 
-  /* [EVENT-TILE-CHOICE] [HAUNT-ACTION] Confirms the selected board tile choice (event or stalk-prey). */
+  /* [EVENT-TILE-CHOICE] [HAUNT-ACTION] Confirms the selected board tile choice (event, stalk-prey, or cue ominous music). */
   function handleConfirmBoardTileChoice() {
     if (isEventTileChoiceActive) {
       handleConfirmEventTileChoice();
@@ -2867,6 +2884,10 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }
     if (isStalkPreyTileChoiceActive) {
       handleUseHauntAction("confirm-stalk-prey-placement");
+      return;
+    }
+    if (isCueOminousMusicChoiceActive) {
+      handleUseHauntAction("confirm-cue-ominous-music");
     }
   }
   const viewedCardActiveAbilityState = viewedCard
@@ -3118,6 +3139,12 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
   // Players on current floor
   const playersOnFloor = getPlayersOnFloor(game.players, cameraFloor);
 
+  // Haunt 28 shark token position
+  const sharkToken =
+    game.activeHauntId === "haunt_28" && game.hauntState?.scenarioState?.ghostShark?.active
+      ? game.hauntState.scenarioState.ghostShark
+      : null;
+
   useEffect(() => {
     const scrollEl = boardRef.current;
     if (!scrollEl || currentPlayer.floor !== cameraFloor) return;
@@ -3210,6 +3237,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         currentPlayer={currentPlayer}
         floorTiles={floorTiles}
         playersOnFloor={playersOnFloor}
+        sharkToken={sharkToken}
         tradeState={tradeState}
         validMoves={validMoves}
         pendingSpecialPlacementTargets={pendingSpecialPlacementTargets}
