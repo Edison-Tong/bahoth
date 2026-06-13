@@ -400,7 +400,9 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
   const gameplayLockedByHauntActionRoll = !!game.hauntActionRoll;
   const gameplayLockedByStalkPreyPlacement = hauntPendingChoiceType === "stalk-prey-placement";
   const gameplayLockedByHauntPendingChoice =
-    hauntPendingChoiceType === "assign-knowledge-token" || hauntPendingChoiceType === "move-exorcism-token";
+    hauntPendingChoiceType === "assign-knowledge-token" ||
+    hauntPendingChoiceType === "move-exorcism-token" ||
+    hauntPendingChoiceType === "flood-tile-selection";
   const gameIsOver = game.gamePhase === GAME_PHASES.GAME_OVER;
   const gameplayUiLocked =
     debugModeEnabled ||
@@ -1403,7 +1405,12 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
   // End turn
   function handleEndTurn() {
     if (hasUnconfirmedMovePathState(game)) return;
-    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP || game.gamePhase === GAME_PHASES.GAME_OVER)
+    if (
+      debugModeEnabled ||
+      game.gamePhase === GAME_PHASES.HAUNT_SETUP ||
+      game.gamePhase === GAME_PHASES.GAME_OVER ||
+      gameplayLockedByHauntPendingChoice
+    )
       return;
     let nextCameraFloor = null;
     let nextDiceAnimation = null;
@@ -2826,12 +2833,18 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
   const selectedStalkPreyTileChoiceId = isStalkPreyTileChoiceActive
     ? hauntPendingChoice.selectedOptionId || null
     : null;
+  const isFloodTileChoiceActive = hauntPendingChoice?.type === "flood-tile-selection";
+  const floodTileChoiceOptions = isFloodTileChoiceActive ? hauntPendingChoice.options || [] : [];
   const isEventTileChoiceActive = eventState?.awaiting?.type === "tile-choice";
-  const boardTileChoiceOptions = isEventTileChoiceActive ? eventTileChoiceOptions : stalkPreyTileChoiceOptions;
+  const boardTileChoiceOptions = isEventTileChoiceActive
+    ? eventTileChoiceOptions
+    : isStalkPreyTileChoiceActive
+      ? stalkPreyTileChoiceOptions
+      : floodTileChoiceOptions;
   const selectedBoardTileChoiceId = isEventTileChoiceActive ? selectedEventTileChoiceId : selectedStalkPreyTileChoiceId;
-  const isBoardTileChoiceActive = isEventTileChoiceActive || isStalkPreyTileChoiceActive;
+  const isBoardTileChoiceActive = isEventTileChoiceActive || isStalkPreyTileChoiceActive || isFloodTileChoiceActive;
 
-  /* [EVENT-TILE-CHOICE] [HAUNT-ACTION] Handles clicking a board tile-choice target (event tile-choice or stalk-prey placement). */
+  /* [EVENT-TILE-CHOICE] [HAUNT-ACTION] Handles clicking a board tile-choice target (event tile-choice, stalk-prey, or flood tile). */
   function handleBoardTileChoice(option) {
     if (isEventTileChoiceActive) {
       handleEventTileChoice(option);
@@ -2839,6 +2852,10 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }
     if (isStalkPreyTileChoiceActive && option?.id) {
       handleUseHauntAction(`pending-select-stalk-prey:${option.id}`);
+      return;
+    }
+    if (isFloodTileChoiceActive && option?.id) {
+      handleUseHauntAction(`pending-flood-tile:${option.id}`);
     }
   }
 

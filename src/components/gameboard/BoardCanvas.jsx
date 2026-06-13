@@ -83,6 +83,39 @@ export default function BoardCanvas({
               const tilePlayersHere = playersOnFloor.filter((p) => p.x === tile.x && p.y === tile.y);
               const isCurrentTile =
                 currentPlayer.x === tile.x && currentPlayer.y === tile.y && currentPlayer.floor === cameraFloor;
+              const floodedTiles = game.hauntState?.scenarioState?.floodedTiles;
+              const isFlooded =
+                floodedTiles?.some((f) => f.floor === cameraFloor && f.x === tile.x && f.y === tile.y) ?? false;
+
+              if (isFlooded) {
+                return (
+                  <div
+                    key={tile.id + tile.x + tile.y}
+                    className={`board-tile board-tile-flooded ${isCurrentTile ? "board-tile-current" : ""}`}
+                    style={{ left, top, width: TILE_SIZE, height: TILE_SIZE }}
+                  >
+                    <div className="flooded-wave" aria-hidden="true" />
+                    {tilePlayersHere.length > 0 && (
+                      <div className="tile-players tile-players-flooded">
+                        {tilePlayersHere.map((p) => {
+                          const isTraitor = traitorPlayerIndex === p.index;
+                          return (
+                            <div
+                              key={p.index}
+                              className={`player-token ${isTraitor ? "player-token-traitor" : ""}`}
+                              style={{ background: p.color }}
+                              title={isTraitor ? `${p.name} (Traitor)` : p.name}
+                            >
+                              {p.name.charAt(0)}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              }
+
               const hauntTokensRaw = getHauntTileTokenLabelsState(game, {
                 floor: cameraFloor,
                 x: tile.x,

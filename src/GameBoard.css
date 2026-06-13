@@ -398,6 +398,59 @@
   background: #352a20;
 }
 
+.board-tile-flooded {
+  background: linear-gradient(180deg, #0d3d58 0%, #071e2e 100%);
+  border-color: #1a7aaa;
+  box-shadow: 0 0 12px rgba(0, 160, 220, 0.4), inset 0 0 8px rgba(0, 80, 140, 0.5);
+  overflow: hidden;
+}
+
+.flooded-wave {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.flooded-wave::before,
+.flooded-wave::after {
+  content: "";
+  position: absolute;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  border-radius: 42%;
+}
+
+.flooded-wave::before {
+  top: -55%;
+  background: rgba(20, 130, 210, 0.28);
+  animation: wave-spin 4s linear infinite;
+}
+
+.flooded-wave::after {
+  top: -60%;
+  background: rgba(60, 180, 240, 0.15);
+  animation: wave-spin 6.5s linear infinite reverse;
+}
+
+@keyframes wave-spin {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.tile-players-flooded {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex-wrap: wrap;
+  padding: 4px;
+  z-index: 1;
+}
+
 .tile-name {
   font-size: 0.7rem;
   font-weight: bold;

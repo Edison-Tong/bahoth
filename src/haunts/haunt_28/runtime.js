@@ -94,6 +94,20 @@ function isHero(game, playerIndex) {
   return getHeroIndexes(game).includes(playerIndex);
 }
 
+/* [HAUNT-SETUP] Called once when the haunt begins: floods the traitor's starting tile. */
+export function onHauntBegin(game) {
+  const scenarioState = getScenarioState(game.hauntState);
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  const traitor = game.players[traitorIndex];
+  if (!traitor) return scenarioState;
+  const { floor, x, y } = traitor;
+  if (isTileFlooded(scenarioState.floodedTiles, floor, x, y)) return scenarioState;
+  return {
+    ...scenarioState,
+    floodedTiles: [...scenarioState.floodedTiles, { floor, x, y }],
+  };
+}
+
 /* [LOOKUP] Returns true if { floor, x, y } is a Flooded tile. */
 function isTileFlooded(floodedTiles, floor, x, y) {
   return floodedTiles.some((t) => t.floor === floor && t.x === x && t.y === y);
@@ -387,14 +401,9 @@ export function getActionButtonsState(game, context) {
   const scenarioState = getScenarioState(game.hauntState);
   const pendingChoice = scenarioState.pendingChoice;
 
-  // Pending flood tile selection (traitor picks which tile to flood at hero turn start)
+  // Flood tile selection: handled via board tile highlighting, not buttons
   if (pendingChoice?.type === "flood-tile-selection") {
-    return (pendingChoice.options || []).map((option) => ({
-      id: `pending-flood-tile:${option.id}`,
-      label: `Flood ${option.label}`,
-      tone: "danger",
-      enabled: true,
-    }));
+    return [];
   }
 
   // Pending tile selection for Cue Ominous Music

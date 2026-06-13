@@ -21,6 +21,7 @@ import {
 } from "./haunt_1/runtime";
 import {
   createInitialScenarioState as createInitialScenarioState28,
+  onHauntBegin as onHauntBegin28,
   resolveAfterDamageState as resolveAfterDamageState28,
   resolveAfterMovementState as resolveAfterMovementState28,
   resolveTurnStartState as resolveTurnStartState28,
@@ -66,6 +67,7 @@ const HAUNT_RUNTIME_REGISTRY = {
   },
   [haunt28Definition.id]: {
     createInitialScenarioState: createInitialScenarioState28,
+    onHauntBegin: onHauntBegin28,
     resolveAfterDamageState: resolveAfterDamageState28,
     resolveAfterMovementState: resolveAfterMovementState28,
     resolveTurnStartState: resolveTurnStartState28,

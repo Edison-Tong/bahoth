@@ -213,7 +213,21 @@ export function completeHauntSetupState(game, { getHauntDefinitionById }) {
     movesLeft: index === desiredFirstPlayer ? firstPlayerSpeed : 0,
   }));
 
-  return {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  const baseHauntState = {
+    ...game.hauntState,
+    status: "active",
+    setup: {
+      ...game.hauntState.setup,
+      currentStepIndex: Math.max(
+        game.hauntState.setup?.heroSteps?.length || 0,
+        game.hauntState.setup?.traitorSteps?.length || 0
+      ),
+      completed: true,
+    },
+  };
+
+  const baseGame = {
     ...game,
     players: playersWithMoves,
     currentPlayerIndex: desiredFirstPlayer,
@@ -229,20 +243,21 @@ export function completeHauntSetupState(game, { getHauntDefinitionById }) {
     damageChoice: null,
     rabbitFootPendingReroll: null,
     eventState: null,
-    hauntState: {
-      ...game.hauntState,
-      status: "active",
-      setup: {
-        ...game.hauntState.setup,
-        currentStepIndex: Math.max(
-          game.hauntState.setup?.heroSteps?.length || 0,
-          game.hauntState.setup?.traitorSteps?.length || 0
-        ),
-        completed: true,
-      },
-    },
+    hauntState: baseHauntState,
     message: `${firstPlayer.name} takes the first hero turn. The haunt is active.`,
   };
+
+  if (runtimeHooks?.onHauntBegin) {
+    const updatedScenarioState = runtimeHooks.onHauntBegin(baseGame);
+    if (updatedScenarioState) {
+      return {
+        ...baseGame,
+        hauntState: { ...baseHauntState, scenarioState: updatedScenarioState },
+      };
+    }
+  }
+
+  return baseGame;
 }
 
 /* [HAUNT-ACTION] [DAMAGE] Delegates to the active haunt's after-damage hook (e.g. to trigger Jack's Spirit appearance on traitor death). */
