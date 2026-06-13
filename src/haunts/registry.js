@@ -1,4 +1,5 @@
 import haunt1Definition from "./haunt_1/definition";
+import haunt28Definition from "./haunt_28/definition";
 import { SCENARIO_CARDS } from "./scenarioCards";
 import {
   createInitialScenarioState,
@@ -18,11 +19,30 @@ import {
   resolveActionRollContinueState,
   resolveMonsterSpeedRollState,
 } from "./haunt_1/runtime";
+import {
+  createInitialScenarioState as createInitialScenarioState28,
+  resolveAfterDamageState as resolveAfterDamageState28,
+  resolveAfterMovementState as resolveAfterMovementState28,
+  resolveTurnStartState as resolveTurnStartState28,
+  getCombatBonus as getCombatBonus28,
+  getCombatActorProxyState as getCombatActorProxyState28,
+  getSpecialMoveOptionsState as getSpecialMoveOptionsState28,
+  getTileTokenLabelsState as getTileTokenLabelsState28,
+  getKnowledgeTokenHoldersState as getKnowledgeTokenHoldersState28,
+  canDeadPlayerTakeTurn as canDeadPlayerTakeTurn28,
+  getActionAvailabilityState as getActionAvailabilityState28,
+  getActionButtonsState as getActionButtonsState28,
+  getActionRollPreviewState as getActionRollPreviewState28,
+  resolveActionState as resolveActionState28,
+  resolveActionRollContinueState as resolveActionRollContinueState28,
+  resolveMonsterSpeedRollState as resolveMonsterSpeedRollState28,
+} from "./haunt_28/runtime";
 
 // Static registry mapping haunt IDs to definition objects and runtime hook bundles.
 // Add new haunts here when they are implemented.
 const HAUNT_REGISTRY = {
   [haunt1Definition.id]: haunt1Definition,
+  [haunt28Definition.id]: haunt28Definition,
 };
 
 const HAUNT_RUNTIME_REGISTRY = {
@@ -43,6 +63,24 @@ const HAUNT_RUNTIME_REGISTRY = {
     resolveActionState,
     resolveActionRollContinueState,
     resolveMonsterSpeedRollState,
+  },
+  [haunt28Definition.id]: {
+    createInitialScenarioState: createInitialScenarioState28,
+    resolveAfterDamageState: resolveAfterDamageState28,
+    resolveAfterMovementState: resolveAfterMovementState28,
+    resolveTurnStartState: resolveTurnStartState28,
+    getCombatBonus: getCombatBonus28,
+    getCombatActorProxyState: getCombatActorProxyState28,
+    getSpecialMoveOptionsState: getSpecialMoveOptionsState28,
+    getTileTokenLabelsState: getTileTokenLabelsState28,
+    getKnowledgeTokenHoldersState: getKnowledgeTokenHoldersState28,
+    canDeadPlayerTakeTurn: canDeadPlayerTakeTurn28,
+    getActionAvailabilityState: getActionAvailabilityState28,
+    getActionButtonsState: getActionButtonsState28,
+    getActionRollPreviewState: getActionRollPreviewState28,
+    resolveActionState: resolveActionState28,
+    resolveActionRollContinueState: resolveActionRollContinueState28,
+    resolveMonsterSpeedRollState: resolveMonsterSpeedRollState28,
   },
 };
 
