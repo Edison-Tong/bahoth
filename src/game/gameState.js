@@ -42,7 +42,7 @@ export const TILE_SIZE = 150;
 export const GAP = 4;
 
 /* [PLAYER-STATE] [BOARD-LAYOUT] Builds the full initial game state: shuffles decks, places starting tiles, and initialises each player at the Entrance with their starting speed as movesLeft. */
-export function initGameState(players) {
+export function initGameState(players, options = {}) {
   const tileStack = createTileStack();
   const itemDeck = createItemDeck();
   const omenDeck = createOmenDeck();
@@ -104,6 +104,7 @@ export function initGameState(players) {
     extraTurnAfterCurrent: false,
     eventState: null,
     turnNumber: 1,
+    selectedReasonCardId: options.selectedReasonCardId ?? null,
     message: `${players[0].name}'s turn — ${players[0].character.speed[players[0].character.startIndex.speed]} moves`,
   };
 }

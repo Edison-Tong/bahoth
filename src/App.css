@@ -579,3 +579,96 @@
   opacity: 0.6;
   font-style: italic;
 }
+
+/* Reason card picker */
+.reason-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.reason-card-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 20px 18px;
+  background: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+  text-align: left;
+  transition: border-color 0.2s, transform 0.1s;
+  position: relative;
+}
+
+.reason-card-btn:hover:not(:disabled) {
+  border-color: var(--accent-secondary);
+  transform: translateY(-2px);
+}
+
+.reason-card-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.reason-card-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.reason-card-selected {
+  border-color: var(--accent-secondary) !important;
+  opacity: 1 !important;
+}
+
+.reason-card-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.reason-card-desc {
+  font-size: 13px;
+  line-height: 1.5;
+  opacity: 0.75;
+  font-style: italic;
+}
+
+.reason-card-badge {
+  margin-top: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--accent-secondary);
+}
+
+.reason-card-result {
+  max-width: 440px;
+  margin: 24px auto;
+  padding: 32px;
+  border: 2px solid var(--accent-secondary);
+  border-radius: 12px;
+  background: rgba(var(--accent-secondary-rgb, 180, 140, 60), 0.08);
+  text-align: center;
+}
+
+.reason-card-result-name {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--accent-secondary);
+  margin-bottom: 12px;
+  letter-spacing: 0.02em;
+}
+
+.reason-card-result-desc {
+  font-size: 14px;
+  opacity: 0.82;
+  line-height: 1.55;
+}
+
+.reason-card-begin {
+  display: block;
+  margin: 0 auto;
+}

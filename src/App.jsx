@@ -5,6 +5,7 @@ import GameBoard from "./GameBoard";
 import { API_BASE_URL } from "./config/api";
 import { initGameState } from "./game/gameState";
 import { useOnlineSync } from "./hooks/useOnlineSync";
+import { REASON_CARDS } from "./haunts/reasonCards";
 
 // Top-level application component. Manages the pre-game flow:
 // mode select → online lobby / pass-and-play setup → character select → game board.
@@ -49,6 +50,9 @@ function App() {
   const [pickingPlayerIndex, setPickingPlayerIndex] = useState(0);
   const [characterChoices, setCharacterChoices] = useState({}); // { playerIndex: character }
   const [charPicks, setCharPicks] = useState({}); // online: { playerIndex: character }
+  const [reasonCardPicks, setReasonCardPicks] = useState({}); // online: { playerIndex: cardId }
+  const [pendingSelectedReasonCardId, setPendingSelectedReasonCardId] = useState(null);
+  const [localInitialGameState, setLocalInitialGameState] = useState(null);
   const [backendStatus, setBackendStatus] = useState("checking");
 
   useEffect(() => {
@@ -121,6 +125,7 @@ function App() {
 
       case "char-select-started":
         setCharPicks({});
+        setReasonCardPicks({});
         setScreen("char-select");
         break;
 
@@ -133,6 +138,7 @@ function App() {
         setPlayers(msg.players.map((p) => ({ ...p, isHost: p.playerIndex === 0 })));
         setOnlineInitialGameState(msg.gameState);
         setCharPicks({});
+        setReasonCardPicks({});
         setScreen("game");
         break;
 
@@ -147,6 +153,21 @@ function App() {
 
       case "dice-result":
         setRemoteDiceResult(msg.roll);
+        break;
+
+      case "reason-card-select-started":
+        setPlayers(msg.players.map((p) => ({ ...p, isHost: p.playerIndex === 0 })));
+        setCharPicks({});
+        setReasonCardPicks({});
+        setScreen("reason-card");
+        break;
+
+      case "reason-card-picks-update":
+        setReasonCardPicks(msg.picks);
+        break;
+
+      case "reason-card-selected":
+        setPendingSelectedReasonCardId(msg.cardId);
         break;
 
       case "error":
@@ -166,7 +187,7 @@ function App() {
     sendRef.current = send;
   });
 
-  // Online char-select: once all players have picked, host fires start-game
+  // Online char-select: once all players have picked characters, move to reason-card screen
   useEffect(() => {
     if (!gameCode || !isHost) return;
     if (screen !== "char-select") return;
@@ -178,15 +199,29 @@ function App() {
       character: charPicks[i],
       color: charPicks[i].color,
     }));
-    const initialState = initGameState(finalPlayers);
-    sendRef.current({ type: "start-game", code: gameCode, players: finalPlayers, gameState: initialState });
-    // Batch all state updates together at the end to avoid cascading renders
+    // Tell non-host players to move to reason-card screen with finalized players
+    sendRef.current({ type: "reason-card-select-started", code: gameCode, players: finalPlayers });
     React.startTransition(() => {
-      setOnlineInitialGameState(initialState);
       setPlayers(finalPlayers);
-      setScreen("game");
+      setReasonCardPicks({});
+      setScreen("reason-card");
     });
   }, [charPicks, players, gameCode, isHost, screen]);
+
+  // Online reason-card: once all players have picked, host does weighted random selection and shows result
+  useEffect(() => {
+    if (!gameCode || !isHost) return;
+    if (screen !== "reason-card") return;
+    if (pendingSelectedReasonCardId) return; // already resolved
+    if (players.length === 0) return;
+    if (Object.keys(reasonCardPicks).length < players.length) return;
+
+    const pickedIds = Object.values(reasonCardPicks);
+    const selectedId = pickedIds[Math.floor(Math.random() * pickedIds.length)];
+    // Broadcast result to non-host players so they also see the reveal
+    sendRef.current({ type: "reason-card-selected", code: gameCode, cardId: selectedId });
+    setPendingSelectedReasonCardId(selectedId);
+  }, [reasonCardPicks, players, gameCode, isHost, screen, pendingSelectedReasonCardId]);
 
   /* [LOBBY] [ONLINE-SYNC] Renders a small backend connectivity badge (Connected / Offline / Checking…). */
   function renderBackendStatus() {
@@ -249,6 +284,8 @@ function App() {
     setRemoteGameState(null);
     setOnlineInitialGameState(null);
     setCharPicks({});
+    setReasonCardPicks({});
+    setPendingSelectedReasonCardId(null);
     setWsError(null);
     setScreen("online-menu");
   }
@@ -295,6 +332,8 @@ function App() {
     setPlayers([]);
     setCharacterChoices({});
     setPickingPlayerIndex(0);
+    setLocalInitialGameState(null);
+    setPendingSelectedReasonCardId(null);
     setScreen("mode");
   }
 
@@ -329,10 +368,38 @@ function App() {
         color: updated[i].color,
       }));
       setPlayers(finalPlayers);
-      setScreen("game");
+      setScreen("reason-card");
     } else {
       setPickingPlayerIndex(pickingPlayerIndex + 1);
     }
+  }
+
+  /* [LOBBY] Handles reason-card selection: online sends pick to server; pass-and-play shows the result. */
+  function handlePickReasonCard(cardId) {
+    if (gameCode) {
+      if (reasonCardPicks[myPlayerIndex]) return; // already picked
+      send({ type: "reason-card-pick", code: gameCode, cardId });
+      return;
+    }
+    // Pass & play: show the selected card, wait for Begin
+    setPendingSelectedReasonCardId(cardId);
+  }
+
+  /* [LOBBY] Confirms the selected reason card and starts the game. */
+  function handleBeginGame() {
+    if (gameCode) {
+      // Only host can begin
+      const initialState = initGameState(players, { selectedReasonCardId: pendingSelectedReasonCardId });
+      sendRef.current({ type: "start-game", code: gameCode, players, gameState: initialState });
+      React.startTransition(() => {
+        setOnlineInitialGameState(initialState);
+        setScreen("game");
+      });
+      return;
+    }
+    const initialState = initGameState(players, { selectedReasonCardId: pendingSelectedReasonCardId });
+    setLocalInitialGameState(initialState);
+    setScreen("game");
   }
 
   /* [LOBBY] [VALIDATION] Returns an array of already-chosen character names to prevent duplicate picks in char-select. */
@@ -772,6 +839,103 @@ function App() {
     );
   }
 
+  // --- Reason Card Select ---
+  if (screen === "reason-card") {
+    const resolvedCard = pendingSelectedReasonCardId
+      ? REASON_CARDS.find((c) => c.id === pendingSelectedReasonCardId)
+      : null;
+
+    // Result reveal: show the selected card to everyone
+    if (resolvedCard) {
+      return (
+        <div className="app">
+          {renderBackendStatus()}
+          <h1 className="title">Why Are You Here?</h1>
+          <p className="subtitle">The fates have decided your reason for being at the house.</p>
+          <div className="reason-card-result">
+            <div className="reason-card-result-name">{resolvedCard.name}</div>
+            <div className="reason-card-result-desc">{resolvedCard.description}</div>
+          </div>
+          {!gameCode || isHost ? (
+            <button className="btn btn-primary reason-card-begin" onClick={handleBeginGame}>
+              Begin
+            </button>
+          ) : (
+            <p style={{ textAlign: "center", opacity: 0.6, marginTop: "24px" }}>Waiting for host to begin...</p>
+          )}
+          {gameCode && (
+            <button className="btn btn-danger" style={{ marginTop: "12px" }} onClick={handleLeaveGame}>
+              Leave Game
+            </button>
+          )}
+        </div>
+      );
+    }
+
+    // Picker UI
+    if (gameCode) {
+      const myPick = reasonCardPicks[myPlayerIndex];
+      const pickedCount = Object.keys(reasonCardPicks).length;
+      const stillWaiting = players.filter((_, i) => !reasonCardPicks[i]);
+      return (
+        <div className="app app-wide">
+          {renderBackendStatus()}
+          <h1 className="title">Why Are You Here?</h1>
+          <p className="subtitle">
+            {myPick ? (
+              <>
+                Your reason is set — waiting for others ({pickedCount}/{players.length})
+              </>
+            ) : (
+              "Choose your reason for visiting the house"
+            )}
+          </p>
+          {stillWaiting.length > 0 && myPick && (
+            <p style={{ textAlign: "center", opacity: 0.55, fontSize: "13px", marginBottom: "8px" }}>
+              Still choosing: {stillWaiting.map((p) => p.name).join(", ")}
+            </p>
+          )}
+          <div className="reason-card-grid">
+            {REASON_CARDS.map((card) => {
+              const isMyPick = myPick === card.id;
+              return (
+                <button
+                  className={`reason-card-btn${isMyPick ? " reason-card-selected" : ""}`}
+                  key={card.id}
+                  onClick={() => !myPick && handlePickReasonCard(card.id)}
+                  disabled={!!myPick && !isMyPick}
+                >
+                  <div className="reason-card-name">{card.name}</div>
+                  <div className="reason-card-desc">{card.description}</div>
+                  {isMyPick && <div className="reason-card-badge">✓ Your pick</div>}
+                </button>
+              );
+            })}
+          </div>
+          <button className="btn btn-danger" style={{ marginTop: "16px" }} onClick={handleLeaveGame}>
+            Leave Game
+          </button>
+        </div>
+      );
+    }
+    // Pass & play
+    return (
+      <div className="app app-wide">
+        {renderBackendStatus()}
+        <h1 className="title">Why Are You Here?</h1>
+        <p className="subtitle">Choose a reason for visiting the house</p>
+        <div className="reason-card-grid">
+          {REASON_CARDS.map((card) => (
+            <button className="reason-card-btn" key={card.id} onClick={() => handlePickReasonCard(card.id)}>
+              <div className="reason-card-name">{card.name}</div>
+              <div className="reason-card-desc">{card.description}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   // --- Game board ---
   if (screen === "game") {
     if (gameCode) {
@@ -795,7 +959,7 @@ function App() {
       );
     }
     // Pass & play game
-    return <GameBoard players={players} onQuit={handleLocalLeave} />;
+    return <GameBoard players={players} onQuit={handleLocalLeave} initialGameState={localInitialGameState} />;
   }
 
   // --- Pass & Play: Lobby ---
