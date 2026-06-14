@@ -382,6 +382,15 @@ export function getHauntMonsterCardState(game) {
   return null;
 }
 
+/* [SIDEBAR] Returns haunt-specific token chips for a given player, e.g. Knowledge of Jack or Explosive tokens. Returns [] if none. */
+export function getHauntPlayerTokensState(game, playerIndex) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getPlayerHauntTokensState) {
+    return runtimeHooks.getPlayerHauntTokensState(game, playerIndex);
+  }
+  return [];
+}
+
 /* [PLAYER-STATE] [HAUNT-SETUP] Returns whether the current haunt allows a dead player to still take a turn (Jack's Spirit traitor). */
 export function getHauntCanDeadPlayerTakeTurnState(game, playerIndex) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);

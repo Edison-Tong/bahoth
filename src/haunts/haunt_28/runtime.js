@@ -1154,6 +1154,14 @@ export function getCombatBonus() {
   return 0;
 }
 
+/* [SIDEBAR] Returns haunt-specific token chips for a given player index (e.g. Explosive tokens). */
+export function getPlayerHauntTokensState(game, playerIndex) {
+  if (game.activeHauntId !== "haunt_28" || !game.hauntState) return [];
+  const scenarioState = getScenarioState(game.hauntState);
+  const count = scenarioState.playerExplosives?.[playerIndex] || 0;
+  return Array.from({ length: count }, () => ({ label: "Explosive", variant: "token" }));
+}
+
 /* [SIDEBAR] Returns monster card display data for the Great White Ghost Shark when active, or null. */
 export function getMonsterCardState(game) {
   if (game.activeHauntId !== "haunt_28" || !game.hauntState) return null;

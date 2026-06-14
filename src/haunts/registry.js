@@ -19,6 +19,7 @@ import {
   resolveActionRollContinueState,
   resolveMonsterSpeedRollState,
   getMonsterCardState,
+  getPlayerHauntTokensState,
 } from "./haunt_1/runtime";
 import {
   createInitialScenarioState as createInitialScenarioState28,
@@ -39,6 +40,7 @@ import {
   resolveActionRollContinueState as resolveActionRollContinueState28,
   resolveMonsterSpeedRollState as resolveMonsterSpeedRollState28,
   getMonsterCardState as getMonsterCardState28,
+  getPlayerHauntTokensState as getPlayerHauntTokensState28,
 } from "./haunt_28/runtime";
 
 // Static registry mapping haunt IDs to definition objects and runtime hook bundles.
@@ -67,6 +69,7 @@ const HAUNT_RUNTIME_REGISTRY = {
     resolveActionRollContinueState,
     resolveMonsterSpeedRollState,
     getMonsterCardState,
+    getPlayerHauntTokensState,
   },
   [haunt28Definition.id]: {
     createInitialScenarioState: createInitialScenarioState28,
@@ -87,6 +90,7 @@ const HAUNT_RUNTIME_REGISTRY = {
     resolveActionRollContinueState: resolveActionRollContinueState28,
     resolveMonsterSpeedRollState: resolveMonsterSpeedRollState28,
     getMonsterCardState: getMonsterCardState28,
+    getPlayerHauntTokensState: getPlayerHauntTokensState28,
   },
 };
 

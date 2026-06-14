@@ -1542,6 +1542,15 @@ export function getMonsterCardState(game) {
   };
 }
 
+/* [SIDEBAR] Returns haunt-specific token chips for a given player index (e.g. Knowledge of Jack). */
+export function getPlayerHauntTokensState(game, playerIndex) {
+  if (game.activeHauntId !== "haunt_1" || !game.hauntState) return [];
+  const scenarioState = getScenarioState(game.hauntState);
+  const holders = scenarioState.revealedKnowledgeOfJackHolders || [];
+  const count = holders.filter((idx) => idx === playerIndex).length;
+  return Array.from({ length: count }, () => ({ label: "Knowledge of Jack", variant: "token" }));
+}
+
 /* [HAUNT-COMBAT] [SPIRIT] Exported: returns +2 if the attacker (hero) holds Knowledge of Jack and is fighting the traitor/spirit. */
 export function getCombatKnowledgeBonus(game, actorIndex, defenderIndex, role) {
   if (game.activeHauntId !== "haunt_1" || !game.hauntState) return 0;

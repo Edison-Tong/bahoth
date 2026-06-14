@@ -22,5 +22,6 @@ export {
   resolveHauntActionRollContinueState,
   advanceHauntRulesViewState,
   getHauntMonsterCardState,
+  getHauntPlayerTokensState,
 } from "./core/hauntRuntime";
 export { getHauntDefinitionById, getAllHauntDefinitions, selectTriggeredHauntDefinition } from "./registry";

@@ -1,5 +1,5 @@
 /* [SIDEBAR] [OVERLAY] Collapsible sidebar listing all players' stats, inventory, and omens. Also shows haunt-specific UI (Jack's Spirit tracker, knowledge tokens) when haunt is active. */
-import { getHauntMonsterCardState } from "../../haunts/hauntDomain";
+import { getHauntMonsterCardState, getHauntPlayerTokensState } from "../../haunts/hauntDomain";
 
 export default function PlayerSidebar({
   game,
@@ -14,10 +14,6 @@ export default function PlayerSidebar({
   onQuit,
 }) {
   const traitorPlayerIndex = game?.hauntState?.traitorPlayerIndex;
-  const scenarioState = game?.hauntState?.scenarioState || {};
-  const knowledgeHolders = Array.isArray(scenarioState?.revealedKnowledgeOfJackHolders)
-    ? scenarioState.revealedKnowledgeOfJackHolders
-    : [];
 
   // Single hook — each haunt runtime provides its own monster card data.
   const monsterCard = getHauntMonsterCardState(game);
@@ -69,7 +65,7 @@ export default function PlayerSidebar({
         const isCurrent = i === game.currentPlayerIndex;
         const isExpanded = isCurrent || expandedSidebarPlayers.has(i);
         const isTraitor = traitorPlayerIndex === i;
-        const knowledgeTokenCount = knowledgeHolders.filter((holderIndex) => holderIndex === i).length;
+        const hauntTokens = getHauntPlayerTokensState(game, i);
         return (
           <div key={`sidebar-entry-${i}`} className="sidebar-entry">
             <div
@@ -195,16 +191,16 @@ export default function PlayerSidebar({
                   <div className="sidebar-card-group">
                     <div className="sidebar-card-group-header">
                       <span>Tokens</span>
-                      <span>{knowledgeTokenCount}</span>
+                      <span>{hauntTokens.length}</span>
                     </div>
-                    {knowledgeTokenCount > 0 ? (
+                    {hauntTokens.length > 0 ? (
                       <div className="sidebar-card-list">
-                        {Array.from({ length: knowledgeTokenCount }).map((_, tokenIndex) => (
+                        {hauntTokens.map((token, tokenIndex) => (
                           <span
-                            key={`${p.name}-knowledge-token-${tokenIndex}`}
+                            key={`${p.name}-haunt-token-${tokenIndex}`}
                             className="sidebar-card-chip sidebar-card-chip-token"
                           >
-                            Knowledge of Jack
+                            {token.label}
                           </span>
                         ))}
                       </div>
