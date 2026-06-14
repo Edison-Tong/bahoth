@@ -248,11 +248,16 @@ export function completeHauntSetupState(game, { getHauntDefinitionById }) {
   };
 
   if (runtimeHooks?.onHauntBegin) {
-    const updatedScenarioState = runtimeHooks.onHauntBegin(baseGame);
-    if (updatedScenarioState) {
+    const result = runtimeHooks.onHauntBegin(baseGame);
+    if (result) {
+      // If result has a hauntState, treat it as a full game return (e.g. haunt_28 also modifies the board)
+      if (result.hauntState !== undefined) {
+        return result;
+      }
+      // Backward compat: result is just a scenarioState object
       return {
         ...baseGame,
-        hauntState: { ...baseHauntState, scenarioState: updatedScenarioState },
+        hauntState: { ...baseHauntState, scenarioState: result },
       };
     }
   }
@@ -366,6 +371,15 @@ export function getHauntKnowledgeTokenHoldersState(game) {
     return runtimeHooks.getKnowledgeTokenHoldersState(game);
   }
   return [];
+}
+
+/* [SIDEBAR] Returns the haunt-specific monster card data object for display in the player sidebar, or null if no monster is active. */
+export function getHauntMonsterCardState(game) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getMonsterCardState) {
+    return runtimeHooks.getMonsterCardState(game);
+  }
+  return null;
 }
 
 /* [PLAYER-STATE] [HAUNT-SETUP] Returns whether the current haunt allows a dead player to still take a turn (Jack's Spirit traitor). */

@@ -1520,6 +1520,28 @@ export function resolveMonsterSpeedRollState(game, { dice, total, monsterName })
   };
 }
 
+/* [SIDEBAR] Returns monster card display data for Jack's Spirit when active, or null. */
+export function getMonsterCardState(game) {
+  if (game.activeHauntId !== "haunt_1" || !game.hauntState) return null;
+  const scenarioState = getScenarioState(game.hauntState);
+  const spirit = scenarioState.jacksSpirit;
+  if (!spirit?.active) return null;
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  const monsterDef = game.hauntState.monsters?.find((m) => m.id === "jacks-spirit") || game.hauntState.monsters?.[0];
+  const stats = monsterDef?.stats || { might: 0, speed: 0, sanity: 0, knowledge: 0 };
+  const speedRollLabel =
+    Array.isArray(spirit.speedRoll) && spirit.speedRoll.length > 0
+      ? `${spirit.speedRoll.join(", ")} (${spirit.speedTotal ?? spirit.movesLeft ?? 0})`
+      : "-";
+  return {
+    name: "Jack's Spirit",
+    stats,
+    movesLeft: spirit.movesLeft ?? 0,
+    speedRollLabel,
+    isCurrentTurn: game.currentPlayerIndex === traitorIndex && !game.players[traitorIndex]?.isAlive,
+  };
+}
+
 /* [HAUNT-COMBAT] [SPIRIT] Exported: returns +2 if the attacker (hero) holds Knowledge of Jack and is fighting the traitor/spirit. */
 export function getCombatKnowledgeBonus(game, actorIndex, defenderIndex, role) {
   if (game.activeHauntId !== "haunt_1" || !game.hauntState) return 0;

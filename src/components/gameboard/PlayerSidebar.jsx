@@ -1,4 +1,6 @@
 /* [SIDEBAR] [OVERLAY] Collapsible sidebar listing all players' stats, inventory, and omens. Also shows haunt-specific UI (Jack's Spirit tracker, knowledge tokens) when haunt is active. */
+import { getHauntMonsterCardState } from "../../haunts/hauntDomain";
+
 export default function PlayerSidebar({
   game,
   expandedSidebarPlayers,
@@ -13,42 +15,30 @@ export default function PlayerSidebar({
 }) {
   const traitorPlayerIndex = game?.hauntState?.traitorPlayerIndex;
   const scenarioState = game?.hauntState?.scenarioState || {};
-  const spirit = scenarioState?.jacksSpirit || {};
   const knowledgeHolders = Array.isArray(scenarioState?.revealedKnowledgeOfJackHolders)
     ? scenarioState.revealedKnowledgeOfJackHolders
     : [];
-  const spiritIsActive = !!spirit?.active;
-  const isMonsterTurn =
-    spiritIsActive && game.currentPlayerIndex === traitorPlayerIndex && !game.players[traitorPlayerIndex]?.isAlive;
-  const monsterStats = game?.hauntState?.monsters?.find((monster) => monster.id === "jacks-spirit")?.stats ||
-    game?.hauntState?.monsters?.[0]?.stats || {
-      might: 0,
-      speed: 0,
-      sanity: 0,
-      knowledge: 0,
-    };
-  const movementRollLabel =
-    Array.isArray(spirit?.speedRoll) && spirit.speedRoll.length > 0
-      ? `${spirit.speedRoll.join(", ")} (${spirit.speedTotal ?? spirit.movesLeft ?? 0})`
-      : "-";
 
-  /* [SIDEBAR] [SPIRIT] Renders the Jack's Spirit monster stat card in the sidebar when the spirit is active. */
+  // Single hook — each haunt runtime provides its own monster card data.
+  const monsterCard = getHauntMonsterCardState(game);
+
+  /* [SIDEBAR] [MONSTER] Renders the haunt-specific monster stat card below the traitor's player card. */
   function renderMonsterCard() {
-    if (!spiritIsActive) return null;
-
+    if (!monsterCard) return null;
+    const { name, emoji, stats, movesLeft, speedRollLabel, isCurrentTurn } = monsterCard;
+    const displayName = emoji ? `${emoji} ${name}` : name;
     return (
       <div
-        key="sidebar-monster-jacks-spirit"
-        className={`sidebar-player sidebar-monster ${isMonsterTurn ? "sidebar-current" : ""}`}
+        key={`sidebar-monster-${name}`}
+        className={`sidebar-player sidebar-monster ${isCurrentTurn ? "sidebar-current" : ""}`}
       >
         <div className="sidebar-header sidebar-header-static">
           <div className="sidebar-name sidebar-name-monster">
-            Jack's Spirit {isMonsterTurn && "◄"}
+            {displayName} {isCurrentTurn && "◄"}
             <span className="sidebar-monster-badge">Monster</span>
           </div>
         </div>
         <div className="sidebar-char">Monster Card</div>
-
         <div className="sidebar-stats sidebar-stats-expanded sidebar-monster-stats">
           <div className="sidebar-monster-trait-grid">
             {PLAYER_STAT_ORDER.map((stat) => (
@@ -57,18 +47,17 @@ export default function PlayerSidebar({
                   <span>{STAT_ICONS[stat]}</span>
                   <span>{STAT_LABELS[stat]}</span>
                 </div>
-                <div className="sidebar-monster-stat-value">{monsterStats?.[stat] ?? 0}</div>
+                <div className="sidebar-monster-stat-value">{stats?.[stat] ?? 0}</div>
               </div>
             ))}
           </div>
-
           <div className="sidebar-monster-movement">
             <div className="sidebar-stat-label">
               <span>Movement</span>
             </div>
-            <div className="sidebar-monster-stat-value">{spirit?.movesLeft ?? 0}</div>
+            <div className="sidebar-monster-stat-value">{movesLeft}</div>
           </div>
-          <div className="sidebar-monster-roll">Speed roll: {movementRollLabel}</div>
+          <div className="sidebar-monster-roll">Speed roll: {speedRollLabel}</div>
         </div>
       </div>
     );

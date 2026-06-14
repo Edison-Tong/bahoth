@@ -21,5 +21,6 @@ export {
   getHauntActionRollPreviewState,
   resolveHauntActionRollContinueState,
   advanceHauntRulesViewState,
+  getHauntMonsterCardState,
 } from "./core/hauntRuntime";
 export { getHauntDefinitionById, getAllHauntDefinitions, selectTriggeredHauntDefinition } from "./registry";

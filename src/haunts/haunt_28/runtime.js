@@ -99,10 +99,10 @@ export function onHauntBegin(game) {
   const scenarioState = getScenarioState(game.hauntState);
   const traitorIndex = game.hauntState.traitorPlayerIndex;
   const traitor = game.players[traitorIndex];
-  if (!traitor) return scenarioState;
+  if (!traitor) return null;
   const { floor, x, y } = traitor;
   const alreadyFlooded = isTileFlooded(scenarioState.floodedTiles, floor, x, y);
-  return {
+  const nextScenarioState = {
     ...scenarioState,
     ghostShark: {
       ...scenarioState.ghostShark,
@@ -112,11 +112,32 @@ export function onHauntBegin(game) {
     },
     floodedTiles: alreadyFlooded ? scenarioState.floodedTiles : [...scenarioState.floodedTiles, { floor, x, y }],
   };
+  const nextBoard = alreadyFlooded ? game.board : applyFloodToBoardState(game.board, floor, x, y);
+  // Mark the traitor as dead — their human form is replaced by the shark.
+  const nextPlayers = game.players.map((player, index) =>
+    index === traitorIndex ? { ...player, isAlive: false } : player
+  );
+  return {
+    ...game,
+    players: nextPlayers,
+    board: nextBoard,
+    hauntState: { ...game.hauntState, scenarioState: nextScenarioState },
+  };
 }
 
 /* [LOOKUP] Returns true if { floor, x, y } is a Flooded tile. */
 function isTileFlooded(floodedTiles, floor, x, y) {
   return floodedTiles.some((t) => t.floor === floor && t.x === x && t.y === y);
+}
+
+/* [FLOODING] Applies flood effects to a board tile: opens all 4 doors and nullifies the card type (water erodes walls and submerges card-draw triggers). */
+function applyFloodToBoardState(board, floor, x, y) {
+  return {
+    ...board,
+    [floor]: (board[floor] || []).map((t) =>
+      t.x === x && t.y === y ? { ...t, doors: ["N", "S", "E", "W"], cardType: null } : t
+    ),
+  };
 }
 
 /* [LOOKUP] Returns true if this is a starting tile that cannot be Flooded. */
@@ -295,13 +316,54 @@ export function getCombatActorProxyState() {
 
 // ---------------------------------------------------------------------------
 // Exported hook: getSpecialMoveOptionsState
-// The shark's "Cue Ominous Music" teleport is handled via haunt action buttons,
-// not the movement grid. So no special move overrides for any player.
+// The shark (traitor) moves like a monster: only to existing placed tiles,
+// never discovering new ones. This override filters out "explore" moves.
 // ---------------------------------------------------------------------------
 
-/* [MOVEMENT] Haunt 28 has no special movement overrides (shark moves via action button). */
-export function getSpecialMoveOptionsState() {
-  return null;
+/* [MOVEMENT] Haunt 28 shark movement: only existing tiles, no exploration. */
+export function getSpecialMoveOptionsState({ game, currentPlayer, DIR, getTileAt, backtrackPos }) {
+  if (game.activeHauntId !== "haunt_28" || game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || !game.hauntState) {
+    return null;
+  }
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  if (game.currentPlayerIndex !== traitorIndex) return null;
+  const scenarioState = getScenarioState(game.hauntState);
+  if (!scenarioState.ghostShark?.active) return null;
+
+  // Monsters can only move to existing placed tiles — never discover new ones.
+  const OPPOSITE_DIR = { N: "S", S: "N", E: "W", W: "E" };
+  const tile = getTileAt(currentPlayer.x, currentPlayer.y, currentPlayer.floor);
+  if (!tile) return [];
+
+  const movesLeft = Number(currentPlayer?.movesLeft) || 0;
+  const isFirstMove = !game.hasMovedThisTurn;
+  const hasObstacleToken = Array.isArray(tile?.tokens) && tile.tokens.some((token) => token?.type === "obstacle");
+  const tileLeaveCost = tile?.obstacle || hasObstacleToken ? 2 : 1;
+  const heroIndexes = game.hauntState.teams?.heroes?.playerIndexes || [];
+  const heroesOnTile = heroIndexes.filter((hi) => {
+    const h = game.players[hi];
+    return h?.isAlive && h.floor === currentPlayer.floor && h.x === currentPlayer.x && h.y === currentPlayer.y;
+  }).length;
+  const moveCost = tileLeaveCost + heroesOnTile;
+  const canAffordMove = movesLeft >= moveCost || (isFirstMove && movesLeft > 0);
+
+  const moves = [];
+  for (const dir of tile.doors) {
+    const { dx, dy } = DIR[dir];
+    const nx = currentPlayer.x + dx;
+    const ny = currentPlayer.y + dy;
+    const neighbor = getTileAt(nx, ny, currentPlayer.floor);
+    if (!neighbor) continue; // No tile here — monsters never explore
+    if (!neighbor.doors.includes(OPPOSITE_DIR[dir])) continue;
+    const isBacktrack =
+      backtrackPos && backtrackPos.x === nx && backtrackPos.y === ny && backtrackPos.floor === currentPlayer.floor;
+    if (isBacktrack) {
+      moves.push({ dir, x: nx, y: ny, type: "backtrack" });
+    } else if (canAffordMove) {
+      moves.push({ dir, x: nx, y: ny, type: "move", cost: moveCost });
+    }
+  }
+  return moves;
 }
 
 // ---------------------------------------------------------------------------
@@ -335,9 +397,13 @@ export function getKnowledgeTokenHoldersState() {
 // Exported hook: canDeadPlayerTakeTurn
 // ---------------------------------------------------------------------------
 
-/* [PLAYER-STATE] Haunt 28: no dead-player-takes-turn mechanic (shark is not a dead player). */
-export function canDeadPlayerTakeTurn() {
-  return false;
+/* [PLAYER-STATE] Haunt 28: the traitor is dead (became the shark) but still takes turns controlling it. */
+export function canDeadPlayerTakeTurn(game, playerIndex) {
+  if (game.activeHauntId !== "haunt_28" || !game.hauntState) return false;
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  if (playerIndex !== traitorIndex) return false;
+  const shark = getScenarioState(game.hauntState).ghostShark;
+  return !!shark?.active;
 }
 
 // ---------------------------------------------------------------------------
@@ -363,8 +429,10 @@ export function getActionAvailabilityState(game, { hauntActionLocked }) {
   const shark = scenarioState.ghostShark;
   const canUseHeroAction = !isTraitorTurn && !!currentPlayer?.isAlive && !hauntActionLocked;
 
-  // Search for Explosives: hero, on an item-cardType tile, hasn't used this turn
-  const onItemTile = !!currentTile && currentTile.cardType === "item";
+  // Search for Explosives: hero, on an item-cardType tile that is not flooded, hasn't used this turn
+  const currentTileIsFlooded =
+    !!currentTile && isTileFlooded(scenarioState.floodedTiles, currentPlayer?.floor, currentTile.x, currentTile.y);
+  const onItemTile = !!currentTile && currentTile.cardType === "item" && !currentTileIsFlooded;
   const totalExplosives = Object.values(scenarioState.playerExplosives || {}).reduce((s, n) => s + n, 0);
   const searchUsageKey = createUsageKey(game, "search-for-explosives");
   const searchAlreadyUsed = !!game.hauntState.oncePerTurnUsage?.[searchUsageKey];
@@ -544,6 +612,10 @@ function resolveSearchForExplosivesState(game) {
   const currentTile = getCurrentTile(game);
   if (!currentTile || currentTile.cardType !== "item") {
     return { ...game, message: "Search for Explosives can only be used on an Item tile." };
+  }
+  const scenarioStateForFlood = getScenarioState(game.hauntState);
+  if (isTileFlooded(scenarioStateForFlood.floodedTiles, currentPlayer?.floor, currentTile.x, currentTile.y)) {
+    return { ...game, message: "Search for Explosives cannot be used on a Flooded tile." };
   }
 
   const scenarioState = getScenarioState(game.hauntState);
@@ -763,10 +835,19 @@ function resolvePendingCueOminousMusicState(game) {
     y: selectedOption.y,
   };
 
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  const nextPlayers = game.players.map((player, index) =>
+    index === traitorIndex
+      ? { ...player, floor: selectedOption.floor, x: selectedOption.x, y: selectedOption.y }
+      : player
+  );
+
   const nextHauntState = markHauntActionUsed(game.hauntState, pendingChoice.usageKey);
 
   return {
     ...game,
+    players: nextPlayers,
+    movePath: [{ x: selectedOption.x, y: selectedOption.y, floor: selectedOption.floor, cost: 0 }],
     hauntState: {
       ...nextHauntState,
       scenarioState: {
@@ -1073,6 +1154,29 @@ export function getCombatBonus() {
   return 0;
 }
 
+/* [SIDEBAR] Returns monster card display data for the Great White Ghost Shark when active, or null. */
+export function getMonsterCardState(game) {
+  if (game.activeHauntId !== "haunt_28" || !game.hauntState) return null;
+  const scenarioState = getScenarioState(game.hauntState);
+  const shark = scenarioState.ghostShark;
+  if (!shark?.active) return null;
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  const monsterDef = game.hauntState.monsters?.find((m) => m.id === "ghost-shark");
+  const stats = monsterDef?.stats || { might: 8, speed: 2, sanity: 4, knowledge: 4 };
+  const speedRollLabel =
+    Array.isArray(shark.speedRoll) && shark.speedRoll.length > 0
+      ? `${shark.speedRoll.join(", ")} (${shark.speedTotal ?? shark.movesLeft ?? 0})`
+      : "-";
+  return {
+    name: "Great White Ghost Shark",
+    emoji: "🦈",
+    stats,
+    movesLeft: shark.movesLeft ?? 0,
+    speedRollLabel,
+    isCurrentTurn: game.currentPlayerIndex === traitorIndex,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Flood tile selection — called from resolveActionState when the pending
 // choice type is "flood-tile-selection" and the traitor picks a tile.
@@ -1089,15 +1193,17 @@ export function resolveFloodTileSelectionState(game, optionId) {
   const selectedOption = (pendingChoice.options || []).find((opt) => opt.id === optionId);
   if (!selectedOption) return game;
 
-  // Mark the tile as flooded
+  // Mark the tile as flooded and open all 4 doors + clear card type on the board tile
   const newFloodedTile = { floor: selectedOption.floor, x: selectedOption.x, y: selectedOption.y };
   const nextFloodedTiles = [...scenarioState.floodedTiles, newFloodedTile];
+  const nextBoard = applyFloodToBoardState(game.board, selectedOption.floor, selectedOption.x, selectedOption.y);
 
   // Check traitor win: all non-landing tiles flooded
-  const allFlooded = areAllTilesFlooded(game.board, nextFloodedTiles);
+  const allFlooded = areAllTilesFlooded(nextBoard, nextFloodedTiles);
   if (allFlooded) {
     return {
       ...game,
+      board: nextBoard,
       hauntState: {
         ...game.hauntState,
         scenarioState: {
@@ -1115,6 +1221,7 @@ export function resolveFloodTileSelectionState(game, optionId) {
 
   return {
     ...game,
+    board: nextBoard,
     hauntState: {
       ...game.hauntState,
       scenarioState: {
