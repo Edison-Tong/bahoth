@@ -41,6 +41,7 @@ import {
   resolveMonsterSpeedRollState as resolveMonsterSpeedRollState28,
   getMonsterCardState as getMonsterCardState28,
   getPlayerHauntTokensState as getPlayerHauntTokensState28,
+  getPlayerCardFlagsState as getPlayerCardFlagsState28,
 } from "./haunt_28/runtime";
 
 // Static registry mapping haunt IDs to definition objects and runtime hook bundles.
@@ -91,6 +92,7 @@ const HAUNT_RUNTIME_REGISTRY = {
     resolveMonsterSpeedRollState: resolveMonsterSpeedRollState28,
     getMonsterCardState: getMonsterCardState28,
     getPlayerHauntTokensState: getPlayerHauntTokensState28,
+    getPlayerCardFlagsState: getPlayerCardFlagsState28,
   },
 };
 

@@ -113,14 +113,26 @@ export function onHauntBegin(game) {
     floodedTiles: alreadyFlooded ? scenarioState.floodedTiles : [...scenarioState.floodedTiles, { floor, x, y }],
   };
   const nextBoard = alreadyFlooded ? game.board : applyFloodToBoardState(game.board, floor, x, y);
+
+  // Bury traitor's items and omens — strip the drawn `type` wrapper and return to respective decks.
+  // eslint-disable-next-line no-unused-vars
+  const itemsToBury = (traitor.inventory || []).map(({ type, ...card }) => card);
+  // eslint-disable-next-line no-unused-vars
+  const omensToBury = (traitor.omens || []).map(({ type, ...card }) => card);
+  const omensBuried = omensToBury.length;
+
   // Mark the traitor as dead — their human form is replaced by the shark.
   const nextPlayers = game.players.map((player, index) =>
-    index === traitorIndex ? { ...player, isAlive: false } : player
+    index === traitorIndex ? { ...player, isAlive: false, inventory: [], omens: [] } : player
   );
+
   return {
     ...game,
     players: nextPlayers,
     board: nextBoard,
+    itemDeck: [...game.itemDeck, ...itemsToBury],
+    omenDeck: [...game.omenDeck, ...omensToBury],
+    omenCount: Math.max(0, game.omenCount - omensBuried),
     hauntState: { ...game.hauntState, scenarioState: nextScenarioState },
   };
 }
@@ -1152,6 +1164,14 @@ export function resolveMonsterSpeedRollState(game, { dice, total, monsterName })
 /* [HAUNT-COMBAT] Haunt 28 has no combat roll bonuses. */
 export function getCombatBonus() {
   return 0;
+}
+
+/* [SIDEBAR] Haunt 28: traitor's character card cannot be expanded (they are the shark now). */
+export function getPlayerCardFlagsState(game, playerIndex) {
+  if (game.activeHauntId !== "haunt_28" || !game.hauntState) return null;
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  if (playerIndex === traitorIndex) return { expandable: false };
+  return null;
 }
 
 /* [SIDEBAR] Returns haunt-specific token chips for a given player index (e.g. Explosive tokens). */

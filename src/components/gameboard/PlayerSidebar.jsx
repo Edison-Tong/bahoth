@@ -1,5 +1,9 @@
 /* [SIDEBAR] [OVERLAY] Collapsible sidebar listing all players' stats, inventory, and omens. Also shows haunt-specific UI (Jack's Spirit tracker, knowledge tokens) when haunt is active. */
-import { getHauntMonsterCardState, getHauntPlayerTokensState } from "../../haunts/hauntDomain";
+import {
+  getHauntMonsterCardState,
+  getHauntPlayerTokensState,
+  getHauntPlayerCardFlagsState,
+} from "../../haunts/hauntDomain";
 
 export default function PlayerSidebar({
   game,
@@ -63,23 +67,33 @@ export default function PlayerSidebar({
     <div className="player-sidebar">
       {game.players.map((p, i) => {
         const isCurrent = i === game.currentPlayerIndex;
-        const isExpanded = isCurrent || expandedSidebarPlayers.has(i);
+        const isDead = !p.isAlive;
+        const cardFlags = getHauntPlayerCardFlagsState(game, i);
+        const isExpanded = cardFlags.expandable && (isCurrent || expandedSidebarPlayers.has(i));
         const isTraitor = traitorPlayerIndex === i;
         const hauntTokens = getHauntPlayerTokensState(game, i);
         return (
           <div key={`sidebar-entry-${i}`} className="sidebar-entry">
             <div
-              className={`sidebar-player ${isCurrent ? "sidebar-current" : ""} ${isExpanded ? "sidebar-expanded" : "sidebar-collapsed"} ${!p.isAlive ? "sidebar-dead" : ""} ${isTraitor ? "sidebar-traitor" : ""}`}
-              style={{ borderColor: isCurrent ? p.color : "transparent" }}
+              className={`sidebar-player ${isCurrent ? "sidebar-current" : ""} ${isExpanded ? "sidebar-expanded" : "sidebar-collapsed"} ${isDead ? "sidebar-dead" : ""} ${isTraitor ? "sidebar-traitor" : ""}`}
+              style={{ borderColor: isCurrent ? p.color : undefined }}
             >
-              <button className="sidebar-header" onClick={() => toggleSidebarPlayer(i)} type="button">
-                <div className="sidebar-name" style={{ color: p.color }}>
+              <button
+                className="sidebar-header"
+                onClick={() => cardFlags.expandable && toggleSidebarPlayer(i)}
+                style={{ cursor: cardFlags.expandable ? "pointer" : "default" }}
+                type="button"
+              >
+                <div className="sidebar-name" style={{ color: isDead ? "#888" : p.color }}>
                   {p.name} {isCurrent && "◄"}
+                  {isDead && <span className="sidebar-dead-badge">☠ Dead</span>}
                   {isTraitor && <span className="sidebar-traitor-badge">Traitor</span>}
                 </div>
-                <span className={`sidebar-toggle ${isExpanded ? "sidebar-toggle-expanded" : ""}`} aria-hidden="true">
-                  ▾
-                </span>
+                {cardFlags.expandable && (
+                  <span className={`sidebar-toggle ${isExpanded ? "sidebar-toggle-expanded" : ""}`} aria-hidden="true">
+                    ▾
+                  </span>
+                )}
               </button>
               <div className="sidebar-char">{p.character.name}</div>
               {!isExpanded && (

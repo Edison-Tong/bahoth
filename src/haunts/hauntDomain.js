@@ -23,5 +23,6 @@ export {
   advanceHauntRulesViewState,
   getHauntMonsterCardState,
   getHauntPlayerTokensState,
+  getHauntPlayerCardFlagsState,
 } from "./core/hauntRuntime";
 export { getHauntDefinitionById, getAllHauntDefinitions, selectTriggeredHauntDefinition } from "./registry";

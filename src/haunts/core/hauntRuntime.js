@@ -373,6 +373,16 @@ export function getHauntKnowledgeTokenHoldersState(game) {
   return [];
 }
 
+/* [SIDEBAR] Returns per-player card display flags for the active haunt (e.g. expandable: false for shark traitor). Defaults to expandable: true. */
+export function getHauntPlayerCardFlagsState(game, playerIndex) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getPlayerCardFlagsState) {
+    const flags = runtimeHooks.getPlayerCardFlagsState(game, playerIndex);
+    if (flags != null) return flags;
+  }
+  return { expandable: true };
+}
+
 /* [SIDEBAR] Returns the haunt-specific monster card data object for display in the player sidebar, or null if no monster is active. */
 export function getHauntMonsterCardState(game) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
