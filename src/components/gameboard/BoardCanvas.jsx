@@ -1,5 +1,5 @@
 import { EventTileChoiceTargets } from "../EventResolutionModal";
-import { getHauntTileTokenLabelsState } from "../../haunts/hauntDomain";
+import { getHauntTileTokenLabelsState, getHauntBoardRenderState } from "../../haunts/hauntDomain";
 
 /* [BOARD-LAYOUT] [SPIRIT] Abbreviated initials for monster token labels shown on board tiles. */
 function getMonsterTokenAbbreviation(label) {
@@ -26,7 +26,6 @@ export default function BoardCanvas({
   currentPlayer,
   floorTiles,
   playersOnFloor,
-  sharkToken = null,
   tradeState,
   validMoves,
   pendingSpecialPlacementTargets,
@@ -53,6 +52,7 @@ export default function BoardCanvas({
   interactionLocked = false,
 }) {
   const traitorPlayerIndex = game?.hauntState?.traitorPlayerIndex;
+  const { floodedTiles: hauntFloodedTiles, monsterToken } = getHauntBoardRenderState(game);
 
   return (
     <div className="board-container">
@@ -84,14 +84,17 @@ export default function BoardCanvas({
               const tilePlayersHere = playersOnFloor.filter((p) => p.x === tile.x && p.y === tile.y);
               const isCurrentTile =
                 currentPlayer.x === tile.x && currentPlayer.y === tile.y && currentPlayer.floor === cameraFloor;
-              const floodedTiles = game.hauntState?.scenarioState?.floodedTiles;
-              const isFlooded =
-                floodedTiles?.some((f) => f.floor === cameraFloor && f.x === tile.x && f.y === tile.y) ?? false;
+              const isFlooded = hauntFloodedTiles.some(
+                (f) => f.floor === cameraFloor && f.x === tile.x && f.y === tile.y
+              );
 
               if (isFlooded) {
                 const sharkHere =
-                  sharkToken && sharkToken.floor === cameraFloor && sharkToken.x === tile.x && sharkToken.y === tile.y;
-                const visiblePlayers = tilePlayersHere.filter((p) => !(sharkToken && p.index === traitorPlayerIndex));
+                  monsterToken &&
+                  monsterToken.floor === cameraFloor &&
+                  monsterToken.x === tile.x &&
+                  monsterToken.y === tile.y;
+                const visiblePlayers = tilePlayersHere.filter((p) => !(monsterToken && p.index === traitorPlayerIndex));
                 return (
                   <div
                     key={tile.id + tile.x + tile.y}
@@ -102,15 +105,23 @@ export default function BoardCanvas({
                     {(sharkHere || visiblePlayers.length > 0) && (
                       <div className="tile-players tile-players-flooded">
                         {sharkHere && (
-                          <div className="shark-token" title="Great White Ghost Shark">
-                            🦈
+                          <div className="shark-token" title={monsterToken.label}>
+                            {monsterToken.emoji}
                           </div>
                         )}
-                        {visiblePlayers.map((p) => (
-                          <div key={p.index} className="player-token" style={{ background: p.color }} title={p.name}>
-                            {p.name.charAt(0)}
-                          </div>
-                        ))}
+                        {visiblePlayers.map((p) => {
+                          const isTraitor = traitorPlayerIndex === p.index;
+                          return (
+                            <div
+                              key={p.index}
+                              className={`player-token ${isTraitor ? "player-token-traitor" : ""}`}
+                              style={{ background: p.color }}
+                              title={isTraitor ? `${p.name} (Traitor)` : p.name}
+                            >
+                              {p.name.charAt(0)}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -200,29 +211,37 @@ export default function BoardCanvas({
                     ))}
                   </div>
 
-                  {/* Player tokens + shark token */}
+                  {/* Player tokens + monster token */}
                   {(() => {
                     const visiblePlayers = tilePlayersHere.filter(
-                      (p) => !(sharkToken && p.index === traitorPlayerIndex)
+                      (p) => !(monsterToken && p.index === traitorPlayerIndex)
                     );
                     const sharkHere =
-                      sharkToken &&
-                      sharkToken.floor === cameraFloor &&
-                      sharkToken.x === tile.x &&
-                      sharkToken.y === tile.y;
+                      monsterToken &&
+                      monsterToken.floor === cameraFloor &&
+                      monsterToken.x === tile.x &&
+                      monsterToken.y === tile.y;
                     if (!visiblePlayers.length && !sharkHere) return null;
                     return (
                       <div className="tile-players">
                         {sharkHere && (
-                          <div className="shark-token" title="Great White Ghost Shark">
-                            🦈
+                          <div className="shark-token" title={monsterToken.label}>
+                            {monsterToken.emoji}
                           </div>
                         )}
-                        {visiblePlayers.map((p) => (
-                          <div key={p.index} className="player-token" style={{ background: p.color }} title={p.name}>
-                            {p.name.charAt(0)}
-                          </div>
-                        ))}
+                        {visiblePlayers.map((p) => {
+                          const isTraitor = traitorPlayerIndex === p.index;
+                          return (
+                            <div
+                              key={p.index}
+                              className={`player-token ${isTraitor ? "player-token-traitor" : ""}`}
+                              style={{ background: p.color }}
+                              title={isTraitor ? `${p.name} (Traitor)` : p.name}
+                            >
+                              {p.name.charAt(0)}
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })()}

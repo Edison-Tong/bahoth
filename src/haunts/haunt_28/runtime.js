@@ -113,7 +113,9 @@ export function onHauntBegin(game) {
     floodedTiles: alreadyFlooded ? scenarioState.floodedTiles : [...scenarioState.floodedTiles, { floor, x, y }],
   };
   const nextBoard = alreadyFlooded ? game.board : applyFloodToBoardState(game.board, floor, x, y);
-  const nextFloodedTiles = alreadyFlooded ? scenarioState.floodedTiles : [...scenarioState.floodedTiles, { floor, x, y }];
+  const nextFloodedTiles = alreadyFlooded
+    ? scenarioState.floodedTiles
+    : [...scenarioState.floodedTiles, { floor, x, y }];
 
   // Bury traitor's items and omens — strip the drawn `type` wrapper and return to respective decks.
   // eslint-disable-next-line no-unused-vars
@@ -176,7 +178,13 @@ function buildSetupFloodPendingChoice(game, traitorFloor, alreadyFloodedTiles) {
   const floodedSet = new Set(alreadyFloodedTiles.map((t) => `${t.floor}:${t.x}:${t.y}`));
   const candidates = (game.board[traitorFloor] || [])
     .filter((t) => !isTileLanding(t.id) && !floodedSet.has(`${traitorFloor}:${t.x}:${t.y}`))
-    .map((t) => ({ id: `${traitorFloor}:${t.x}:${t.y}`, floor: traitorFloor, x: t.x, y: t.y, label: `${t.name} (${traitorFloor})` }));
+    .map((t) => ({
+      id: `${traitorFloor}:${t.x}:${t.y}`,
+      floor: traitorFloor,
+      x: t.x,
+      y: t.y,
+      label: `${t.name} (${traitorFloor})`,
+    }));
 
   if (candidates.length === 0) return null;
 
@@ -1384,6 +1392,21 @@ export function getMonsterCardState(game) {
   };
 }
 
+/* [BOARD-RENDER] Returns flooded tiles and the active monster token position for board rendering. Called by BoardCanvas via hauntDomain. */
+export function getBoardRenderState(game) {
+  if (game.activeHauntId !== "haunt_28" || !game.hauntState) {
+    return { floodedTiles: [], monsterToken: null };
+  }
+  const scenarioState = getScenarioState(game.hauntState);
+  const shark = scenarioState.ghostShark;
+  return {
+    floodedTiles: scenarioState.floodedTiles || [],
+    monsterToken: shark?.active
+      ? { floor: shark.floor, x: shark.x, y: shark.y, label: "Great White Ghost Shark", emoji: "🦈" }
+      : null,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Setup flood tile selection — called from resolveActionState during haunt
 // setup when extra tiles need to be flooded (4+ players).
@@ -1411,15 +1434,14 @@ function resolveSetupFloodTileSelectionState(game, optionId) {
   );
 
   const nextPendingChoice =
-    remaining > 0 && nextOptions.length > 0
-      ? { ...pendingChoice, remaining, options: nextOptions }
-      : null;
+    remaining > 0 && nextOptions.length > 0 ? { ...pendingChoice, remaining, options: nextOptions } : null;
 
   return {
     ...game,
-    currentPlayerIndex: nextPendingChoice === null
-      ? (game.hauntState.firstPlayerAfterSetup ?? game.currentPlayerIndex)
-      : game.currentPlayerIndex,
+    currentPlayerIndex:
+      nextPendingChoice === null
+        ? (game.hauntState.firstPlayerAfterSetup ?? game.currentPlayerIndex)
+        : game.currentPlayerIndex,
     board: nextBoard,
     hauntState: {
       ...game.hauntState,

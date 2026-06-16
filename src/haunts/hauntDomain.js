@@ -12,6 +12,7 @@ export {
   getHauntCombatActorProxyState,
   resolveHauntMonsterSpeedRollState,
   getHauntMovementOptionsState,
+  getHauntBoardRenderState,
   getHauntTileTokenLabelsState,
   getHauntKnowledgeTokenHoldersState,
   getHauntCanDeadPlayerTakeTurnState,

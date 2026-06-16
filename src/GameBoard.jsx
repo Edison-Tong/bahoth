@@ -2869,8 +2869,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     ? hauntPendingChoice.selectedOptionId || null
     : null;
   const isFloodTileChoiceActive =
-    hauntPendingChoice?.type === "flood-tile-selection" ||
-    hauntPendingChoice?.type === "setup-flood-selection";
+    hauntPendingChoice?.type === "flood-tile-selection" || hauntPendingChoice?.type === "setup-flood-selection";
   const floodTileChoiceOptions = isFloodTileChoiceActive ? hauntPendingChoice.options || [] : [];
   const isCueOminousMusicChoiceActive = hauntPendingChoice?.type === "cue-ominous-music-placement";
   const cueOminousMusicTileChoiceOptions = isCueOminousMusicChoiceActive ? hauntPendingChoice.options || [] : [];
@@ -3175,12 +3174,6 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
   // Players on current floor
   const playersOnFloor = getPlayersOnFloor(game.players, cameraFloor);
 
-  // Haunt 28 shark token position
-  const sharkToken =
-    game.activeHauntId === "haunt_28" && game.hauntState?.scenarioState?.ghostShark?.active
-      ? game.hauntState.scenarioState.ghostShark
-      : null;
-
   useEffect(() => {
     const scrollEl = boardRef.current;
     if (!scrollEl || currentPlayer.floor !== cameraFloor) return;
@@ -3273,7 +3266,6 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         currentPlayer={currentPlayer}
         floorTiles={floorTiles}
         playersOnFloor={playersOnFloor}
-        sharkToken={sharkToken}
         tradeState={tradeState}
         validMoves={validMoves}
         pendingSpecialPlacementTargets={pendingSpecialPlacementTargets}

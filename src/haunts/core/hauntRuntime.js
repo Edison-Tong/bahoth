@@ -341,6 +341,15 @@ export function getHauntMovementOptionsState(context) {
   return null;
 }
 
+/* [BOARD-RENDER] Returns { floodedTiles, monsterToken } for board rendering — flooded tile list and active monster token position/emoji. */
+export function getHauntBoardRenderState(game) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getBoardRenderState) {
+    return runtimeHooks.getBoardRenderState(game);
+  }
+  return { floodedTiles: [], monsterToken: null };
+}
+
 /* [SPIRIT] [BOARD-LAYOUT] Returns UI token labels for the active haunt at a given board position (corpse, exorcism circle, spirit). */
 export function getHauntTileTokenLabelsState(game, position) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
