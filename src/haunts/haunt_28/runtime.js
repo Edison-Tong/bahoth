@@ -113,6 +113,7 @@ export function onHauntBegin(game) {
     floodedTiles: alreadyFlooded ? scenarioState.floodedTiles : [...scenarioState.floodedTiles, { floor, x, y }],
   };
   const nextBoard = alreadyFlooded ? game.board : applyFloodToBoardState(game.board, floor, x, y);
+  const nextFloodedTiles = alreadyFlooded ? scenarioState.floodedTiles : [...scenarioState.floodedTiles, { floor, x, y }];
 
   // Bury traitor's items and omens — strip the drawn `type` wrapper and return to respective decks.
   // eslint-disable-next-line no-unused-vars
@@ -126,6 +127,34 @@ export function onHauntBegin(game) {
     index === traitorIndex ? { ...player, isAlive: false, inventory: [], omens: [] } : player
   );
 
+  const baseGame = {
+    ...game,
+    players: nextPlayers,
+    board: nextBoard,
+    itemDeck: [...game.itemDeck, ...itemsToBury],
+    omenDeck: [...game.omenDeck, ...omensToBury],
+    omenCount: Math.max(0, game.omenCount - omensBuried),
+    hauntState: { ...game.hauntState, scenarioState: { ...nextScenarioState, floodedTiles: nextFloodedTiles } },
+  };
+
+  // Set up extra setup floods if player count requires it.
+  const setupFloodChoice = buildSetupFloodPendingChoice(baseGame, floor, nextFloodedTiles);
+  if (setupFloodChoice) {
+    return {
+      ...baseGame,
+      currentPlayerIndex: traitorIndex,
+      movePath: [{ x, y, floor, cost: 0 }],
+      hauntState: {
+        ...baseGame.hauntState,
+        scenarioState: {
+          ...baseGame.hauntState.scenarioState,
+          pendingChoice: setupFloodChoice,
+        },
+      },
+      message: `The shark has awoken! Flood ${setupFloodChoice.remaining} more tile${setupFloodChoice.remaining !== 1 ? "s" : ""} anywhere on the ${floor} floor to begin.`,
+    };
+  }
+
   return {
     ...game,
     players: nextPlayers,
@@ -133,7 +162,28 @@ export function onHauntBegin(game) {
     itemDeck: [...game.itemDeck, ...itemsToBury],
     omenDeck: [...game.omenDeck, ...omensToBury],
     omenCount: Math.max(0, game.omenCount - omensBuried),
-    hauntState: { ...game.hauntState, scenarioState: nextScenarioState },
+    hauntState: { ...game.hauntState, scenarioState: { ...nextScenarioState, floodedTiles: nextFloodedTiles } },
+  };
+}
+
+/* [HAUNT-SETUP] Builds the setup-flood pending choice after the initial tile is flooded, if player count requires extra floods. Returns null if no extra floods needed or no eligible tiles. */
+function buildSetupFloodPendingChoice(game, traitorFloor, alreadyFloodedTiles) {
+  const playerCount = game.players.length;
+  const EXTRA_FLOODS = { 3: 0, 4: 1, 5: 2, 6: 3 };
+  const remaining = EXTRA_FLOODS[playerCount] ?? 0;
+  if (remaining === 0) return null;
+
+  const floodedSet = new Set(alreadyFloodedTiles.map((t) => `${t.floor}:${t.x}:${t.y}`));
+  const candidates = (game.board[traitorFloor] || [])
+    .filter((t) => !isTileLanding(t.id) && !floodedSet.has(`${traitorFloor}:${t.x}:${t.y}`))
+    .map((t) => ({ id: `${traitorFloor}:${t.x}:${t.y}`, floor: traitorFloor, x: t.x, y: t.y, label: `${t.name} (${traitorFloor})` }));
+
+  if (candidates.length === 0) return null;
+
+  return {
+    type: "setup-flood-selection",
+    remaining: Math.min(remaining, candidates.length),
+    options: candidates,
   };
 }
 
@@ -496,6 +546,11 @@ export function getActionButtonsState(game, context) {
   const scenarioState = getScenarioState(game.hauntState);
   const pendingChoice = scenarioState.pendingChoice;
 
+  // Setup flood selection: handled via board tile highlighting, not buttons
+  if (pendingChoice?.type === "setup-flood-selection") {
+    return [];
+  }
+
   // Flood tile selection: handled via board tile highlighting, not buttons
   if (pendingChoice?.type === "flood-tile-selection") {
     return [];
@@ -600,6 +655,8 @@ export function resolveActionState(game, { actionId }) {
   if (actionId === "force-explosives-count-confirm") return resolveForceExplosivesCountConfirmState(game);
   if (typeof actionId === "string" && actionId.startsWith("pending-flood-tile:")) {
     const optionId = actionId.replace("pending-flood-tile:", "");
+    const pendingType = getScenarioState(game.hauntState).pendingChoice?.type;
+    if (pendingType === "setup-flood-selection") return resolveSetupFloodTileSelectionState(game, optionId);
     return resolveFloodTileSelectionState(game, optionId);
   }
 
@@ -1092,6 +1149,11 @@ export function resolveTurnStartState(game, { rollDice }) {
   if (game.currentPlayerIndex === traitorIndex) {
     if (!shark?.active) return { game, diceAnimation: null };
 
+    // During setup, the traitor is flooding tiles — don't roll speed yet.
+    if (scenarioState.pendingChoice?.type === "setup-flood-selection") {
+      return { game, diceAnimation: null };
+    }
+
     // Win check: all tiles flooded at the start of the shark's turn → traitor wins
     if (areAllTilesFlooded(game.board, scenarioState.floodedTiles)) {
       return {
@@ -1135,6 +1197,10 @@ export function resolveTurnStartState(game, { rollDice }) {
 
   // ---- Hero turn: traitor floods a tile ----
   if (isHero(game, game.currentPlayerIndex)) {
+    // Safety: never overwrite an in-progress setup flood
+    if (scenarioState.pendingChoice?.type === "setup-flood-selection") {
+      return { game, diceAnimation: null };
+    }
     const floodedTiles = scenarioState.floodedTiles;
 
     // Determine flood candidates
@@ -1315,6 +1381,57 @@ export function getMonsterCardState(game) {
     movesLeft: shark.movesLeft ?? 0,
     speedRollLabel,
     isCurrentTurn: game.currentPlayerIndex === traitorIndex,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Setup flood tile selection — called from resolveActionState during haunt
+// setup when extra tiles need to be flooded (4+ players).
+// ---------------------------------------------------------------------------
+
+/* [HAUNT-SETUP] [FLOODING] Resolves one setup-flood tile pick. Decrements remaining; clears choice when done. */
+function resolveSetupFloodTileSelectionState(game, optionId) {
+  if (game.activeHauntId !== "haunt_28" || !game.hauntState) return game;
+  const scenarioState = getScenarioState(game.hauntState);
+  const pendingChoice = scenarioState.pendingChoice;
+  if (pendingChoice?.type !== "setup-flood-selection") return game;
+
+  const selectedOption = (pendingChoice.options || []).find((opt) => opt.id === optionId);
+  if (!selectedOption) return game;
+
+  const newFloodedTile = { floor: selectedOption.floor, x: selectedOption.x, y: selectedOption.y };
+  const nextFloodedTiles = [...scenarioState.floodedTiles, newFloodedTile];
+  const nextBoard = applyFloodToBoardState(game.board, selectedOption.floor, selectedOption.x, selectedOption.y);
+
+  const remaining = pendingChoice.remaining - 1;
+  // Rebuild options excluding the just-picked tile and any now-flooded tiles
+  const floodedSet = new Set(nextFloodedTiles.map((t) => `${t.floor}:${t.x}:${t.y}`));
+  const nextOptions = (pendingChoice.options || []).filter(
+    (opt) => opt.id !== optionId && !floodedSet.has(`${opt.floor}:${opt.x}:${opt.y}`)
+  );
+
+  const nextPendingChoice =
+    remaining > 0 && nextOptions.length > 0
+      ? { ...pendingChoice, remaining, options: nextOptions }
+      : null;
+
+  return {
+    ...game,
+    currentPlayerIndex: nextPendingChoice === null
+      ? (game.hauntState.firstPlayerAfterSetup ?? game.currentPlayerIndex)
+      : game.currentPlayerIndex,
+    board: nextBoard,
+    hauntState: {
+      ...game.hauntState,
+      scenarioState: {
+        ...scenarioState,
+        floodedTiles: nextFloodedTiles,
+        pendingChoice: nextPendingChoice,
+      },
+    },
+    message: nextPendingChoice
+      ? `${selectedOption.label} is Flooded. ${remaining} more tile${remaining !== 1 ? "s" : ""} to flood for setup.`
+      : `${selectedOption.label} is Flooded. Setup complete — the tide begins to rise!`,
   };
 }
 

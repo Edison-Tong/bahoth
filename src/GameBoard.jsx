@@ -406,6 +406,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     hauntPendingChoiceType === "assign-knowledge-token" ||
     hauntPendingChoiceType === "move-exorcism-token" ||
     hauntPendingChoiceType === "flood-tile-selection" ||
+    hauntPendingChoiceType === "setup-flood-selection" ||
     hauntPendingChoiceType === "cue-ominous-music-placement" ||
     hauntPendingChoiceType === "force-explosives-count";
   const gameIsOver = game.gamePhase === GAME_PHASES.GAME_OVER;
@@ -2867,7 +2868,9 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
   const selectedStalkPreyTileChoiceId = isStalkPreyTileChoiceActive
     ? hauntPendingChoice.selectedOptionId || null
     : null;
-  const isFloodTileChoiceActive = hauntPendingChoice?.type === "flood-tile-selection";
+  const isFloodTileChoiceActive =
+    hauntPendingChoice?.type === "flood-tile-selection" ||
+    hauntPendingChoice?.type === "setup-flood-selection";
   const floodTileChoiceOptions = isFloodTileChoiceActive ? hauntPendingChoice.options || [] : [];
   const isCueOminousMusicChoiceActive = hauntPendingChoice?.type === "cue-ominous-music-placement";
   const cueOminousMusicTileChoiceOptions = isCueOminousMusicChoiceActive ? hauntPendingChoice.options || [] : [];

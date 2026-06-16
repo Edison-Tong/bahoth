@@ -30,7 +30,7 @@ const haunt28Definition = {
         },
         {
           heading: "Tokens Needed",
-          bullets: ["Ghost Shark Token", "5 Trap Tokens — Explosives"],
+          bullets: ["Ghost Shark Token", "5 Explosives Tokens"],
         },
         {
           heading: "If You Win",
@@ -46,7 +46,7 @@ const haunt28Definition = {
             title: "Search for Explosives",
             lines: [
               "On any tile with an Item symbol, make a Speed roll.",
-              "4+: Take a Trap token. These are Explosives.",
+              "4+: Take an Explosives token.",
               "0–3: Nothing happens.",
             ],
           },
@@ -54,7 +54,7 @@ const haunt28Definition = {
             title: "Force Explosives down the Shark's Throat",
             lines: [
               "While on a tile with the Shark, make a Might roll.",
-              "Discard any number of Trap tokens to add 2 to the result of your roll for each token discarded.",
+              "Discard any number of Explosives tokens to add 2 to the result of your roll for each token discarded.",
               "If you have Dynamite, add 2 to the result of your roll.",
               "10+: You win! The shark explodes!",
               "0–9: Take 2 Physical damage and end your turn.",
@@ -92,7 +92,7 @@ const haunt28Definition = {
         },
         {
           heading: "Tokens Needed",
-          bullets: ["Ghost Shark Token", "5 Trap Tokens — Explosives"],
+          bullets: ["Ghost Shark Token", "5 Explosives Tokens"],
         },
         {
           heading: "If You Win",
