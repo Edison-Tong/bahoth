@@ -45,6 +45,7 @@ import HauntSetupOverlay from "./components/gameboard/overlays/HauntSetupOverlay
 import HauntRulesViewerOverlay from "./components/gameboard/overlays/HauntRulesViewerOverlay";
 import HauntActionRollOverlay from "./components/gameboard/overlays/HauntActionRollOverlay";
 import DamageChoiceOverlay from "./components/gameboard/overlays/DamageChoiceOverlay";
+import ForceExplosivesOverlay from "./haunts/haunt_28/ForceExplosivesOverlay";
 import DebugModePanel from "./components/gameboard/DebugModePanel";
 import GameBoardActions from "./components/gameboard/GameBoardActions";
 import PlayerSidebar from "./components/gameboard/PlayerSidebar";
@@ -405,7 +406,8 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     hauntPendingChoiceType === "assign-knowledge-token" ||
     hauntPendingChoiceType === "move-exorcism-token" ||
     hauntPendingChoiceType === "flood-tile-selection" ||
-    hauntPendingChoiceType === "cue-ominous-music-placement";
+    hauntPendingChoiceType === "cue-ominous-music-placement" ||
+    hauntPendingChoiceType === "force-explosives-count";
   const gameIsOver = game.gamePhase === GAME_PHASES.GAME_OVER;
   const gameplayUiLocked =
     debugModeEnabled ||
@@ -1551,7 +1553,10 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         : rollStat === "speed"
           ? getPlayerSpeedDiceCount(actor)
           : getPlayerMightDiceCount(actor);
-    const baseDiceCount = actorProxy?.statDiceCounts?.[rollStat] ?? actorProxy?.usesMightDiceCount ?? baseStatDiceCount + defenseBonus.amount;
+    const baseDiceCount =
+      actorProxy?.statDiceCounts?.[rollStat] ??
+      actorProxy?.usesMightDiceCount ??
+      baseStatDiceCount + defenseBonus.amount;
     const rollResult = actorProxy
       ? {
           dice: rollDice(baseDiceCount),
@@ -2599,6 +2604,20 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     setTradeState(null);
   }
 
+  /* [HAUNT-ACTION] Decrements the force-explosives count stepper. */
+  function handleForceExplosivesDecrement() {
+    setGame((g) =>
+      resolveHauntActionState(g, { actionId: "force-explosives-count-decrement", resolveTraitRoll, createDamageChoice })
+    );
+  }
+
+  /* [HAUNT-ACTION] Increments the force-explosives count stepper. */
+  function handleForceExplosivesIncrement() {
+    setGame((g) =>
+      resolveHauntActionState(g, { actionId: "force-explosives-count-increment", resolveTraitRoll, createDamageChoice })
+    );
+  }
+
   /* [TRADE] Sets how many Explosives (or other haunt tokens) the trade owner will offer. */
   function handleSetOwnerGiveExplosiveCount(newCount, maxCount) {
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
@@ -3359,6 +3378,15 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         handleUseViewedCardActiveAbilityNow={handleUseViewedCardActiveAbilityNow}
         handleChooseActiveAbilityValue={handleChooseActiveAbilityValue}
         handleCloseViewedCard={handleCloseViewedCard}
+      />
+
+      <ForceExplosivesOverlay
+        pendingChoice={
+          hauntPendingChoiceType === "force-explosives-count" ? game.hauntState?.scenarioState?.pendingChoice : null
+        }
+        onDecrement={handleForceExplosivesDecrement}
+        onIncrement={handleForceExplosivesIncrement}
+        onConfirm={() => handleUseHauntAction("force-explosives-count-confirm")}
       />
 
       <TradeViewer

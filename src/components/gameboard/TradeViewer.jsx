@@ -90,16 +90,32 @@ export default function TradeViewer({ game, tradeState, hauntTradeTokens, handle
                 <button
                   className="btn btn-secondary"
                   style={{ padding: "0.1rem 0.4rem" }}
-                  onClick={() => handleSetOwnerGiveExplosiveCount((tradeState.ownerGiveExplosiveCount || 0) - 1, hauntTradeTokens.ownerHas)}
+                  onClick={() =>
+                    handleSetOwnerGiveExplosiveCount(
+                      (tradeState.ownerGiveExplosiveCount || 0) - 1,
+                      hauntTradeTokens.ownerHas
+                    )
+                  }
                   disabled={actionsDisabled || (tradeState.ownerGiveExplosiveCount || 0) <= 0}
-                >−</button>
-                <span style={{ minWidth: "1.5rem", textAlign: "center" }}>{tradeState.ownerGiveExplosiveCount || 0}</span>
+                >
+                  −
+                </button>
+                <span style={{ minWidth: "1.5rem", textAlign: "center" }}>
+                  {tradeState.ownerGiveExplosiveCount || 0}
+                </span>
                 <button
                   className="btn btn-secondary"
                   style={{ padding: "0.1rem 0.4rem" }}
-                  onClick={() => handleSetOwnerGiveExplosiveCount((tradeState.ownerGiveExplosiveCount || 0) + 1, hauntTradeTokens.ownerHas)}
+                  onClick={() =>
+                    handleSetOwnerGiveExplosiveCount(
+                      (tradeState.ownerGiveExplosiveCount || 0) + 1,
+                      hauntTradeTokens.ownerHas
+                    )
+                  }
                   disabled={actionsDisabled || (tradeState.ownerGiveExplosiveCount || 0) >= hauntTradeTokens.ownerHas}
-                >+</button>
+                >
+                  +
+                </button>
                 <span style={{ color: "#aaa", fontSize: "0.85em" }}>/ {hauntTradeTokens.ownerHas}</span>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
@@ -107,16 +123,32 @@ export default function TradeViewer({ game, tradeState, hauntTradeTokens, handle
                 <button
                   className="btn btn-secondary"
                   style={{ padding: "0.1rem 0.4rem" }}
-                  onClick={() => handleSetTargetGiveExplosiveCount((tradeState.targetGiveExplosiveCount || 0) - 1, hauntTradeTokens.targetHas)}
+                  onClick={() =>
+                    handleSetTargetGiveExplosiveCount(
+                      (tradeState.targetGiveExplosiveCount || 0) - 1,
+                      hauntTradeTokens.targetHas
+                    )
+                  }
                   disabled={actionsDisabled || (tradeState.targetGiveExplosiveCount || 0) <= 0}
-                >−</button>
-                <span style={{ minWidth: "1.5rem", textAlign: "center" }}>{tradeState.targetGiveExplosiveCount || 0}</span>
+                >
+                  −
+                </button>
+                <span style={{ minWidth: "1.5rem", textAlign: "center" }}>
+                  {tradeState.targetGiveExplosiveCount || 0}
+                </span>
                 <button
                   className="btn btn-secondary"
                   style={{ padding: "0.1rem 0.4rem" }}
-                  onClick={() => handleSetTargetGiveExplosiveCount((tradeState.targetGiveExplosiveCount || 0) + 1, hauntTradeTokens.targetHas)}
+                  onClick={() =>
+                    handleSetTargetGiveExplosiveCount(
+                      (tradeState.targetGiveExplosiveCount || 0) + 1,
+                      hauntTradeTokens.targetHas
+                    )
+                  }
                   disabled={actionsDisabled || (tradeState.targetGiveExplosiveCount || 0) >= hauntTradeTokens.targetHas}
-                >+</button>
+                >
+                  +
+                </button>
                 <span style={{ color: "#aaa", fontSize: "0.85em" }}>/ {hauntTradeTokens.targetHas}</span>
               </div>
             </div>

@@ -473,7 +473,8 @@ export function getActionAvailabilityState(game, { hauntActionLocked }) {
   const forceUsageKey = createUsageKey(game, "force-explosives");
   const forceAlreadyUsed = !!game.hauntState.oncePerTurnUsage?.[forceUsageKey];
   const hasExplosive = playerHasExplosive(game, game.currentPlayerIndex);
-  const canForce = canUseHeroAction && onSharkTile && hasExplosive && !forceAlreadyUsed;
+  const hasDynamiteNow = playerHasDynamite(game, game.currentPlayerIndex);
+  const canForce = canUseHeroAction && onSharkTile && (hasExplosive || hasDynamiteNow) && !forceAlreadyUsed;
 
   // Cue Ominous Music: traitor, shark active, flooded tiles exist, hasn't used this turn
   const cueUsageKey = createUsageKey(game, "cue-ominous-music");
@@ -505,14 +506,9 @@ export function getActionButtonsState(game, context) {
     return [];
   }
 
-  // Pending explosive count selection for Force Explosives
-  if (pendingChoice?.type === "force-explosives-discard") {
-    return (pendingChoice.options || []).map((option) => ({
-      id: `pending-force-explosives-discard:${option.value}`,
-      label: option.label,
-      tone: option.value === 0 ? "secondary" : "danger",
-      enabled: true,
-    }));
+  // Force-explosives count selection: handled by the ForceExplosivesOverlay popup
+  if (pendingChoice?.type === "force-explosives-count") {
+    return [];
   }
 
   const availability = getActionAvailabilityState(game, context);
@@ -599,10 +595,9 @@ export function resolveActionState(game, { actionId }) {
     return resolveSelectCueOminousMusicOptionState(game, optionId);
   }
   if (actionId === "confirm-cue-ominous-music") return resolvePendingCueOminousMusicState(game);
-  if (typeof actionId === "string" && actionId.startsWith("pending-force-explosives-discard:")) {
-    const value = Number(actionId.replace("pending-force-explosives-discard:", ""));
-    return resolvePendingForceExplosivesDiscardState(game, value);
-  }
+  if (actionId === "force-explosives-count-decrement") return resolveForceExplosivesCountChangeState(game, -1);
+  if (actionId === "force-explosives-count-increment") return resolveForceExplosivesCountChangeState(game, +1);
+  if (actionId === "force-explosives-count-confirm") return resolveForceExplosivesCountConfirmState(game);
   if (typeof actionId === "string" && actionId.startsWith("pending-flood-tile:")) {
     const optionId = actionId.replace("pending-flood-tile:", "");
     return resolveFloodTileSelectionState(game, optionId);
@@ -692,16 +687,12 @@ function resolveForceExplosivesState(game) {
   }
 
   const explosiveCount = getExplosiveCount(game, game.currentPlayerIndex);
-  if (explosiveCount === 0) {
-    return { ...game, message: "You need at least one Explosive to use this action." };
-  }
+  const hasDynamite = playerHasDynamite(game, game.currentPlayerIndex);
+  const maxCount = explosiveCount + (hasDynamite ? 1 : 0);
 
-  // Build discard options: 0 to explosiveCount tokens
-  const options = Array.from({ length: explosiveCount + 1 }, (_, i) => ({
-    value: i,
-    label:
-      i === 0 ? "Discard 0 Explosives (no bonus)" : `Discard ${i} Explosive${i !== 1 ? "s" : ""} (+${i * 2} to roll)`,
-  }));
+  if (maxCount === 0) {
+    return { ...game, message: "You need at least one Explosive or Dynamite to use this action." };
+  }
 
   return {
     ...game,
@@ -710,43 +701,86 @@ function resolveForceExplosivesState(game) {
       scenarioState: {
         ...scenarioState,
         pendingChoice: {
-          type: "force-explosives-discard",
+          type: "force-explosives-count",
           actorIndex: game.currentPlayerIndex,
           usageKey,
-          options,
+          currentCount: 0,
+          maxCount,
+          explosiveCount,
+          hasDynamite,
         },
       },
     },
-    message: `${currentPlayer.name} prepares to Force Explosives down the Shark's Throat. Choose how many to discard.`,
+    message: `${currentPlayer.name} prepares to force items down the Shark's Throat. Choose how many to use (max ${maxCount}).`,
   };
 }
 
-/* [HAUNT-ACTION] [DICE-ROLL] Applies discard selection and starts the Might roll. */
-function resolvePendingForceExplosivesDiscardState(game, discardCount) {
+/* [HAUNT-ACTION] Adjusts the Force Explosives stepper count up or down by delta. */
+function resolveForceExplosivesCountChangeState(game, delta) {
   if (game.activeHauntId !== "haunt_28" || !game.hauntState) return game;
   const scenarioState = getScenarioState(game.hauntState);
   const pendingChoice = scenarioState.pendingChoice;
-  if (pendingChoice?.type !== "force-explosives-discard") return game;
+  if (pendingChoice?.type !== "force-explosives-count") return game;
+
+  const newCount = Math.max(0, Math.min(pendingChoice.maxCount, pendingChoice.currentCount + delta));
+  if (newCount === pendingChoice.currentCount) return game;
+
+  return {
+    ...game,
+    hauntState: {
+      ...game.hauntState,
+      scenarioState: {
+        ...scenarioState,
+        pendingChoice: { ...pendingChoice, currentCount: newCount },
+      },
+    },
+  };
+}
+
+/* [HAUNT-ACTION] [DICE-ROLL] Confirms the Force Explosives count and starts the Might roll. */
+function resolveForceExplosivesCountConfirmState(game) {
+  if (game.activeHauntId !== "haunt_28" || !game.hauntState) return game;
+  const scenarioState = getScenarioState(game.hauntState);
+  const pendingChoice = scenarioState.pendingChoice;
+  if (pendingChoice?.type !== "force-explosives-count") return game;
   if (pendingChoice.actorIndex !== game.currentPlayerIndex) return game;
 
-  const explosiveCount = getExplosiveCount(game, game.currentPlayerIndex);
-  const safeDiscard = Math.min(discardCount, explosiveCount);
-  const hasDynamite = playerHasDynamite(game, game.currentPlayerIndex);
-  const bonus = safeDiscard * 2 + (hasDynamite ? 2 : 0);
+  const { currentCount, explosiveCount, hasDynamite, usageKey } = pendingChoice;
+  const explosivesUsed = Math.min(currentCount, explosiveCount);
+  const dynamiteUsed = hasDynamite && currentCount > explosiveCount;
+  const bonus = currentCount * 2;
 
-  // Remove discarded explosives
+  // Remove used explosives from scenarioState
   const nextExplosives = {
     ...(scenarioState.playerExplosives || {}),
-    [game.currentPlayerIndex]: Math.max(0, explosiveCount - safeDiscard),
+    [game.currentPlayerIndex]: Math.max(0, explosiveCount - explosivesUsed),
   };
 
-  const currentPlayer = getCurrentPlayer(game);
-  const usageKey = pendingChoice.usageKey;
+  // Remove Dynamite from inventory if used
+  let nextPlayers = game.players;
+  if (dynamiteUsed) {
+    nextPlayers = game.players.map((player, index) => {
+      if (index !== game.currentPlayerIndex) return player;
+      const dynamiteIdx = (player.inventory || []).findIndex((card) => card.id === "dynamite");
+      if (dynamiteIdx === -1) return player;
+      return {
+        ...player,
+        inventory: [...player.inventory.slice(0, dynamiteIdx), ...player.inventory.slice(dynamiteIdx + 1)],
+      };
+    });
+  }
+
+  const currentPlayer = game.players[game.currentPlayerIndex];
+  const usedParts = [];
+  if (explosivesUsed > 0) usedParts.push(`${explosivesUsed} Explosive${explosivesUsed !== 1 ? "s" : ""}`);
+  if (dynamiteUsed) usedParts.push("Dynamite");
+  const itemDesc = usedParts.length > 0 ? usedParts.join(" + ") : "nothing";
 
   return {
     ...buildPendingActionRoll(
       {
         ...game,
+        players: nextPlayers,
         hauntState: {
           ...game.hauntState,
           scenarioState: {
@@ -761,9 +795,9 @@ function resolvePendingForceExplosivesDiscardState(game, discardCount) {
       { usageKey, threshold: 10, bonus }
     ),
     message:
-      safeDiscard > 0
-        ? `${currentPlayer?.name} discards ${safeDiscard} Explosive${safeDiscard !== 1 ? "s" : ""} for +${safeDiscard * 2} bonus${hasDynamite ? " + Dynamite +2" : ""}. Roll Might to resolve.`
-        : `${currentPlayer?.name} rolls Might (no explosives discarded${hasDynamite ? ", Dynamite +2" : ""}). Roll Might to resolve.`,
+      bonus > 0
+        ? `${currentPlayer?.name} uses ${itemDesc} for +${bonus} bonus. Roll Might (need 10+) to resolve.`
+        : `${currentPlayer?.name} rolls Might with no bonus (need 10+).`,
   };
 }
 
