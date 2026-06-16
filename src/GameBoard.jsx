@@ -326,6 +326,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
   const [debugSelectedHauntId, setDebugSelectedHauntId] = useState(DEBUG_HAUNT_CATALOG[0]?.id || "");
   const [debugHauntTraitorPlayerIndex, setDebugHauntTraitorPlayerIndex] = useState(0);
   const [hauntRulesViewerRole, setHauntRulesViewerRole] = useState(null);
+  const [localHauntRulesDismissed, setLocalHauntRulesDismissed] = useState(false);
   const queuedTraitRollOverrideRef = useRef(null);
   const messageBubbleTimeoutRef = useRef(null);
   const boardRef = useRef(null);
@@ -2646,6 +2647,9 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
 
   /* [HAUNT-SETUP] Closes the haunt rules overlay and begins the haunt phase. */
   function handleBeginHauntAfterRules() {
+    // In online mode, dismiss the local overlay immediately so closing one player's rules
+    // doesn't close everyone else's (the game-phase broadcast would do that otherwise).
+    if (isOnlineMode) setLocalHauntRulesDismissed(true);
     let nextCameraFloor = null;
 
     setGame((g) => {
@@ -2968,6 +2972,12 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     game.hauntState?.traitorPlayerIndex != null
       ? game.players[game.hauntState.traitorPlayerIndex]?.name || "the traitor"
       : "the traitor";
+  const isOnlineMode = !!onlineConfig;
+  const myOnlineRole = isOnlineMode
+    ? onlineConfig.myPlayerIndex === game.hauntState?.traitorPlayerIndex
+      ? "traitor"
+      : "heroes"
+    : null;
   const canOpenHauntRulesViewer = game.gamePhase === GAME_PHASES.HAUNT_ACTIVE && !!activeHauntDefinition;
   const endTurnPreviewPlayerName = getEndTurnPreviewPlayerName(game, currentPlayer);
   const hauntActionLocked =
@@ -3152,6 +3162,11 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     }
   }, [canOpenHauntRulesViewer, hauntRulesViewerRole]);
 
+  // Reset per-player dismissed flag whenever a new haunt begins.
+  useEffect(() => {
+    setLocalHauntRulesDismissed(false);
+  }, [game.activeHauntId]);
+
   // Calculate board bounds for centering
   const allXs = floorTiles.map((t) => t.x);
   const allYs = floorTiles.map((t) => t.y);
@@ -3233,18 +3248,22 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         <div className="game-header-right">
           {canOpenHauntRulesViewer && (
             <div className="haunt-rule-shortcuts" aria-label="Haunt rules shortcuts">
-              <button
-                className="btn btn-secondary haunt-rule-shortcut-btn"
-                onClick={() => setHauntRulesViewerRole("heroes")}
-              >
-                View Hero Rules
-              </button>
-              <button
-                className="btn btn-secondary haunt-rule-shortcut-btn"
-                onClick={() => setHauntRulesViewerRole("traitor")}
-              >
-                View Traitor Rules
-              </button>
+              {(!isOnlineMode || myOnlineRole === "heroes") && (
+                <button
+                  className="btn btn-secondary haunt-rule-shortcut-btn"
+                  onClick={() => setHauntRulesViewerRole("heroes")}
+                >
+                  View Hero Rules
+                </button>
+              )}
+              {(!isOnlineMode || myOnlineRole === "traitor") && (
+                <button
+                  className="btn btn-secondary haunt-rule-shortcut-btn"
+                  onClick={() => setHauntRulesViewerRole("traitor")}
+                >
+                  View Traitor Rules
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -3409,18 +3428,24 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         }}
       />
 
-      <HauntSetupOverlay
-        game={game}
-        hauntDefinition={activeHauntDefinition}
-        onAdvanceRules={handleAdvanceHauntRules}
-        onBeginHaunt={handleBeginHauntAfterRules}
-      />
+      {(isOnlineMode
+        ? !!game.hauntState && !localHauntRulesDismissed
+        : game.gamePhase === GAME_PHASES.HAUNT_SETUP) && (
+        <HauntSetupOverlay
+          game={game}
+          hauntDefinition={activeHauntDefinition}
+          onAdvanceRules={handleAdvanceHauntRules}
+          onBeginHaunt={handleBeginHauntAfterRules}
+          myRole={myOnlineRole}
+        />
+      )}
 
       <HauntRulesViewerOverlay
         role={hauntRulesViewerRole}
         hauntDefinition={activeHauntDefinition}
         traitorName={hauntTraitorName}
         onClose={() => setHauntRulesViewerRole(null)}
+        isOnline={isOnlineMode}
       />
 
       <DebugModePanel

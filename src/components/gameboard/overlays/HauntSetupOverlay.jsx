@@ -233,10 +233,21 @@ export function TraitorRulesPage({ hauntDefinition, playerCount, onDone }) {
 }
 
 /* [HAUNT-SETUP] [OVERLAY] Default export: haunt setup overlay gate/rules viewer; shows prompts then the hero/traitor rules pages. */
-export default function HauntSetupOverlay({ game, hauntDefinition, onAdvanceRules, onBeginHaunt }) {
-  if (!game?.hauntState || game.gamePhase !== "hauntSetup") return null;
+export default function HauntSetupOverlay({ game, hauntDefinition, onAdvanceRules, onBeginHaunt, myRole = null }) {
+  if (!game?.hauntState) return null;
   if (!hauntDefinition) return null;
 
+  // Online mode: each player only sees their own role's rules — no prompts, no other role's content.
+  if (myRole !== null) {
+    if (myRole === "traitor") {
+      return (
+        <TraitorRulesPage hauntDefinition={hauntDefinition} playerCount={game.players.length} onDone={onBeginHaunt} />
+      );
+    }
+    return <HeroRulesPage hauntDefinition={hauntDefinition} onDone={onBeginHaunt} />;
+  }
+
+  // Pass-and-play: sequential prompts + rules for both roles.
   const rulesStep = game.hauntState.rulesView?.step || "heroes-prompt";
   const traitorName = game.players[game.hauntState.traitorPlayerIndex]?.name || "the traitor";
   const isTraitorScreen = rulesStep === "traitor-prompt" || rulesStep === "traitor-rules";

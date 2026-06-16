@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { HeroRulesPage, TraitorRulesPage } from "./HauntSetupOverlay";
 
 /* [HAUNT-SETUP] [OVERLAY] Standalone overlay for viewing haunt rules at any time (not just during setup). Shows hero or traitor page based on the current player's role. */
-export default function HauntRulesViewerOverlay({ role, hauntDefinition, traitorName, onClose }) {
+export default function HauntRulesViewerOverlay({ role, hauntDefinition, traitorName, onClose, isOnline = false }) {
   const [step, setStep] = useState("prompt");
 
   useEffect(() => {
@@ -12,6 +12,16 @@ export default function HauntRulesViewerOverlay({ role, hauntDefinition, traitor
   if (!role || !hauntDefinition) return null;
 
   const isTraitorView = role === "traitor";
+
+  // Online mode: skip the "step away" prompt and go straight to the rules.
+  if (isOnline) {
+    if (isTraitorView) {
+      return <TraitorRulesPage hauntDefinition={hauntDefinition} onDone={onClose} />;
+    }
+    return <HeroRulesPage hauntDefinition={hauntDefinition} onDone={onClose} />;
+  }
+
+  // Pass-and-play: show the "step away" gate before revealing rules.
   const panelClass = isTraitorView ? "card-haunt-rules-traitor" : "card-haunt-rules-heroes";
 
   if (step === "prompt") {
