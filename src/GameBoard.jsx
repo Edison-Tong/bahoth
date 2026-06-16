@@ -117,6 +117,7 @@ import {
   resolveToggleTradeOwnerGiveOmenState,
   resolveToggleTradeTargetGiveState,
   resolveToggleTradeTargetGiveOmenState,
+  resolveSetTradeExplosiveCountState,
   resolveEndTurnActionState,
   resolvePassTurnActionState,
   resolvePassTurnCoreActionState,
@@ -154,6 +155,7 @@ import {
   resolveHauntActionState,
   resolveHauntTurnStartState,
   startSelectedHauntState,
+  getHauntTradeableTokensState,
 } from "./haunts/hauntDomain";
 import { TILES, STARTING_TILES } from "./tiles";
 import { getDamageConversionOptions, getPassiveEffects } from "./items/passiveItemEffectAbility";
@@ -1549,7 +1551,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         : rollStat === "speed"
           ? getPlayerSpeedDiceCount(actor)
           : getPlayerMightDiceCount(actor);
-    const baseDiceCount = actorProxy?.usesMightDiceCount ?? baseStatDiceCount + defenseBonus.amount;
+    const baseDiceCount = actorProxy?.statDiceCounts?.[rollStat] ?? actorProxy?.usesMightDiceCount ?? baseStatDiceCount + defenseBonus.amount;
     const rollResult = actorProxy
       ? {
           dice: rollDice(baseDiceCount),
@@ -2597,6 +2599,18 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     setTradeState(null);
   }
 
+  /* [TRADE] Sets how many Explosives (or other haunt tokens) the trade owner will offer. */
+  function handleSetOwnerGiveExplosiveCount(newCount, maxCount) {
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
+    setTradeState((prev) => resolveSetTradeExplosiveCountState(prev, "owner", newCount, maxCount));
+  }
+
+  /* [TRADE] Sets how many Explosives (or other haunt tokens) the trade target will offer. */
+  function handleSetTargetGiveExplosiveCount(newCount, maxCount) {
+    if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
+    setTradeState((prev) => resolveSetTradeExplosiveCountState(prev, "target", newCount, maxCount));
+  }
+
   /* [TRADE] Confirms the dog trade, transferring items between players. */
   function handleConfirmDogTrade() {
     if (debugModeEnabled || game.gamePhase === GAME_PHASES.HAUNT_SETUP) return;
@@ -3350,6 +3364,11 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
       <TradeViewer
         game={game}
         tradeState={tradeState}
+        hauntTradeTokens={
+          tradeState?.mode === "player-local"
+            ? getHauntTradeableTokensState(game, tradeState.ownerIndex, tradeState.targetPlayerIndex)
+            : null
+        }
         actionsDisabled={gameplayUiLocked}
         handlers={{
           handleToggleDogOwnerGive,
@@ -3359,6 +3378,8 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
           handleConfirmDogTrade,
           handleBackToDogMove,
           handleCancelDogTrade,
+          handleSetOwnerGiveExplosiveCount,
+          handleSetTargetGiveExplosiveCount,
         }}
       />
 

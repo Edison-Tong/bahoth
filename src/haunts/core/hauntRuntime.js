@@ -401,6 +401,24 @@ export function getHauntPlayerTokensState(game, playerIndex) {
   return [];
 }
 
+/* [TRADE] Returns { label, ownerHas, targetHas } for haunt-specific tradeable tokens (e.g. Explosives), or null. */
+export function getHauntTradeableTokensState(game, ownerIndex, targetIndex) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getHauntTradeableTokensState) {
+    return runtimeHooks.getHauntTradeableTokensState(game, ownerIndex, targetIndex);
+  }
+  return null;
+}
+
+/* [TRADE] Applies haunt-specific token transfers (e.g. Explosives) after the normal item/omen trade completes. */
+export function resolveHauntTradeConfirmState(game, tradeState) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.resolveHauntTradeConfirmState) {
+    return runtimeHooks.resolveHauntTradeConfirmState(game, tradeState);
+  }
+  return game;
+}
+
 /* [PLAYER-STATE] [HAUNT-SETUP] Returns whether the current haunt allows a dead player to still take a turn (Jack's Spirit traitor). */
 export function getHauntCanDeadPlayerTakeTurnState(game, playerIndex) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);

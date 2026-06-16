@@ -317,13 +317,26 @@ function clearHauntActionRoll(game) {
 
 // ---------------------------------------------------------------------------
 // Exported hook: getCombatActorProxyState
-// The shark is NOT a dead player proxy — it's always on the board independently.
-// Heroes/traitor are never proxied for haunt 28. Return null always.
+// The shark acts as a combat proxy for the traitor (who is dead).
+// Returning the shark's position enables hero/shark mutual combat and mutual obstacles.
 // ---------------------------------------------------------------------------
 
-/* [COMBAT] [VALIDATION] Haunt 28 has no combat actor proxy (shark is not a player). */
-export function getCombatActorProxyState() {
-  return null;
+/* [COMBAT] Returns the shark as a proxy combat actor for the traitor, enabling hero attacks and obstacles. */
+export function getCombatActorProxyState(game, actorIndex) {
+  if (game.activeHauntId !== "haunt_28" || !game.hauntState) return null;
+  if (actorIndex !== game.hauntState.traitorPlayerIndex) return null;
+  const scenarioState = getScenarioState(game.hauntState);
+  const shark = scenarioState.ghostShark;
+  if (!shark?.active || shark.floor == null) return null;
+  const monsterDef = game.hauntState?.monsters?.find((m) => m.id === "ghost-shark");
+  const stats = monsterDef?.stats || { might: 8, speed: 2, sanity: 4 };
+  return {
+    name: "Great White Ghost Shark",
+    floor: shark.floor,
+    x: shark.x,
+    y: shark.y,
+    statDiceCounts: { might: stats.might, speed: stats.speed, sanity: stats.sanity },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1041,9 +1054,23 @@ export function resolveTurnStartState(game, { rollDice }) {
   const scenarioState = getScenarioState(game.hauntState);
   const shark = scenarioState.ghostShark;
 
-  // ---- Traitor turn: roll shark speed ----
+  // ---- Traitor turn: check win condition then roll shark speed ----
   if (game.currentPlayerIndex === traitorIndex) {
     if (!shark?.active) return { game, diceAnimation: null };
+
+    // Win check: all tiles flooded at the start of the shark's turn → traitor wins
+    if (areAllTilesFlooded(game.board, scenarioState.floodedTiles)) {
+      return {
+        game: {
+          ...game,
+          gamePhase: GAME_PHASES.GAME_OVER,
+          turnPhase: "game-over",
+          winnerTeam: HAUNT_TEAMS.TRAITOR,
+          message: "Every tile in the house is now Flooded. The Shark wins!",
+        },
+        diceAnimation: null,
+      };
+    }
 
     const dice = rollDice(GHOST_SHARK_SPEED_DICE);
     const total = dice.reduce((s, v) => s + v, 0);
@@ -1182,6 +1209,58 @@ export function getPlayerHauntTokensState(game, playerIndex) {
   return Array.from({ length: count }, () => ({ label: "Explosive", variant: "token" }));
 }
 
+// ---------------------------------------------------------------------------
+// Exported hook: getHauntTradeableTokensState
+// Returns the label and per-player explosive counts for the trade UI.
+// ---------------------------------------------------------------------------
+
+/* [TRADE] Returns explosive counts for both trade participants, enabling explosive trading. */
+export function getHauntTradeableTokensState(game, ownerIndex, targetIndex) {
+  if (game.activeHauntId !== "haunt_28" || !game.hauntState) return null;
+  const scenarioState = getScenarioState(game.hauntState);
+  const ownerHas = scenarioState.playerExplosives?.[ownerIndex] || 0;
+  const targetHas = scenarioState.playerExplosives?.[targetIndex] || 0;
+  if (ownerHas === 0 && targetHas === 0) return null;
+  return { label: "Explosive", ownerHas, targetHas };
+}
+
+// ---------------------------------------------------------------------------
+// Exported hook: resolveHauntTradeConfirmState
+// Called after the normal item/omen transfer to move explosives.
+// ---------------------------------------------------------------------------
+
+/* [TRADE] Transfers explosives between players according to ownerGiveExplosiveCount / targetGiveExplosiveCount. */
+export function resolveHauntTradeConfirmState(game, tradeState) {
+  if (game.activeHauntId !== "haunt_28" || !game.hauntState) return game;
+  const ownerGive = Math.max(0, tradeState.ownerGiveExplosiveCount || 0);
+  const targetGive = Math.max(0, tradeState.targetGiveExplosiveCount || 0);
+  if (ownerGive === 0 && targetGive === 0) return game;
+
+  const scenarioState = getScenarioState(game.hauntState);
+  const ownerHas = scenarioState.playerExplosives?.[tradeState.ownerIndex] || 0;
+  const targetHas = scenarioState.playerExplosives?.[tradeState.targetPlayerIndex] || 0;
+
+  const safeOwnerGive = Math.min(ownerGive, ownerHas);
+  const safeTargetGive = Math.min(targetGive, targetHas);
+
+  const nextExplosives = {
+    ...(scenarioState.playerExplosives || {}),
+    [tradeState.ownerIndex]: ownerHas - safeOwnerGive + safeTargetGive,
+    [tradeState.targetPlayerIndex]: targetHas - safeTargetGive + safeOwnerGive,
+  };
+
+  return {
+    ...game,
+    hauntState: {
+      ...game.hauntState,
+      scenarioState: {
+        ...scenarioState,
+        playerExplosives: nextExplosives,
+      },
+    },
+  };
+}
+
 /* [SIDEBAR] Returns monster card display data for the Great White Ghost Shark when active, or null. */
 export function getMonsterCardState(game) {
   if (game.activeHauntId !== "haunt_28" || !game.hauntState) return null;
@@ -1208,7 +1287,7 @@ export function getMonsterCardState(game) {
 // ---------------------------------------------------------------------------
 // Flood tile selection — called from resolveActionState when the pending
 // choice type is "flood-tile-selection" and the traitor picks a tile.
-// Also handles the all-tiles-flooded win check.
+// Win check is deferred to the START of the shark's next turn.
 // ---------------------------------------------------------------------------
 
 /* [FLOODING] Resolves the traitor's flood tile selection. Exported so resolveActionState can dispatch it. */
@@ -1226,27 +1305,7 @@ export function resolveFloodTileSelectionState(game, optionId) {
   const nextFloodedTiles = [...scenarioState.floodedTiles, newFloodedTile];
   const nextBoard = applyFloodToBoardState(game.board, selectedOption.floor, selectedOption.x, selectedOption.y);
 
-  // Check traitor win: all non-landing tiles flooded
-  const allFlooded = areAllTilesFlooded(nextBoard, nextFloodedTiles);
-  if (allFlooded) {
-    return {
-      ...game,
-      board: nextBoard,
-      hauntState: {
-        ...game.hauntState,
-        scenarioState: {
-          ...scenarioState,
-          pendingChoice: null,
-          floodedTiles: nextFloodedTiles,
-        },
-      },
-      gamePhase: GAME_PHASES.GAME_OVER,
-      turnPhase: "game-over",
-      winnerTeam: HAUNT_TEAMS.TRAITOR,
-      message: `${selectedOption.label} is Flooded. Every tile in the house is now Flooded. The Shark wins!`,
-    };
-  }
-
+  // Win check is deferred: the shark only wins at the START of its own turn.
   return {
     ...game,
     board: nextBoard,

@@ -24,5 +24,7 @@ export {
   getHauntMonsterCardState,
   getHauntPlayerTokensState,
   getHauntPlayerCardFlagsState,
+  getHauntTradeableTokensState,
+  resolveHauntTradeConfirmState,
 } from "./core/hauntRuntime";
 export { getHauntDefinitionById, getAllHauntDefinitions, selectTriggeredHauntDefinition } from "./registry";

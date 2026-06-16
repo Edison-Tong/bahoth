@@ -7,6 +7,7 @@ import {
   toggleDogTradeOwnerGiveState,
   toggleDogTradeTargetGiveState,
 } from "../omens/dogAbility";
+import { getHauntTradeableTokensState, resolveHauntTradeConfirmState } from "../haunts/hauntDomain";
 
 /* [TRADE] [VALIDATION] Returns false if the two players are on opposite teams (heroes cannot trade with traitor). */
 function canPlayersTradeAcrossTeams(game, ownerIndex, targetPlayerIndex) {
@@ -55,6 +56,8 @@ export function createLocalPlayerTradeState(game, ownerIndex, targetPlayerIndex)
     targetGiveIndexes: [],
     ownerGiveOmenIndexes: [],
     targetGiveOmenIndexes: [],
+    ownerGiveExplosiveCount: 0,
+    targetGiveExplosiveCount: 0,
   };
 }
 
@@ -111,6 +114,14 @@ function toggleCardIndex(previousTradeState, key, card, index, turnNumber) {
     ...previousTradeState,
     [key]: exists ? selected.filter((value) => value !== index) : [...selected, index],
   };
+}
+
+/* [TRADE] Sets how many haunt-specific tokens (e.g. Explosives) one side offers. side: "owner" | "target". */
+export function resolveSetTradeExplosiveCountState(previousTradeState, side, newCount, maxCount) {
+  if (!previousTradeState) return previousTradeState;
+  const clamped = Math.max(0, Math.min(newCount, maxCount));
+  const key = side === "owner" ? "ownerGiveExplosiveCount" : "targetGiveExplosiveCount";
+  return { ...previousTradeState, [key]: clamped };
 }
 
 /* [TRADE] Toggles an omen index in the owner's give list (blocks the Dog's own omen from being given). */
@@ -214,7 +225,9 @@ function resolveConfirmLocalPlayerTradeState(game, tradeState) {
     ownerGiveSet.size === 0 &&
     targetGiveSet.size === 0 &&
     ownerGiveOmenSet.size === 0 &&
-    targetGiveOmenSet.size === 0
+    targetGiveOmenSet.size === 0 &&
+    !(tradeState.ownerGiveExplosiveCount > 0) &&
+    !(tradeState.targetGiveExplosiveCount > 0)
   ) {
     return {
       nextGame: {
@@ -256,8 +269,7 @@ function resolveConfirmLocalPlayerTradeState(game, tradeState) {
 
   return {
     nextGame: {
-      ...game,
-      players: nextPlayers,
+      ...resolveHauntTradeConfirmState({ ...game, players: nextPlayers }, tradeState),
       message: `${owner.name} traded with ${target.name} (${ownerGivenItems.length + ownerGivenOmens.length} card${ownerGivenItems.length + ownerGivenOmens.length !== 1 ? "s" : ""} sent, ${targetGivenItems.length + targetGivenOmens.length} card${targetGivenItems.length + targetGivenOmens.length !== 1 ? "s" : ""} received).`,
     },
     nextTradeState: null,

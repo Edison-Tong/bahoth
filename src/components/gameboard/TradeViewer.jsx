@@ -1,7 +1,7 @@
 import { isItemTradeLockedThisTurn } from "../../omens/dogAbility";
 
 /* [TRADE] [OVERLAY] Sidebar panel showing the card-selection UI for a player-local or Dog remote trade. Renders when tradeState.phase === "trade". Card rows highlight items locked this turn. */
-export default function TradeViewer({ game, tradeState, handlers, actionsDisabled = false }) {
+export default function TradeViewer({ game, tradeState, hauntTradeTokens, handlers, actionsDisabled = false }) {
   const {
     handleToggleDogOwnerGive,
     handleToggleDogOwnerGiveOmen,
@@ -10,6 +10,8 @@ export default function TradeViewer({ game, tradeState, handlers, actionsDisable
     handleConfirmDogTrade,
     handleBackToDogMove,
     handleCancelDogTrade,
+    handleSetOwnerGiveExplosiveCount,
+    handleSetTargetGiveExplosiveCount,
   } = handlers || {};
 
   if (!tradeState || tradeState.phase !== "trade") return null;
@@ -79,6 +81,46 @@ export default function TradeViewer({ game, tradeState, handlers, actionsDisable
               <div className="sidebar-card-empty">No cards to send</div>
             )}
           </div>
+
+          {hauntTradeTokens && tradeState.mode === "player-local" && (
+            <div style={{ marginBottom: "0.75rem" }}>
+              <h3 style={{ marginTop: 0 }}>{hauntTradeTokens.label}s</h3>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.4rem" }}>
+                <span style={{ flex: 1 }}>{owner?.name} sends:</span>
+                <button
+                  className="btn btn-secondary"
+                  style={{ padding: "0.1rem 0.4rem" }}
+                  onClick={() => handleSetOwnerGiveExplosiveCount((tradeState.ownerGiveExplosiveCount || 0) - 1, hauntTradeTokens.ownerHas)}
+                  disabled={actionsDisabled || (tradeState.ownerGiveExplosiveCount || 0) <= 0}
+                >−</button>
+                <span style={{ minWidth: "1.5rem", textAlign: "center" }}>{tradeState.ownerGiveExplosiveCount || 0}</span>
+                <button
+                  className="btn btn-secondary"
+                  style={{ padding: "0.1rem 0.4rem" }}
+                  onClick={() => handleSetOwnerGiveExplosiveCount((tradeState.ownerGiveExplosiveCount || 0) + 1, hauntTradeTokens.ownerHas)}
+                  disabled={actionsDisabled || (tradeState.ownerGiveExplosiveCount || 0) >= hauntTradeTokens.ownerHas}
+                >+</button>
+                <span style={{ color: "#aaa", fontSize: "0.85em" }}>/ {hauntTradeTokens.ownerHas}</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <span style={{ flex: 1 }}>{selectedTarget?.name} sends:</span>
+                <button
+                  className="btn btn-secondary"
+                  style={{ padding: "0.1rem 0.4rem" }}
+                  onClick={() => handleSetTargetGiveExplosiveCount((tradeState.targetGiveExplosiveCount || 0) - 1, hauntTradeTokens.targetHas)}
+                  disabled={actionsDisabled || (tradeState.targetGiveExplosiveCount || 0) <= 0}
+                >−</button>
+                <span style={{ minWidth: "1.5rem", textAlign: "center" }}>{tradeState.targetGiveExplosiveCount || 0}</span>
+                <button
+                  className="btn btn-secondary"
+                  style={{ padding: "0.1rem 0.4rem" }}
+                  onClick={() => handleSetTargetGiveExplosiveCount((tradeState.targetGiveExplosiveCount || 0) + 1, hauntTradeTokens.targetHas)}
+                  disabled={actionsDisabled || (tradeState.targetGiveExplosiveCount || 0) >= hauntTradeTokens.targetHas}
+                >+</button>
+                <span style={{ color: "#aaa", fontSize: "0.85em" }}>/ {hauntTradeTokens.targetHas}</span>
+              </div>
+            </div>
+          )}
 
           <h3 style={{ marginTop: 0 }}>Receive From {selectedTarget?.name || "Target"}</h3>
           <div className="event-option-list" style={{ marginBottom: "0.75rem" }}>

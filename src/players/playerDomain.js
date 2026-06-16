@@ -21,6 +21,7 @@ export {
   resolveToggleTradeOwnerGiveOmenState,
   resolveToggleTradeTargetGiveState,
   resolveToggleTradeTargetGiveOmenState,
+  resolveSetTradeExplosiveCountState,
 } from "./tradeControllerState";
 export {
   resolveEndTurnActionState,
