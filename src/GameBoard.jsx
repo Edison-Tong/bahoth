@@ -3010,9 +3010,12 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
 
   // Recovery: if game is stuck with "rolling for stability" or "rolling for damage" message
   // but no dice animation running (animation was lost due to a race condition), re-trigger the roll.
+  // In online mode, only the local current player should re-trigger — other players receiving the
+  // intermediate broadcast state must not run this or they will overwrite the rolling player's result.
   useEffect(() => {
     if (diceAnimation) return;
     if (game.tileEffect) return;
+    if (onlineConfig && onlineConfig.myPlayerIndex !== game.currentPlayerIndex) return;
     const isFurnaceStuck = game.message.includes("Furnace Room") && game.message.includes("rolling for damage");
     const isCollapsedStuck = game.message.endsWith("— rolling for stability...");
     if (!isFurnaceStuck && !isCollapsedStuck) return;
