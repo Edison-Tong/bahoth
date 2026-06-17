@@ -1,4 +1,4 @@
-import { GAME_PHASES, getHauntCombatActorProxyState } from "../haunts/hauntDomain";
+import { GAME_PHASES, getHauntCombatActorProxyState, getHauntCanAttackTargetState } from "../haunts/hauntDomain";
 import { DIR, OPPOSITE } from "../game/gameState";
 import { applyStatChangeState } from "../players/playerDomain";
 import { getTileAtPosition } from "../events/eventActions";
@@ -22,7 +22,6 @@ export function getPlayerSpeedDiceCount(player) {
 export function getCombatTargetsOnCurrentTile(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return [];
   if (!game.hauntState) return [];
-  if (game.hasAttackedThisTurn) return [];
 
   const attackerIndex = game.currentPlayerIndex;
   const attacker = game.players[attackerIndex];
@@ -40,7 +39,11 @@ export function getCombatTargetsOnCurrentTile(game) {
     return game.players
       .map((player, playerIndex) => ({ player, playerIndex }))
       .filter(
-        ({ player, playerIndex }) => playerIndex !== attackerIndex && playerIndex !== traitorIndex && onSameTile(player)
+        ({ player, playerIndex }) =>
+          playerIndex !== attackerIndex &&
+          playerIndex !== traitorIndex &&
+          onSameTile(player) &&
+          getHauntCanAttackTargetState(game, attackerIndex, playerIndex)
       );
   }
 
@@ -53,6 +56,7 @@ export function getCombatTargetsOnCurrentTile(game) {
     attacker.x === traitorProxy.x &&
     attacker.y === traitorProxy.y;
   if ((!traitor || !traitorOnSameTile) && !spiritOnSameTile) return [];
+  if (!getHauntCanAttackTargetState(game, attackerIndex, traitorIndex)) return [];
   const displayPlayer = traitorProxy ? { ...traitor, name: traitorProxy.name } : traitor;
   return [{ player: displayPlayer, playerIndex: traitorIndex }];
 }

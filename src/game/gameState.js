@@ -93,6 +93,7 @@ export function initGameState(players, options = {}) {
     activeHauntId: null,
     hauntState: null,
     hasAttackedThisTurn: false,
+    attackedPlayerIndexes: [],
     hasMovedThisTurn: false,
     combatState: null,
     drawnCard: null,

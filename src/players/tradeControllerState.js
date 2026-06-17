@@ -7,7 +7,11 @@ import {
   toggleDogTradeOwnerGiveState,
   toggleDogTradeTargetGiveState,
 } from "../omens/dogAbility";
-import { getHauntTradeableTokensState, resolveHauntTradeConfirmState } from "../haunts/hauntDomain";
+import {
+  getHauntTradeableTokensState,
+  resolveHauntTradeConfirmState,
+  getHauntCanPlayersTradeState,
+} from "../haunts/hauntDomain";
 
 /* [TRADE] [VALIDATION] Returns false if the two players are on opposite teams (heroes cannot trade with traitor). */
 function canPlayersTradeAcrossTeams(game, ownerIndex, targetPlayerIndex) {
@@ -30,7 +34,8 @@ export function getPlayerTradeTargetsOnTile(game, ownerIndex, floor, x, y) {
         player.floor === floor &&
         player.x === x &&
         player.y === y &&
-        canPlayersTradeAcrossTeams(game, ownerIndex, playerIndex)
+        canPlayersTradeAcrossTeams(game, ownerIndex, playerIndex) &&
+        getHauntCanPlayersTradeState(game, ownerIndex, playerIndex)
     );
 }
 
@@ -40,6 +45,7 @@ export function createLocalPlayerTradeState(game, ownerIndex, targetPlayerIndex)
   const target = game.players[targetPlayerIndex];
   if (!owner || !target) return null;
   if (!canPlayersTradeAcrossTeams(game, ownerIndex, targetPlayerIndex)) return null;
+  if (!getHauntCanPlayersTradeState(game, ownerIndex, targetPlayerIndex)) return null;
 
   const isSameTile = owner.floor === target.floor && owner.x === target.x && owner.y === target.y;
   if (!isSameTile) return null;

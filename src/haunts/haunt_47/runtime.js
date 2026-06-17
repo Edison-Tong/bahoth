@@ -769,6 +769,114 @@ export function getCombatBonusLabel() {
 }
 
 // ---------------------------------------------------------------------------
+// Exported hook: getCombatInitOverride
+// When the traitor attacks a Trapped hero, force both to roll Sanity and
+// set Physical as the damage type ("Sanity Attack" rule).
+// Returns { rollStat, combatDamageType } or null.
+// ---------------------------------------------------------------------------
+
+/* [HAUNT-COMBAT] Overrides combat stat/damage-type for Sanity attacks vs Trapped heroes. */
+export function getCombatInitOverride(game, attackerIndex, defenderIndex) {
+  if (game.activeHauntId !== "haunt_47" || !game.hauntState) return null;
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  if (attackerIndex !== traitorIndex) return null;
+  // Sanity attack only applies when the defender is Trapped.
+  if (isTrapped(game, defenderIndex)) {
+    return { rollStat: "sanity", combatDamageType: "physical" };
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Exported hook: resolveCombatOutcomeState
+// Called after combat resolves, before any damageChoice is built.
+// Returns a modified game state (replacing default damage logic) or null.
+//
+// Haunt 47 rules:
+//   Might attack vs non-Trapped hero:
+//     win  → trap the hero, NO damage
+//     lose → NO damage to the knight
+//   Sanity attack vs Trapped hero:
+//     default damage logic applies (Physical to hero on win, handled by init override)
+// ---------------------------------------------------------------------------
+
+/* [HAUNT-COMBAT] Overrides combat resolution for the cruel knight's special attack rules. */
+export function resolveCombatOutcomeState(game, outcome, combatState) {
+  if (game.activeHauntId !== "haunt_47" || !game.hauntState) return null;
+
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  if (combatState.attackerIndex !== traitorIndex) return null;
+
+  // Ties and zero-damage: don't override (let default handle the tie message).
+  if (outcome.tie || outcome.loserIndex == null || outcome.damage <= 0) return null;
+
+  const defenderIndex = combatState.defenderIndex;
+  if (isTrapped(game, defenderIndex)) {
+    // Sanity attack vs Trapped hero — default Physical damage logic is correct. No override.
+    return null;
+  }
+
+  // Might attack vs non-Trapped hero.
+  if (outcome.winnerIndex === traitorIndex) {
+    // Knight wins → hero becomes Trapped, no damage.
+    const scenarioState = getScenarioState(game.hauntState);
+    const nextTrappedHeroes = scenarioState.trappedHeroes.includes(defenderIndex)
+      ? scenarioState.trappedHeroes
+      : [...scenarioState.trappedHeroes, defenderIndex];
+    const defender = game.players[defenderIndex];
+    return {
+      ...game,
+      combatState: null,
+      hauntState: {
+        ...game.hauntState,
+        scenarioState: { ...scenarioState, trappedHeroes: nextTrappedHeroes },
+      },
+      message: `${outcome.winnerName} wins! ${defender?.name ?? "Hero"} is dragged into another dimension — now Trapped.`,
+    };
+  }
+
+  if (outcome.loserIndex === traitorIndex) {
+    // Knight loses vs non-Trapped hero → no damage to knight.
+    return {
+      ...game,
+      combatState: null,
+      message: `${outcome.winnerName} wins (${outcome.attackerTotal} vs ${outcome.defenderTotal}). The cruel knight takes no damage from this attack.`,
+    };
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// Exported hook: getHauntCanPlayersTradeState
+// Trapped heroes may only trade with other Trapped heroes.
+// Non-Trapped heroes may only trade with other non-Trapped heroes.
+// ---------------------------------------------------------------------------
+
+/* [TRADE] Returns false if one player is Trapped and the other is not. */
+export function getHauntCanPlayersTradeState(game, ownerIndex, targetIndex) {
+  if (game.activeHauntId !== "haunt_47" || !game.hauntState) return true;
+  const ownerIsTrapped = isTrapped(game, ownerIndex);
+  const targetIsTrapped = isTrapped(game, targetIndex);
+  return ownerIsTrapped === targetIsTrapped;
+}
+
+// ---------------------------------------------------------------------------
+// Exported hook: getHauntCanAttackTargetState
+// The traitor may attack each living hero once per turn (not limited to one
+// attack total). Heroes remain limited to one attack per turn.
+// ---------------------------------------------------------------------------
+
+/* [HAUNT-COMBAT] Traitor may attack each hero once per turn; heroes still limited to one attack total. */
+export function getHauntCanAttackTargetState(game, attackerIndex, defenderIndex) {
+  if (game.activeHauntId !== "haunt_47" || !game.hauntState) return !game.hasAttackedThisTurn;
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  if (attackerIndex !== traitorIndex) return !game.hasAttackedThisTurn;
+  // Traitor: check per-target rather than global flag.
+  return !(game.attackedPlayerIndexes || []).includes(defenderIndex);
+}
+
+// ---------------------------------------------------------------------------
 // Exported hook: getKnowledgeTokenHoldersState
 // ---------------------------------------------------------------------------
 

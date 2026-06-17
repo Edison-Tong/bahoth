@@ -64,6 +64,10 @@ import {
   resolveActionRollContinueState as resolveActionRollContinueState47,
   getPlayerHauntTokensState as getPlayerHauntTokensState47,
   getBoardRenderState as getBoardRenderState47,
+  getCombatInitOverride as getCombatInitOverride47,
+  resolveCombatOutcomeState as resolveCombatOutcomeState47,
+  getHauntCanPlayersTradeState as getHauntCanPlayersTradeState47,
+  getHauntCanAttackTargetState as getHauntCanAttackTargetState47,
 } from "./haunt_47/runtime";
 
 // Static registry mapping haunt IDs to definition objects and runtime hook bundles.
@@ -137,6 +141,10 @@ const HAUNT_RUNTIME_REGISTRY = {
     resolveActionRollContinueState: resolveActionRollContinueState47,
     getPlayerHauntTokensState: getPlayerHauntTokensState47,
     getBoardRenderState: getBoardRenderState47,
+    getCombatInitOverride: getCombatInitOverride47,
+    resolveCombatOutcomeState: resolveCombatOutcomeState47,
+    getHauntCanPlayersTradeState: getHauntCanPlayersTradeState47,
+    getHauntCanAttackTargetState: getHauntCanAttackTargetState47,
   },
 };
 

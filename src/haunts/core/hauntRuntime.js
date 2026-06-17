@@ -323,6 +323,42 @@ export function getHauntCombatBonusLabel(game, actorIndex, defenderIndex, role) 
   return null;
 }
 
+/* [HAUNT-COMBAT] Returns { rollStat, combatDamageType } override for combat initiation, or null. Only fires for melee (no source card). */
+export function getHauntCombatInitOverride(game, attackerIndex, defenderIndex) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getCombatInitOverride) {
+    return runtimeHooks.getCombatInitOverride(game, attackerIndex, defenderIndex);
+  }
+  return null;
+}
+
+/* [HAUNT-COMBAT] Resolves combat outcome with haunt-specific logic (e.g. trap instead of damage). Returns modified game state or null. */
+export function getHauntCombatOutcomeOverride(game, outcome, combatState) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.resolveCombatOutcomeState) {
+    return runtimeHooks.resolveCombatOutcomeState(game, outcome, combatState);
+  }
+  return null;
+}
+
+/* [TRADE] Returns false if the haunt restricts trading between these two players. Defaults to true (allowed). */
+export function getHauntCanPlayersTradeState(game, ownerIndex, targetIndex) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getHauntCanPlayersTradeState) {
+    return runtimeHooks.getHauntCanPlayersTradeState(game, ownerIndex, targetIndex);
+  }
+  return true;
+}
+
+/* [HAUNT-COMBAT] Returns whether the attacker can attack the given defender this turn. Defaults to !game.hasAttackedThisTurn. */
+export function getHauntCanAttackTargetState(game, attackerIndex, defenderIndex) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getHauntCanAttackTargetState) {
+    return runtimeHooks.getHauntCanAttackTargetState(game, attackerIndex, defenderIndex);
+  }
+  return !game.hasAttackedThisTurn;
+}
+
 /* [SPIRIT] Returns a proxy combat actor for the traitor when dead but controlling a monster (Jack's Spirit). */
 export function getHauntCombatActorProxyState(game, actorIndex) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);

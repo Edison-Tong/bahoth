@@ -150,6 +150,8 @@ import {
   getAllHauntDefinitions,
   getHauntCombatBonus,
   getHauntCombatBonusLabel,
+  getHauntCombatInitOverride,
+  getHauntCombatOutcomeOverride,
   getHauntCombatActorProxyState,
   resolveHauntMonsterSpeedRollState,
   getHauntDefinitionById,
@@ -1484,8 +1486,8 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
       const defenderDisplayName = defenderProxy?.name ?? defender.name;
       const sourceRule = sourceCard?.activeAbilityRule || null;
       const {
-        rollStat,
-        combatDamageType,
+        rollStat: baseRollStat,
+        combatDamageType: baseCombatDamageType,
         attackerNoDamageOnLoss,
         preRollBonusDice,
         preRollFlatBonus,
@@ -1494,12 +1496,18 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         nextPlayers,
       } = applyCombatItemSource(sourceRule, sourceCard, g.currentPlayerIndex, g.players);
 
+      // Haunt init override: only for melee (no source card) — e.g. sanity attack vs trapped hero.
+      const hauntInitOverride = !sourceCard ? getHauntCombatInitOverride(g, g.currentPlayerIndex, defenderIndex) : null;
+      const rollStat = hauntInitOverride?.rollStat ?? baseRollStat;
+      const combatDamageType = hauntInitOverride?.combatDamageType ?? baseCombatDamageType;
+
       const defenderDefenseBonus = defenderProxy ? { amount: 0, sourceNames: [] } : getDefenseRollDiceBonus(defender);
 
       return {
         ...g,
         players: nextPlayers,
         hasAttackedThisTurn: true,
+        attackedPlayerIndexes: [...(g.attackedPlayerIndexes || []), defenderIndex],
         combatState: {
           phase: "attacker-roll",
           attackerIndex: g.currentPlayerIndex,
@@ -1794,6 +1802,10 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
           message: `${outcome.winnerName} wins (${outcome.attackerTotal} vs ${outcome.defenderTotal}). ${outcome.loserName} cannot be harmed.`,
         };
       }
+
+      // Haunt-specific outcome override: e.g. trap instead of damage, or no damage on loss.
+      const hauntOutcomeOverride = getHauntCombatOutcomeOverride(g, outcome, combatState);
+      if (hauntOutcomeOverride !== null) return hauntOutcomeOverride;
 
       const loser = g.players[outcome.loserIndex];
       const combatDamageType = combatState.combatDamageType || "physical";
