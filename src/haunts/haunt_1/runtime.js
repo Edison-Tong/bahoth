@@ -1573,3 +1573,11 @@ export function getCombatKnowledgeBonus(game, actorIndex, defenderIndex, role) {
   // Spirit is active — only applies when hero is defending against the spirit
   return role === "defender" ? 2 : 0;
 }
+
+/* [HAUNT-COMBAT] Returns the message label for the haunt combat bonus, shown in roll item messages. */
+export function getCombatBonusLabel(game, actorIndex, defenderIndex, role) {
+  if (getCombatKnowledgeBonus(game, actorIndex, defenderIndex, role) > 0) {
+    return "Knowledge of Jack";
+  }
+  return null;
+}

@@ -314,6 +314,15 @@ export function getHauntCombatBonus(game, actorIndex, defenderIndex, role) {
   return 0;
 }
 
+/* [HAUNT-COMBAT] Returns a label string for the haunt combat bonus (shown in roll messages), or null for no message. */
+export function getHauntCombatBonusLabel(game, actorIndex, defenderIndex, role) {
+  const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
+  if (runtimeHooks?.getCombatBonusLabel) {
+    return runtimeHooks.getCombatBonusLabel(game, actorIndex, defenderIndex, role);
+  }
+  return null;
+}
+
 /* [SPIRIT] Returns a proxy combat actor for the traitor when dead but controlling a monster (Jack's Spirit). */
 export function getHauntCombatActorProxyState(game, actorIndex) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);

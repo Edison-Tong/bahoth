@@ -149,6 +149,7 @@ import {
   getHauntActionRollPreviewState,
   getAllHauntDefinitions,
   getHauntCombatBonus,
+  getHauntCombatBonusLabel,
   getHauntCombatActorProxyState,
   resolveHauntMonsterSpeedRollState,
   getHauntDefinitionById,
@@ -1593,8 +1594,9 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     const preRollDiceTotal = preRollDice.reduce((sum, value) => sum + value, 0);
     const opponentIndex = role === "attacker" ? combatState.defenderIndex : combatState.attackerIndex;
     const hauntKnowledgeBonus = getHauntCombatBonus(game, actorIndex, opponentIndex, role);
-    if (hauntKnowledgeBonus > 0) {
-      itemMessages.push(`+${hauntKnowledgeBonus} to roll from Knowledge of Jack.`);
+    const hauntBonusLabel = getHauntCombatBonusLabel(game, actorIndex, opponentIndex, role);
+    if (hauntKnowledgeBonus > 0 && hauntBonusLabel) {
+      itemMessages.push(`+${hauntKnowledgeBonus} to roll from ${hauntBonusLabel}.`);
     }
     const animatedDice = [...rollResult.dice, ...preRollDice];
 

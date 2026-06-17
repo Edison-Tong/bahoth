@@ -763,6 +763,11 @@ export function getCombatBonus(game, actorIndex, defenderIndex, role) {
   return isTrapped(game, defenderIndex) ? 2 : 0;
 }
 
+/* [HAUNT-COMBAT] No label — the +2 bonus is applied silently. */
+export function getCombatBonusLabel() {
+  return "attacking a trapped hero";
+}
+
 // ---------------------------------------------------------------------------
 // Exported hook: getKnowledgeTokenHoldersState
 // ---------------------------------------------------------------------------
