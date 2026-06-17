@@ -52,7 +52,8 @@ export default function BoardCanvas({
   interactionLocked = false,
 }) {
   const traitorPlayerIndex = game?.hauntState?.traitorPlayerIndex;
-  const { floodedTiles: hauntFloodedTiles, monsterToken } = getHauntBoardRenderState(game);
+  const { floodedTiles: hauntFloodedTiles, monsterToken, trappedPlayerIndexes } = getHauntBoardRenderState(game);
+  const trappedHeroIndexes = trappedPlayerIndexes || [];
 
   return (
     <div className="board-container">
@@ -111,12 +112,15 @@ export default function BoardCanvas({
                         )}
                         {visiblePlayers.map((p) => {
                           const isTraitor = traitorPlayerIndex === p.index;
+                          const isPlayerTrapped = trappedHeroIndexes.includes(p.index);
                           return (
                             <div
                               key={p.index}
-                              className={`player-token ${isTraitor ? "player-token-traitor" : ""}`}
+                              className={`player-token ${isTraitor ? "player-token-traitor" : ""} ${isPlayerTrapped ? "player-token-trapped" : ""}`}
                               style={{ background: p.color }}
-                              title={isTraitor ? `${p.name} (Traitor)` : p.name}
+                              title={
+                                isTraitor ? `${p.name} (Traitor)` : isPlayerTrapped ? `${p.name} (Trapped)` : p.name
+                              }
                             >
                               {p.name.charAt(0)}
                             </div>
@@ -196,6 +200,12 @@ export default function BoardCanvas({
                           >
                             {getCorpseTokenAbbreviation()}
                           </div>
+                        ) : token.variant === "portal" ? (
+                          <div
+                            key={`haunt-token-${tile.id}-${token.label}`}
+                            className="portal-swirl"
+                            title={token.label}
+                          />
                         ) : (
                           <div key={`haunt-token-${tile.id}-${token.label}`} className="tile-token">
                             {token.label}
@@ -231,12 +241,15 @@ export default function BoardCanvas({
                         )}
                         {visiblePlayers.map((p) => {
                           const isTraitor = traitorPlayerIndex === p.index;
+                          const isPlayerTrapped = trappedHeroIndexes.includes(p.index);
                           return (
                             <div
                               key={p.index}
-                              className={`player-token ${isTraitor ? "player-token-traitor" : ""}`}
+                              className={`player-token ${isTraitor ? "player-token-traitor" : ""} ${isPlayerTrapped ? "player-token-trapped" : ""}`}
                               style={{ background: p.color }}
-                              title={isTraitor ? `${p.name} (Traitor)` : p.name}
+                              title={
+                                isTraitor ? `${p.name} (Traitor)` : isPlayerTrapped ? `${p.name} (Trapped)` : p.name
+                              }
                             >
                               {p.name.charAt(0)}
                             </div>
@@ -296,12 +309,15 @@ export default function BoardCanvas({
                       <div className="tile-players">
                         {tilePlayersHere.map((p) => {
                           const isTraitor = traitorPlayerIndex === p.index;
+                          const isPlayerTrapped = trappedHeroIndexes.includes(p.index);
                           return (
                             <div
                               key={p.index}
-                              className={`player-token ${isTraitor ? "player-token-traitor" : ""}`}
+                              className={`player-token ${isTraitor ? "player-token-traitor" : ""} ${isPlayerTrapped ? "player-token-trapped" : ""}`}
                               style={{ background: p.color }}
-                              title={isTraitor ? `${p.name} (Traitor)` : p.name}
+                              title={
+                                isTraitor ? `${p.name} (Traitor)` : isPlayerTrapped ? `${p.name} (Trapped)` : p.name
+                              }
                             >
                               {p.name.charAt(0)}
                             </div>

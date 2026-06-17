@@ -1,5 +1,6 @@
 import haunt1Definition from "./haunt_1/definition";
 import haunt28Definition from "./haunt_28/definition";
+import haunt47Definition from "./haunt_47/definition";
 import { SCENARIO_CARDS } from "./scenarioCards";
 import {
   createInitialScenarioState,
@@ -46,12 +47,29 @@ import {
   resolveHauntTradeConfirmState as resolveHauntTradeConfirmState28,
   getBoardRenderState as getBoardRenderState28,
 } from "./haunt_28/runtime";
+import {
+  createInitialScenarioState as createInitialScenarioState47,
+  onHauntBegin as onHauntBegin47,
+  resolveAfterDamageState as resolveAfterDamageState47,
+  resolveTurnStartState as resolveTurnStartState47,
+  getCombatBonus as getCombatBonus47,
+  getTileTokenLabelsState as getTileTokenLabelsState47,
+  getKnowledgeTokenHoldersState as getKnowledgeTokenHoldersState47,
+  getActionAvailabilityState as getActionAvailabilityState47,
+  getActionButtonsState as getActionButtonsState47,
+  getActionRollPreviewState as getActionRollPreviewState47,
+  resolveActionState as resolveActionState47,
+  resolveActionRollContinueState as resolveActionRollContinueState47,
+  getPlayerHauntTokensState as getPlayerHauntTokensState47,
+  getBoardRenderState as getBoardRenderState47,
+} from "./haunt_47/runtime";
 
 // Static registry mapping haunt IDs to definition objects and runtime hook bundles.
 // Add new haunts here when they are implemented.
 const HAUNT_REGISTRY = {
   [haunt1Definition.id]: haunt1Definition,
   [haunt28Definition.id]: haunt28Definition,
+  [haunt47Definition.id]: haunt47Definition,
 };
 
 const HAUNT_RUNTIME_REGISTRY = {
@@ -99,6 +117,22 @@ const HAUNT_RUNTIME_REGISTRY = {
     getHauntTradeableTokensState: getHauntTradeableTokensState28,
     resolveHauntTradeConfirmState: resolveHauntTradeConfirmState28,
     getBoardRenderState: getBoardRenderState28,
+  },
+  [haunt47Definition.id]: {
+    createInitialScenarioState: createInitialScenarioState47,
+    onHauntBegin: onHauntBegin47,
+    resolveAfterDamageState: resolveAfterDamageState47,
+    getCombatBonus: getCombatBonus47,
+    resolveTurnStartState: resolveTurnStartState47,
+    getTileTokenLabelsState: getTileTokenLabelsState47,
+    getKnowledgeTokenHoldersState: getKnowledgeTokenHoldersState47,
+    getActionAvailabilityState: getActionAvailabilityState47,
+    getActionButtonsState: getActionButtonsState47,
+    getActionRollPreviewState: getActionRollPreviewState47,
+    resolveActionState: resolveActionState47,
+    resolveActionRollContinueState: resolveActionRollContinueState47,
+    getPlayerHauntTokensState: getPlayerHauntTokensState47,
+    getBoardRenderState: getBoardRenderState47,
   },
 };
 

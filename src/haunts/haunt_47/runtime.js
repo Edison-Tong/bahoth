@@ -90,6 +90,56 @@ function hasTilePortal(portalTokens, floor, x, y) {
   return portalTokens.some((t) => t.floor === floor && t.x === x && t.y === y);
 }
 
+/* [HAUNT-SETUP] BFS across placed tiles on a given floor to find the tile requiring the most moves from (startX, startY).
+   Respects doorway connections. Skips tiles already holding a portal (alreadyPlaced). */
+function bfsFarthestTile(board, floor, startX, startY, alreadyPlaced) {
+  const floorTiles = board[floor] || [];
+  if (floorTiles.length === 0) return null;
+
+  // Build a quick lookup: "x:y" → tile
+  const tileMap = {};
+  for (const t of floorTiles) tileMap[`${t.x}:${t.y}`] = t;
+
+  const placedSet = new Set((alreadyPlaced || []).filter((p) => p.floor === floor).map((p) => `${p.x}:${p.y}`));
+
+  const DIR_VECTORS = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
+  const OPPOSITE_DIR = { N: "S", S: "N", E: "W", W: "E" };
+
+  const visited = new Set();
+  const queue = [{ x: startX, y: startY, dist: 0 }];
+  visited.add(`${startX}:${startY}`);
+
+  let farthestTile = null;
+  let farthestDist = -1;
+
+  while (queue.length > 0) {
+    const { x, y, dist } = queue.shift();
+    const tile = tileMap[`${x}:${y}`];
+    if (!tile) continue;
+
+    const key = `${x}:${y}`;
+    if (dist > 0 && !placedSet.has(key) && dist > farthestDist) {
+      farthestDist = dist;
+      farthestTile = tile;
+    }
+
+    for (const dir of tile.doors || []) {
+      const [dx, dy] = DIR_VECTORS[dir];
+      const nx = x + dx;
+      const ny = y + dy;
+      const nKey = `${nx}:${ny}`;
+      if (visited.has(nKey)) continue;
+      const neighbor = tileMap[nKey];
+      if (!neighbor) continue;
+      if (!(neighbor.doors || []).includes(OPPOSITE_DIR[dir])) continue;
+      visited.add(nKey);
+      queue.push({ x: nx, y: ny, dist: dist + 1 });
+    }
+  }
+
+  return farthestTile;
+}
+
 /* [HAUNT-SETUP] [STAT-CHANGE] Heals a player back to their starting stat index values. Mirrors the pattern in hauntRuntime.js. */
 function healAllTraits(player) {
   const statIndex = {};
@@ -117,29 +167,15 @@ export function onHauntBegin(game) {
   // 1. Heal the traitor's traits.
   const nextPlayers = game.players.map((player, index) => (index === traitorIndex ? healAllTraits(player) : player));
 
-  // 2. For each hero, find the farthest placed tile on their floor and place a portal there.
-  //    "Region" = the hero's current floor. "Farthest" = maximum Manhattan distance.
+  // 2. For each hero, find the farthest reachable tile on their floor by BFS move-distance,
+  //    then place a portal there. "Farthest" = most moves required, not physical distance.
   const portalTokens = [];
   for (let i = 0; i < Math.min(heroIndexes.length, portalCount); i++) {
     const heroIndex = heroIndexes[i];
     const hero = nextPlayers[heroIndex];
     if (!hero) continue;
 
-    const floorTiles = game.board[hero.floor] || [];
-    let farthestTile = null;
-    let farthestDist = -1;
-
-    for (const tile of floorTiles) {
-      const dist = Math.abs(tile.x - hero.x) + Math.abs(tile.y - hero.y);
-      if (dist === 0) continue; // Skip hero's own tile
-      // Avoid placing two portals on the same tile
-      if (portalTokens.some((p) => p.floor === hero.floor && p.x === tile.x && p.y === tile.y)) continue;
-      if (dist > farthestDist) {
-        farthestDist = dist;
-        farthestTile = tile;
-      }
-    }
-
+    const farthestTile = bfsFarthestTile(game.board, hero.floor, hero.x, hero.y, portalTokens);
     if (farthestTile) {
       portalTokens.push({ floor: hero.floor, x: farthestTile.x, y: farthestTile.y });
     }
@@ -502,7 +538,7 @@ function resolveClosePortalState(game, stat) {
 // ---------------------------------------------------------------------------
 
 /* [HAUNT-ACTION] Processes Continue after an Escape the Portal or Close the Portal roll. */
-export function resolveActionRollContinueState(game, { createDamageChoice }) {
+export function resolveActionRollContinueState(game, { createDamageChoice, rollDice }) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_47" || !game.hauntState) {
     return game;
   }
@@ -589,16 +625,21 @@ export function resolveActionRollContinueState(game, { createDamageChoice }) {
       };
     }
 
-    // Fail: take 1 die of Mental damage (approximated as 1 fixed Mental damage).
+    // Fail: take 1 die of Mental damage — roll the die now and use the result as flat damage.
+    const damageDice = rollDice ? rollDice(1) : [1];
+    const damageRolled = Math.max(
+      1,
+      damageDice.reduce((s, v) => s + v, 0)
+    );
     const damageChoice = createDamageChoice(
-      { damage: 1, damageType: "mental", sourceName: "Portal — Dimensional Feedback" },
+      { damage: damageRolled, damageType: "mental", sourceName: "Portal — Dimensional Feedback" },
       actor
     );
     return {
       ...clearHauntActionRoll(game),
       hauntState: nextHauntState,
       damageChoice,
-      message: `${actorName} rolled${rollSuffix}. Failed to close the Portal — take 1 Mental damage.`,
+      message: `${actorName} rolled${rollSuffix}. Failed to close the Portal — rolled ${damageRolled} Mental damage.`,
     };
   }
 
@@ -606,15 +647,64 @@ export function resolveActionRollContinueState(game, { createDamageChoice }) {
 }
 
 // ---------------------------------------------------------------------------
+// Exported hook: resolveTurnStartState
+// At the start of a hero's turn, roll Speed to determine movement (minimum 1).
+// The traitor takes a normal turn — no speed roll needed.
+// ---------------------------------------------------------------------------
+
+/* [HAUNT-ACTION] [DICE-ROLL] At start of each hero's turn: roll Speed to determine movement (min 1). */
+export function resolveTurnStartState(game, { rollDice }) {
+  if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_47" || !game.hauntState) {
+    return { game, diceAnimation: null };
+  }
+
+  // Only applies to heroes — traitor takes a normal turn.
+  if (!isHero(game, game.currentPlayerIndex)) {
+    return { game, diceAnimation: null };
+  }
+
+  const currentPlayer = getCurrentPlayer(game);
+  if (!currentPlayer?.isAlive) return { game, diceAnimation: null };
+
+  const speedStatIndex = currentPlayer.statIndex?.speed ?? 0;
+  const speedDiceCount = currentPlayer.character?.speed?.[speedStatIndex] ?? 0;
+  const dice = rollDice(Math.max(1, speedDiceCount));
+  const total = dice.reduce((s, v) => s + v, 0);
+  const moves = Math.max(1, total);
+
+  const nextPlayers = game.players.map((player, index) =>
+    index === game.currentPlayerIndex ? { ...player, movesLeft: moves } : player
+  );
+
+  return {
+    game: {
+      ...game,
+      players: nextPlayers,
+      message: `${currentPlayer.name} rolls Speed for movement...`,
+    },
+    diceAnimation: {
+      purpose: "hero-speed-roll",
+      final: [...dice],
+      display: Array.from({ length: dice.length }, () => Math.floor(Math.random() * 3)),
+      settled: false,
+      label: "Speed",
+      total,
+      monsterName: null,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Exported hook: getTileTokenLabelsState
 // ---------------------------------------------------------------------------
 
-/* [BOARD-LAYOUT] Returns Portal token label on any tile that has an active Portal token. */
+/* [BOARD-LAYOUT] Returns a portal variant token on any tile that has an active Portal token.
+   BoardCanvas renders the "portal" variant as an animated swirl overlay. */
 export function getTileTokenLabelsState(game, { floor, x, y }) {
   if (game.activeHauntId !== "haunt_47" || !game.hauntState) return [];
   const scenarioState = getScenarioState(game.hauntState);
   if (hasTilePortal(scenarioState.portalTokens, floor, x, y)) {
-    return [{ label: "Portal", variant: "token" }];
+    return [{ label: "Portal", variant: "portal" }];
   }
   return [];
 }
@@ -638,12 +728,18 @@ export function getPlayerHauntTokensState(game, playerIndex) {
 // ---------------------------------------------------------------------------
 
 /* [BOARD-RENDER] Haunt 47 has no flooded tiles and no single monster token.
-   Portal tokens are rendered per-tile via getTileTokenLabelsState. */
+   Portal tokens are rendered per-tile via getTileTokenLabelsState.
+   Trapped heroes are returned here so BoardCanvas can apply the visual style generically. */
 export function getBoardRenderState(game) {
   if (game.activeHauntId !== "haunt_47" || !game.hauntState) {
-    return { floodedTiles: [], monsterToken: null };
+    return { floodedTiles: [], monsterToken: null, trappedPlayerIndexes: [] };
   }
-  return { floodedTiles: [], monsterToken: null };
+  const scenarioState = getScenarioState(game.hauntState);
+  return {
+    floodedTiles: [],
+    monsterToken: null,
+    trappedPlayerIndexes: scenarioState.trappedHeroes || [],
+  };
 }
 
 // ---------------------------------------------------------------------------

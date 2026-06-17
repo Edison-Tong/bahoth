@@ -347,7 +347,7 @@ export function getHauntBoardRenderState(game) {
   if (runtimeHooks?.getBoardRenderState) {
     return runtimeHooks.getBoardRenderState(game);
   }
-  return { floodedTiles: [], monsterToken: null };
+  return { floodedTiles: [], monsterToken: null, trappedPlayerIndexes: [] };
 }
 
 /* [SPIRIT] [BOARD-LAYOUT] Returns UI token labels for the active haunt at a given board position (corpse, exorcism circle, spirit). */
@@ -467,10 +467,10 @@ export function getHauntActionRollPreviewState(game) {
 }
 
 /* [HAUNT-ACTION] Processes the continue-button press after a completed haunt action roll. */
-export function resolveHauntActionRollContinueState(game, { createDamageChoice }) {
+export function resolveHauntActionRollContinueState(game, { createDamageChoice, rollDice }) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.resolveActionRollContinueState) {
-    return runtimeHooks.resolveActionRollContinueState(game, { createDamageChoice });
+    return runtimeHooks.resolveActionRollContinueState(game, { createDamageChoice, rollDice });
   }
   return game;
 }

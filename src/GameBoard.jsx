@@ -2717,6 +2717,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     setGame((g) =>
       resolveHauntActionRollContinueState(g, {
         createDamageChoice,
+        rollDice,
       })
     );
   }
