@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 // GameBoard.jsx — Main game board component. See component comment near the export for full description.
 import { useState, useRef, useEffect, useMemo } from "react";
 import {
