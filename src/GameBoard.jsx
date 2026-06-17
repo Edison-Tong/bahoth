@@ -401,6 +401,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
   const hauntPendingChoiceType = game?.hauntState?.scenarioState?.pendingChoice?.type;
   const gameplayLockedByHauntSetup = game.gamePhase === GAME_PHASES.HAUNT_SETUP;
   const gameplayLockedByCombat = !!game.combatState;
+  const gameplayLockedByDamageChoice = !!game.damageChoice;
   const gameplayLockedByHauntActionRoll = !!game.hauntActionRoll;
   const gameplayLockedByStalkPreyPlacement = hauntPendingChoiceType === "stalk-prey-placement";
   const gameplayLockedByHauntPendingChoice =
@@ -415,6 +416,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     debugModeEnabled ||
     gameplayLockedByHauntSetup ||
     gameplayLockedByCombat ||
+    gameplayLockedByDamageChoice ||
     gameplayLockedByHauntActionRoll ||
     gameplayLockedByStalkPreyPlacement ||
     gameplayLockedByHauntPendingChoice ||
@@ -1416,7 +1418,8 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
       debugModeEnabled ||
       game.gamePhase === GAME_PHASES.HAUNT_SETUP ||
       game.gamePhase === GAME_PHASES.GAME_OVER ||
-      gameplayLockedByHauntPendingChoice
+      gameplayLockedByHauntPendingChoice ||
+      gameplayLockedByDamageChoice
     )
       return;
     let nextCameraFloor = null;
@@ -3428,9 +3431,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
         }}
       />
 
-      {(isOnlineMode
-        ? !!game.hauntState && !localHauntRulesDismissed
-        : game.gamePhase === GAME_PHASES.HAUNT_SETUP) && (
+      {(isOnlineMode ? !!game.hauntState && !localHauntRulesDismissed : game.gamePhase === GAME_PHASES.HAUNT_SETUP) && (
         <HauntSetupOverlay
           game={game}
           hauntDefinition={activeHauntDefinition}
