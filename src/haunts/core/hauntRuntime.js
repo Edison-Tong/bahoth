@@ -333,10 +333,10 @@ export function getHauntCombatInitOverride(game, attackerIndex, defenderIndex) {
 }
 
 /* [HAUNT-COMBAT] Resolves combat outcome with haunt-specific logic (e.g. trap instead of damage). Returns modified game state or null. */
-export function getHauntCombatOutcomeOverride(game, outcome, combatState) {
+export function getHauntCombatOutcomeOverride(game, outcome, combatState, { createDamageChoice } = {}) {
   const runtimeHooks = getHauntRuntimeHooksById(game.activeHauntId);
   if (runtimeHooks?.resolveCombatOutcomeState) {
-    return runtimeHooks.resolveCombatOutcomeState(game, outcome, combatState);
+    return runtimeHooks.resolveCombatOutcomeState(game, outcome, combatState, { createDamageChoice });
   }
   return null;
 }

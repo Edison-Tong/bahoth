@@ -13,23 +13,27 @@ export default function DiceRollOverlay({ diceAnimation, renderDiceRow, isMyTurn
           ? "HAUNT ACTION REROLL"
           : diceAnimation.purpose === "monster-speed-roll"
             ? "MONSTER MOVEMENT"
-            : diceAnimation.purpose === "event-roll"
-              ? "EVENT ROLL"
-              : diceAnimation.purpose === "combat-attacker-roll"
-                ? "ATTACKER ROLL"
-                : diceAnimation.purpose === "combat-defender-roll"
-                  ? "DEFENDER ROLL"
-                  : diceAnimation.purpose === "event-damage-roll"
-                    ? "EVENT DAMAGE ROLL"
-                    : diceAnimation.purpose === "skeleton-key"
-                      ? "SKELETON KEY"
-                      : diceAnimation.purpose === "mystic-elevator"
-                        ? "MYSTIC ELEVATOR"
-                        : diceAnimation.purpose === "collapsed"
-                          ? "COLLAPSED ROOM"
-                          : diceAnimation.purpose === "collapsed-damage"
-                            ? "COLLAPSED ROOM — DAMAGE"
-                            : "FURNACE ROOM";
+            : diceAnimation.purpose === "hero-speed-roll"
+              ? "HERO MOVEMENT"
+              : diceAnimation.purpose === "event-roll"
+                ? "EVENT ROLL"
+                : diceAnimation.purpose === "combat-attacker-roll"
+                  ? "ATTACKER ROLL"
+                  : diceAnimation.purpose === "combat-defender-roll"
+                    ? "DEFENDER ROLL"
+                    : diceAnimation.purpose === "event-damage-roll"
+                      ? "EVENT DAMAGE ROLL"
+                      : diceAnimation.purpose === "skeleton-key"
+                        ? "SKELETON KEY"
+                        : diceAnimation.purpose === "mystic-elevator"
+                          ? "MYSTIC ELEVATOR"
+                          : diceAnimation.purpose === "collapsed"
+                            ? "COLLAPSED ROOM"
+                            : diceAnimation.purpose === "collapsed-damage"
+                              ? "COLLAPSED ROOM — DAMAGE"
+                              : diceAnimation.purpose === "portal-close-damage-roll"
+                                ? "PORTAL DAMAGE ROLL"
+                                : "FURNACE ROOM";
 
   if (isMyTurn === false) {
     return null;
@@ -39,7 +43,9 @@ export default function DiceRollOverlay({ diceAnimation, renderDiceRow, isMyTurn
     <div className="card-overlay card-overlay-animation">
       <div
         className={`card-modal ${
-          diceAnimation.purpose === "haunt" || diceAnimation.purpose === "monster-speed-roll"
+          diceAnimation.purpose === "haunt" ||
+          diceAnimation.purpose === "monster-speed-roll" ||
+          diceAnimation.purpose === "hero-speed-roll"
             ? "card-haunt-rolling"
             : "card-tile-rolling"
         }`}

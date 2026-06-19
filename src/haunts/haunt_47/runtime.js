@@ -215,6 +215,38 @@ export function resolveAfterDamageState(previousGame, nextGame) {
   // Knight invincibility: traitor cannot die — heal all traits instead.
   if (previousGame.players[traitorIndex]?.isAlive === true && nextGame.players[traitorIndex]?.isAlive === false) {
     const healedTraitor = healAllTraits(nextGame.players[traitorIndex]);
+
+    // If the traitor died on their own turn, passTurnCoreState was already called inside
+    // resolveConfirmDamageChoiceActionState. We need to undo that pass and restore the
+    // traitor's turn exactly as it was before the fatal hit (same moves remaining,
+    // same per-target attack tracking, same turn phase) so they can continue playing.
+    if (
+      previousGame.currentPlayerIndex === traitorIndex &&
+      nextGame.currentPlayerIndex !== traitorIndex
+    ) {
+      const prevTraitor = previousGame.players[traitorIndex];
+      const healedTraitorWithMoves = { ...healedTraitor, movesLeft: prevTraitor.movesLeft };
+      const restoredPlayers = nextGame.players.map((p, i) => (i === traitorIndex ? healedTraitorWithMoves : p));
+      return {
+        ...nextGame,
+        players: restoredPlayers,
+        currentPlayerIndex: traitorIndex,
+        turnPhase: previousGame.turnPhase,
+        movePath: previousGame.movePath,
+        hasAttackedThisTurn: previousGame.hasAttackedThisTurn,
+        attackedPlayerIndexes: previousGame.attackedPlayerIndexes || [],
+        hasMovedThisTurn: previousGame.hasMovedThisTurn,
+        combatState: null,
+        damageChoice: null,
+        mysticElevatorReady: previousGame.mysticElevatorReady,
+        mysticElevatorUsed: previousGame.mysticElevatorUsed,
+        skeletonKeyArmed: previousGame.skeletonKeyArmed,
+        extraTurnAfterCurrent: previousGame.extraTurnAfterCurrent,
+        turnNumber: previousGame.turnNumber,
+        message: "The cruel knight is invincible! All traits are healed — the knight continues their turn.",
+      };
+    }
+
     const nextPlayers = nextGame.players.map((p, i) => (i === traitorIndex ? healedTraitor : p));
     return {
       ...nextGame,
@@ -538,7 +570,7 @@ function resolveClosePortalState(game, stat) {
 // ---------------------------------------------------------------------------
 
 /* [HAUNT-ACTION] Processes Continue after an Escape the Portal or Close the Portal roll. */
-export function resolveActionRollContinueState(game, { createDamageChoice, rollDice }) {
+export function resolveActionRollContinueState(game, { rollDice }) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_47" || !game.hauntState) {
     return game;
   }
@@ -625,21 +657,25 @@ export function resolveActionRollContinueState(game, { createDamageChoice, rollD
       };
     }
 
-    // Fail: take 1 die of Mental damage — roll the die now and use the result as flat damage.
+    // Fail: take 1 die of Mental damage — roll and animate the die, apply damage on settle.
     const damageDice = rollDice ? rollDice(1) : [1];
-    const damageRolled = Math.max(
-      1,
-      damageDice.reduce((s, v) => s + v, 0)
-    );
-    const damageChoice = createDamageChoice(
-      { damage: damageRolled, damageType: "mental", sourceName: "Portal — Dimensional Feedback" },
-      actor
-    );
-    return {
+    const pendingState = {
       ...clearHauntActionRoll(game),
       hauntState: nextHauntState,
-      damageChoice,
-      message: `${actorName} rolled${rollSuffix}. Failed to close the Portal — rolled ${damageRolled} Mental damage.`,
+      message: `${actorName} rolled${rollSuffix}. Failed to close the Portal — rolling for Mental damage...`,
+    };
+    return {
+      game: pendingState,
+      diceAnimation: {
+        purpose: "portal-close-damage-roll",
+        final: [...damageDice],
+        display: Array.from({ length: damageDice.length }, () => Math.floor(Math.random() * 3)),
+        settled: false,
+        label: "Mental Damage",
+        total: damageDice.reduce((s, v) => s + v, 0),
+        playerIndex: actionRoll.actorIndex,
+        actorName,
+      },
     };
   }
 
@@ -801,7 +837,7 @@ export function getCombatInitOverride(game, attackerIndex, defenderIndex) {
 // ---------------------------------------------------------------------------
 
 /* [HAUNT-COMBAT] Overrides combat resolution for the cruel knight's special attack rules. */
-export function resolveCombatOutcomeState(game, outcome, combatState) {
+export function resolveCombatOutcomeState(game, outcome, combatState, { createDamageChoice } = {}) {
   if (game.activeHauntId !== "haunt_47" || !game.hauntState) return null;
 
   const traitorIndex = game.hauntState.traitorPlayerIndex;
@@ -812,7 +848,26 @@ export function resolveCombatOutcomeState(game, outcome, combatState) {
 
   const defenderIndex = combatState.defenderIndex;
   if (isTrapped(game, defenderIndex)) {
-    // Sanity attack vs Trapped hero — default Physical damage logic is correct. No override.
+    // Sanity attack vs Trapped hero.
+    // Hero loses → default Physical damage is correct; no override.
+    if (outcome.loserIndex !== traitorIndex) return null;
+    // Knight loses → apply Mental damage to the knight instead of Physical.
+    if (createDamageChoice) {
+      const knight = game.players[traitorIndex];
+      const damageChoice = {
+        ...createDamageChoice(
+          { damage: outcome.damage, damageType: "mental", sourceName: "Dimensional Combat" },
+          knight
+        ),
+        playerIndex: traitorIndex,
+      };
+      return {
+        ...game,
+        combatState: null,
+        damageChoice,
+        message: `${outcome.winnerName} wins (${outcome.attackerTotal} vs ${outcome.defenderTotal}). The cruel knight takes ${outcome.damage} Mental damage.`,
+      };
+    }
     return null;
   }
 

@@ -716,6 +716,30 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
           };
         });
         setDiceAnimation(null);
+      } else if (da.purpose === "hero-speed-roll") {
+        // Game state was already updated when the animation was initiated — just clear the animation.
+        setDiceAnimation(null);
+      } else if (da.purpose === "portal-close-damage-roll") {
+        setGame((g) => {
+          const actor = g.players[da.playerIndex ?? g.currentPlayerIndex];
+          const damageRolled = Math.max(
+            1,
+            da.final.reduce((s, v) => s + v, 0)
+          );
+          const damageChoice = {
+            ...createDamageChoice(
+              { damage: damageRolled, damageType: "mental", sourceName: "Portal — Dimensional Feedback" },
+              actor
+            ),
+            playerIndex: da.playerIndex ?? g.currentPlayerIndex,
+          };
+          return {
+            ...g,
+            damageChoice,
+            message: `${da.actorName ?? actor?.name ?? "Hero"} takes ${damageRolled} Mental damage from dimensional feedback.`,
+          };
+        });
+        setDiceAnimation(null);
       }
     }, 2000);
 
@@ -1804,7 +1828,7 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
       }
 
       // Haunt-specific outcome override: e.g. trap instead of damage, or no damage on loss.
-      const hauntOutcomeOverride = getHauntCombatOutcomeOverride(g, outcome, combatState);
+      const hauntOutcomeOverride = getHauntCombatOutcomeOverride(g, outcome, combatState, { createDamageChoice });
       if (hauntOutcomeOverride !== null) return hauntOutcomeOverride;
 
       const loser = g.players[outcome.loserIndex];
@@ -2728,12 +2752,16 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
 
   /* [HAUNT-ACTION] Continue button after a haunt action roll settles; applies roll outcome and advances haunt state. */
   function handleContinueHauntActionRoll() {
-    setGame((g) =>
-      resolveHauntActionRollContinueState(g, {
-        createDamageChoice,
-        rollDice,
-      })
-    );
+    const result = resolveHauntActionRollContinueState(game, {
+      createDamageChoice,
+      rollDice,
+    });
+    if (result && result.game && result.diceAnimation) {
+      setGame(result.game);
+      setDiceAnimation(result.diceAnimation);
+    } else {
+      setGame(result);
+    }
   }
 
   /* [ITEM-REROLL] [DICE-ROLL] Selects which die index will be rerolled by the Rabbit's Foot. */

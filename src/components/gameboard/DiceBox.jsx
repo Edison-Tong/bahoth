@@ -21,6 +21,8 @@ const PURPOSE_LABEL = {
   "haunt-action-roll": "Haunt Action",
   "haunt-action-partial-reroll": "Haunt Action Reroll",
   "monster-speed-roll": "Monster Movement",
+  "hero-speed-roll": "Hero Movement",
+  "portal-close-damage-roll": "Portal Damage",
   "event-roll": "Event Roll",
   "event-partial-reroll": "Event Reroll",
   "event-damage-roll": "Event Damage",
