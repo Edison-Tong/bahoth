@@ -220,10 +220,7 @@ export function resolveAfterDamageState(previousGame, nextGame) {
     // resolveConfirmDamageChoiceActionState. We need to undo that pass and restore the
     // traitor's turn exactly as it was before the fatal hit (same moves remaining,
     // same per-target attack tracking, same turn phase) so they can continue playing.
-    if (
-      previousGame.currentPlayerIndex === traitorIndex &&
-      nextGame.currentPlayerIndex !== traitorIndex
-    ) {
+    if (previousGame.currentPlayerIndex === traitorIndex && nextGame.currentPlayerIndex !== traitorIndex) {
       const prevTraitor = previousGame.players[traitorIndex];
       const healedTraitorWithMoves = { ...healedTraitor, movesLeft: prevTraitor.movesLeft };
       const restoredPlayers = nextGame.players.map((p, i) => (i === traitorIndex ? healedTraitorWithMoves : p));
@@ -799,9 +796,13 @@ export function getCombatBonus(game, actorIndex, defenderIndex, role) {
   return isTrapped(game, defenderIndex) ? 2 : 0;
 }
 
-/* [HAUNT-COMBAT] No label — the +2 bonus is applied silently. */
-export function getCombatBonusLabel() {
-  return "attacking a trapped hero";
+/* [HAUNT-COMBAT] Returns a label for the +2 Sanity attack bonus when the traitor attacks a Trapped hero. */
+export function getCombatBonusLabel(game, actorIndex, defenderIndex, role) {
+  if (role !== "attacker") return null;
+  if (!game.hauntState) return null;
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  if (actorIndex !== traitorIndex) return null;
+  return isTrapped(game, defenderIndex) ? "Sanity attack vs Trapped hero" : null;
 }
 
 // ---------------------------------------------------------------------------

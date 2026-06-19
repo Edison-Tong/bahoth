@@ -65,7 +65,6 @@ export function getCombatTargetsOnCurrentTile(game) {
 export function getCrossboxTargets(game, getTileAtPos) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return [];
   if (!game.hauntState) return [];
-  if (game.hasAttackedThisTurn) return [];
 
   const attackerIndex = game.currentPlayerIndex;
   const attacker = game.players[attackerIndex];
@@ -97,7 +96,8 @@ export function getCrossboxTargets(game, getTileAtPos) {
     if (!Number.isInteger(traitorIndex)) return false;
     const attackerIsTraitor = attackerIndex === traitorIndex;
     const targetIsTraitor = playerIndex === traitorIndex;
-    return attackerIsTraitor ? !targetIsTraitor : targetIsTraitor;
+    if (!(attackerIsTraitor ? !targetIsTraitor : targetIsTraitor)) return false;
+    return getHauntCanAttackTargetState(game, attackerIndex, playerIndex);
   };
 
   return game.players
@@ -109,7 +109,6 @@ export function getCrossboxTargets(game, getTileAtPos) {
 export function getGunTargets(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return [];
   if (!game.hauntState) return [];
-  if (game.hasAttackedThisTurn) return [];
 
   const attackerIndex = game.currentPlayerIndex;
   const attacker = game.players[attackerIndex];
@@ -147,7 +146,8 @@ export function getGunTargets(game) {
     if (!Number.isInteger(traitorIndex)) return false;
     const attackerIsTraitor = attackerIndex === traitorIndex;
     const targetIsTraitor = playerIndex === traitorIndex;
-    return attackerIsTraitor ? !targetIsTraitor : targetIsTraitor;
+    if (!(attackerIsTraitor ? !targetIsTraitor : targetIsTraitor)) return false;
+    return getHauntCanAttackTargetState(game, attackerIndex, playerIndex);
   };
 
   return game.players

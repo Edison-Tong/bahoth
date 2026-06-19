@@ -7,11 +7,7 @@ import {
   toggleDogTradeOwnerGiveState,
   toggleDogTradeTargetGiveState,
 } from "../omens/dogAbility";
-import {
-  getHauntTradeableTokensState,
-  resolveHauntTradeConfirmState,
-  getHauntCanPlayersTradeState,
-} from "../haunts/hauntDomain";
+import { resolveHauntTradeConfirmState, getHauntCanPlayersTradeState } from "../haunts/hauntDomain";
 
 /* [TRADE] [VALIDATION] Returns false if the two players are on opposite teams (heroes cannot trade with traitor). */
 function canPlayersTradeAcrossTeams(game, ownerIndex, targetPlayerIndex) {
