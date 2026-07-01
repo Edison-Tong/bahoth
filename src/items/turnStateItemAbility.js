@@ -1,5 +1,6 @@
 import { PLAYER_STAT_ORDER, CRITICAL_STAT_INDEX } from "../game/gameState";
 import { getInventoryCard, matchesActiveAbility, isStatIndexAlive } from "../shared/playerHelpers";
+import { GAME_PHASES } from "../haunts/core/hauntPhases";
 const NECKLACE_OF_TEETH_ID = "necklace-of-teeth";
 const NECKLACE_OF_TEETH_CHOICE_TYPE = "necklace-of-teeth-choice";
 
@@ -318,7 +319,7 @@ export function applyMysticalStopwatchNowState(game, viewedCard) {
     return { game, closeViewedCard: false, diceAnimation: null };
   }
   if (viewedCard.ownerIndex !== game.currentPlayerIndex) return { game, closeViewedCard: false, diceAnimation: null };
-  if (game.gamePhase !== "hauntActive") return { game, closeViewedCard: false, diceAnimation: null };
+  if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) return { game, closeViewedCard: false, diceAnimation: null };
 
   const owner = game.players[viewedCard.ownerIndex];
   const inventoryCard = getInventoryCard(game, viewedCard);

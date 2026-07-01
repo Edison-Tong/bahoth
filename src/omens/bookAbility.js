@@ -1,4 +1,5 @@
 import { matchesActiveAbility } from "../shared/playerHelpers";
+import { GAME_PHASES } from "../haunts/core/hauntPhases";
 
 /* [ITEM-ABILITY] [OMEN] [VALIDATION] Returns whether the Book omen's Knowledge-substitution can be used now or queued for the next trait roll. */
 export function getBookUsageState({
@@ -88,7 +89,7 @@ export function applyBookNowState(game, viewedCard, deps) {
       ),
       statIndex: {
         ...player.statIndex,
-        sanity: Math.max(game.gamePhase === "preHaunt" ? 1 : 0, player.statIndex.sanity - 1),
+        sanity: Math.max(game.gamePhase === GAME_PHASES.PRE_HAUNT ? 1 : 0, player.statIndex.sanity - 1),
       },
     };
   });

@@ -1,6 +1,7 @@
 import { DAMAGE_STATS } from "../game/gameState";
 import { getDamageConversionOptions, getPostDamageEffectsForChoice } from "./passiveItemEffectAbility";
 import { getInventoryCard, matchesActiveAbility } from "../shared/playerHelpers";
+import { GAME_PHASES } from "../haunts/core/hauntPhases";
 
 const DYNAMITE_DAMAGE = 4;
 const DYNAMITE_DAMAGE_TYPE = "physical";
@@ -22,7 +23,7 @@ export function applyDynamiteNowState(g, viewedCard, deps = {}) {
   if (viewedCard.ownerIndex !== g.currentPlayerIndex) {
     return { game: g, closeViewedCard: false, diceAnimation: null };
   }
-  if (g.gamePhase !== "hauntActive") {
+  if (g.gamePhase !== GAME_PHASES.HAUNT_ACTIVE) {
     return { game: g, closeViewedCard: false, diceAnimation: null };
   }
   if (g.hasAttackedThisTurn) {

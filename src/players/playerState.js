@@ -1,4 +1,5 @@
 import { buildDynamiteRollReadyEventState } from "../items/dynamiteAbility";
+import { GAME_PHASES } from "../haunts/core/hauntPhases";
 import { isStatIndexAlive, isLethalDamageAllocation } from "../shared/playerHelpers";
 
 /* [STAT-CHANGE] [PLAYER-STATE] Adjusts a single stat by `amount` index steps (clamped to track bounds). Pass options.preventDeath=true to stop the index at 1 instead of 0. */
@@ -241,7 +242,7 @@ export function confirmDamageChoiceState(
   }
 
   const damagedPlayers = applyDamageAllocation(g.players, choicePlayerIndex, choice.allocation, choice.adjustmentMode, {
-    preventDeath: g.gamePhase === "preHaunt",
+    preventDeath: g.gamePhase === GAME_PHASES.PRE_HAUNT,
   });
   const postDamageResult = applyPostDamagePassiveEffects(damagedPlayers, choicePlayerIndex, choice);
   const resolvedPlayers = applyTileEffectConsequences(g, postDamageResult.players, choice.effect);

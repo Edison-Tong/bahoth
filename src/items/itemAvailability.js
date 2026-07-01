@@ -1,3 +1,5 @@
+import { GAME_PHASES } from "../haunts/core/hauntPhases";
+
 /* [ITEM-ABILITY] [VALIDATION] Determines availability, value options, and whether a value picker is needed for a card's active ability. Controls the Use Now / value-picker flow. */
 export function getItemAbilitySelectionState({
   game,
@@ -78,7 +80,7 @@ export function getItemAbilitySelectionState({
                   : rule.action === "move-through-walls"
                     ? canUseNormalMovementNow(game, viewedCard) && hasSkeletonKeyWallMoveAvailable(game, viewedCard)
                     : rule.action === "dynamite-aoe-attack"
-                      ? game.gamePhase === "hauntActive" && !game.hasAttackedThisTurn && !!game.hauntState
+                      ? game.gamePhase === GAME_PHASES.HAUNT_ACTIVE && !game.hasAttackedThisTurn && !!game.hauntState
                       : rule.action === "substitute-sanity-for-knowledge"
                         ? getMagicCameraUsageState({ game, drawnEventPrimaryAction, queuedTraitRollOverride })
                             .canUseMagicCameraNow

@@ -1,4 +1,5 @@
 import { getInventoryCard, matchesActiveAbility, isStatIndexAlive } from "../shared/playerHelpers";
+import { GAME_PHASES } from "../haunts/core/hauntPhases";
 
 /* [DICE-ROLL] [ITEM-REROLL] Returns the current roll source (haunt action roll or event last roll) with its sourceType. */
 function getTraitRollSource(game) {
@@ -137,7 +138,7 @@ export function applyCreepyDollNowState(game, viewedCard, deps) {
           }
         : card
     );
-    const minSanity = game.gamePhase === "preHaunt" ? 1 : 0;
+    const minSanity = game.gamePhase === GAME_PHASES.PRE_HAUNT ? 1 : 0;
     const nextStatIndex = {
       ...player.statIndex,
       sanity: Math.max(minSanity, player.statIndex.sanity - 1),

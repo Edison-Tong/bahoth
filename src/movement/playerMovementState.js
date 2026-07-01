@@ -5,10 +5,11 @@ import {
 } from "../haunts/hauntDomain";
 import { movesLabel } from "../shared/format";
 import { rotationsWithDoor } from "../shared/tileRotation";
+import { GAME_PHASES } from "../haunts/core/hauntPhases";
 
 /* [MOVEMENT] [COMBAT] Returns the extra move cost imposed by enemies on the current tile. Heroes pay +1 per traitor/monster on tile; the traitor pays +1 per hero on tile. */
 function getEnemyObstacleCost(game, playerIndex) {
-  if (game.gamePhase !== "hauntActive" || !game.hauntState) return 0;
+  if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || !game.hauntState) return 0;
 
   const traitorIndex = game.hauntState.traitorPlayerIndex;
   const player = game.players[playerIndex];

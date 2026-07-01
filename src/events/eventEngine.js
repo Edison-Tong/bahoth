@@ -1,5 +1,6 @@
 import { appendEventSummary, describeTokenPlacementLocation, getDiscoveredTileOptions } from "./eventUtils";
 import { isStatIndexAlive } from "../shared/playerHelpers";
+import { GAME_PHASES } from "../haunts/core/hauntPhases";
 
 /* [EVENT] [VALIDATION] Checks whether an event step's conditional matches the current game/event state. */
 function matchesEventCondition(condition, g, eventState) {
@@ -502,7 +503,7 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
               const isAlive = isStatIndexAlive(statIndex);
               return { ...player, statIndex, isAlive };
             })
-          : applyStatChange(updatedPlayers, playerIndex, stat, delta, { preventDeath: g.gamePhase === "preHaunt" });
+          : applyStatChange(updatedPlayers, playerIndex, stat, delta, { preventDeath: g.gamePhase === GAME_PHASES.PRE_HAUNT });
       }, players);
     }
 
@@ -517,7 +518,7 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
     }
 
     const delta = statEffect.mode === "lose" ? -(statEffect.amount || 0) : statEffect.amount || 0;
-    return applyStatChange(players, playerIndex, targetStat, delta, { preventDeath: g.gamePhase === "preHaunt" });
+    return applyStatChange(players, playerIndex, targetStat, delta, { preventDeath: g.gamePhase === GAME_PHASES.PRE_HAUNT });
   }
 
   const player = g.players[g.currentPlayerIndex];

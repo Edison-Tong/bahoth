@@ -1862,7 +1862,7 @@ export function resolveEventAnimationSettlement(g, da) {
     const nextPlayers = Number.isInteger(ownerIndex)
       ? g.players.map((player, index) => {
           if (index !== ownerIndex) return player;
-          const minSanity = g.gamePhase === "preHaunt" ? 1 : 0;
+          const minSanity = g.gamePhase === GAME_PHASES.PRE_HAUNT ? 1 : 0;
           const nextStatIndex = {
             ...player.statIndex,
             sanity: Math.max(minSanity, player.statIndex.sanity - sanityLoss),
