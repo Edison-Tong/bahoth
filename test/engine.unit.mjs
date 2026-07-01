@@ -10,6 +10,7 @@ import {
 } from "../src/shared/playerHelpers.js";
 import { rotationsWithDoor } from "../src/shared/tileRotation.js";
 import { getActionRollResult } from "../src/haunts/core/hauntBase.js";
+import { shuffle } from "../src/tiles.js";
 import { test, assert, report } from "./harness.mjs";
 
 console.log("shared/format.movesLabel:");
@@ -88,6 +89,17 @@ test("computes effectiveTotal = roll + bonus and success vs threshold", () => {
   assert(fail.effectiveTotal === 3 && fail.success === false, "3 < 6 fails");
 
   assert(getActionRollResult({}) === null, "no roll -> null");
+});
+
+console.log("\ntiles.shuffle (Fisher-Yates):");
+test("returns a same-length permutation and leaves the input unchanged", () => {
+  const input = [1, 2, 3, 4, 5, 6, 7, 8];
+  const snapshot = [...input];
+  const out = shuffle(input);
+  assert(out.length === input.length, "same length");
+  assert(JSON.stringify([...out].sort((a, b) => a - b)) === JSON.stringify(snapshot), "same multiset of elements");
+  assert(JSON.stringify(input) === JSON.stringify(snapshot), "input array not mutated");
+  assert(out !== input, "returns a new array");
 });
 
 report();

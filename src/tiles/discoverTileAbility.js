@@ -1,4 +1,5 @@
 import { movesLabel } from "../shared/format";
+import { shuffle } from "../tiles";
 
 /* [FORMAT] [MOVEMENT] Formats remaining moves into a readable string (e.g. "3 moves left."). */
 function formatMovesLeft(player) {
@@ -141,7 +142,7 @@ export function applyPlacedTileDiscoverEffects({
       };
     }
 
-    nextStack = [...nextStack].sort(() => Math.random() - 0.5);
+    nextStack = shuffle(nextStack);
     nextDrawnCard = null;
     nextTurnPhase = nextTileEffect?.nextTurnPhase || "card";
     nextMessage = panicMessage;

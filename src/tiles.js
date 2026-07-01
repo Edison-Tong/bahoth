@@ -384,8 +384,8 @@ export const TILES = [
   },
 ];
 
-/* [LOOKUP] Shuffles an array in place using Fisher-Yates. */
-function shuffle(array) {
+/* [LOOKUP] Returns a new Fisher-Yates-shuffled copy of `array` (input unchanged). */
+export function shuffle(array) {
   const shuffled = [...array];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
