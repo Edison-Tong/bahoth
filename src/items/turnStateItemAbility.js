@@ -1,5 +1,5 @@
 import { PLAYER_STAT_ORDER, CRITICAL_STAT_INDEX } from "../game/gameState";
-import { getInventoryCard, matchesActiveAbility } from "../shared/playerHelpers";
+import { getInventoryCard, matchesActiveAbility, isStatIndexAlive } from "../shared/playerHelpers";
 const NECKLACE_OF_TEETH_ID = "necklace-of-teeth";
 const NECKLACE_OF_TEETH_CHOICE_TYPE = "necklace-of-teeth-choice";
 
@@ -289,7 +289,7 @@ export function applyFirstAidKitNowState(game, viewedCard, targetPlayerIndex = n
         nextStatIndex[stat] = Math.max(nextStatIndex[stat], player.character.startIndex[stat]);
       }
     }
-    const isAlive = Object.values(nextStatIndex).every((value) => value > 0);
+    const isAlive = isStatIndexAlive(nextStatIndex);
 
     return {
       ...player,

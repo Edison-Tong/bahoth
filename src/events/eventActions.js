@@ -1,4 +1,5 @@
 import { advanceEventResolution, getMatchingOutcome } from "./eventEngine";
+import { isStatIndexAlive } from "../shared/playerHelpers";
 import { appendEventSummary, describeEventEffects, getEventRollButtonLabel } from "./eventUtils";
 import { GAME_PHASES } from "../haunts/hauntDomain";
 import {
@@ -1866,7 +1867,7 @@ export function resolveEventAnimationSettlement(g, da) {
             ...player.statIndex,
             sanity: Math.max(minSanity, player.statIndex.sanity - sanityLoss),
           };
-          const isAlive = Object.values(nextStatIndex).every((value) => value > 0);
+          const isAlive = isStatIndexAlive(nextStatIndex);
           return {
             ...player,
             statIndex: nextStatIndex,

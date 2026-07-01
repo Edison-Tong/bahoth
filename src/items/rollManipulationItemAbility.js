@@ -1,4 +1,4 @@
-import { getInventoryCard, matchesActiveAbility } from "../shared/playerHelpers";
+import { getInventoryCard, matchesActiveAbility, isStatIndexAlive } from "../shared/playerHelpers";
 
 /* [DICE-ROLL] [ITEM-REROLL] Returns the current roll source (haunt action roll or event last roll) with its sourceType. */
 function getTraitRollSource(game) {
@@ -142,7 +142,7 @@ export function applyCreepyDollNowState(game, viewedCard, deps) {
       ...player.statIndex,
       sanity: Math.max(minSanity, player.statIndex.sanity - 1),
     };
-    const isAlive = Object.values(nextStatIndex).every((value) => value > 0);
+    const isAlive = isStatIndexAlive(nextStatIndex);
 
     return {
       ...player,

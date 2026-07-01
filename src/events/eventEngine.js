@@ -1,4 +1,5 @@
 import { appendEventSummary, describeTokenPlacementLocation, getDiscoveredTileOptions } from "./eventUtils";
+import { isStatIndexAlive } from "../shared/playerHelpers";
 
 /* [EVENT] [VALIDATION] Checks whether an event step's conditional matches the current game/event state. */
 function matchesEventCondition(condition, g, eventState) {
@@ -105,7 +106,7 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
               if (index !== playerIndex) return player;
               const nextIndex = Math.max(player.statIndex[stat], player.character.startIndex[stat]);
               const statIndex = { ...player.statIndex, [stat]: nextIndex };
-              const isAlive = Object.values(statIndex).every((value) => value > 0);
+              const isAlive = isStatIndexAlive(statIndex);
               return { ...player, statIndex, isAlive };
             })
           : applyStatChange(updatedPlayers, playerIndex, stat, delta, { preventDeath: g.gamePhase === "preHaunt" });
@@ -117,7 +118,7 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
         if (index !== playerIndex) return player;
         const healedIndex = Math.max(player.statIndex[targetStat], player.character.startIndex[targetStat]);
         const statIndex = { ...player.statIndex, [targetStat]: healedIndex };
-        const isAlive = Object.values(statIndex).every((value) => value > 0);
+        const isAlive = isStatIndexAlive(statIndex);
         return { ...player, statIndex, isAlive };
       });
     }
