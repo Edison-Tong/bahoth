@@ -9,6 +9,7 @@ import {
   matchesActiveAbility,
 } from "../src/shared/playerHelpers.js";
 import { rotationsWithDoor } from "../src/shared/tileRotation.js";
+import { getActionRollResult } from "../src/haunts/core/hauntBase.js";
 import { test, assert, report } from "./harness.mjs";
 
 console.log("shared/format.movesLabel:");
@@ -75,6 +76,18 @@ test("finds rotations whose doors include the needed door", () => {
   // A four-door tile always includes every needed door, in all 4 rotations.
   const cross = rotationsWithDoor(["N", "E", "S", "W"], "W");
   assert(cross.length === 4, `four-door tile matches in all rotations, got ${cross.length}`);
+});
+
+console.log("\nhauntBase.getActionRollResult:");
+test("computes effectiveTotal = roll + bonus and success vs threshold", () => {
+  const pass = getActionRollResult({ hauntActionRoll: { actionId: "escape", stat: "knowledge", bonus: 2, threshold: 6, lastRoll: { total: 5 } } });
+  assert(pass.effectiveTotal === 7, `5 + 2 = 7, got ${pass.effectiveTotal}`);
+  assert(pass.success === true, "7 >= 6 succeeds");
+
+  const fail = getActionRollResult({ hauntActionRoll: { actionId: "escape", stat: "knowledge", bonus: 0, threshold: 6, lastRoll: { total: 3 } } });
+  assert(fail.effectiveTotal === 3 && fail.success === false, "3 < 6 fails");
+
+  assert(getActionRollResult({}) === null, "no roll -> null");
 });
 
 report();

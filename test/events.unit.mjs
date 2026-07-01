@@ -125,6 +125,44 @@ test("creates an event-effect damageChoice when damage > 0", () => {
   assert(next.turnPhase === "event", "turnPhase set to event");
 });
 
+console.log("\neffect: move");
+test("single destination moves the player and sets the camera floor", () => {
+  const game = makeEventGame();
+  const { game: next, cameraFloor } = applyResolvedEventEffect(game, { type: "move", destination: "current-tile" }, null, deps);
+  assert(cameraFloor === "ground", `cameraFloor ground, got ${cameraFloor}`);
+  assert(next.players[P0].x === 0 && next.players[P0].y === 0 && next.players[P0].floor === "ground", "player at entrance");
+  assert(next.movePath.length === 1, "movePath reset to the destination");
+});
+
+test("multiple destinations open a tile-choice awaiting", () => {
+  const game = makeEventGame();
+  const { game: next } = applyResolvedEventEffect(game, { type: "move", destination: "any-tile" }, null, deps);
+  assert(next.eventState.awaiting?.type === "tile-choice", "tile-choice opened");
+  assert(next.eventState.awaiting.options.length === 5, `all 5 starting tiles offered, got ${next.eventState.awaiting.options.length}`);
+});
+
+test("no valid destination appends a summary and does not move", () => {
+  const game = makeEventGame();
+  const { game: next } = applyResolvedEventEffect(game, { type: "move", destination: "conservatory" }, null, deps);
+  assert(/no valid destination/i.test(next.eventState.summary), "summary explains no destination");
+  assert(next.players[P0].x === 0 && next.players[P0].y === 0, "player did not move");
+});
+
+console.log("\neffect: place-token");
+test("obstacle token marks the current tile as an obstacle", () => {
+  const game = makeEventGame();
+  const { game: next } = applyResolvedEventEffect(game, { type: "place-token", location: "current-tile", token: "obstacle" }, null, deps);
+  const tile = next.board.ground.find((t) => t.x === 0 && t.y === 0);
+  assert(tile.obstacle === true, "entrance marked as obstacle");
+});
+
+test("non-obstacle token is appended to the tile's token list", () => {
+  const game = makeEventGame();
+  const { game: next } = applyResolvedEventEffect(game, { type: "place-token", location: "current-tile", token: "blood" }, null, deps);
+  const tile = next.board.ground.find((t) => t.x === 0 && t.y === 0);
+  assert((tile.tokens || []).some((tok) => tok.type === "blood"), "blood token placed on the tile");
+});
+
 console.log("\neffect: start-haunt");
 test("implemented haunt launches into haunt setup", () => {
   const game = makeEventGame();
