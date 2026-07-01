@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "server:dev": "npm --prefix server run dev",
     "server:start": "npm --prefix server run start",
-    "test": "node --import ./test/setup.mjs test/haunts.smoke.mjs && node --import ./test/setup.mjs test/engine.unit.mjs && node --import ./test/setup.mjs test/events.unit.mjs && node --import ./test/setup.mjs test/damage.unit.mjs"
+    "test": "node --import ./test/setup.mjs test/haunts.smoke.mjs && node --import ./test/setup.mjs test/engine.unit.mjs && node --import ./test/setup.mjs test/events.unit.mjs && node --import ./test/setup.mjs test/damage.unit.mjs && node --import ./test/setup.mjs test/movement.unit.mjs"
   },
   "dependencies": {
     "react": "^19.2.4",
