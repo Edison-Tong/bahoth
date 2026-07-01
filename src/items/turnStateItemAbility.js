@@ -1,13 +1,7 @@
 import { PLAYER_STAT_ORDER, CRITICAL_STAT_INDEX } from "../game/gameState";
+import { getInventoryCard } from "../shared/playerHelpers";
 const NECKLACE_OF_TEETH_ID = "necklace-of-teeth";
 const NECKLACE_OF_TEETH_CHOICE_TYPE = "necklace-of-teeth-choice";
-
-/* [ITEM-ABILITY] [LOOKUP] Returns the inventory card object for the currently viewed card (null if not in inventory). */
-function getInventoryCard(game, viewedCard) {
-  if (!viewedCard || viewedCard.ownerCollection !== "inventory") return null;
-  const owner = game.players[viewedCard.ownerIndex];
-  return owner?.inventory?.[viewedCard.ownerCardIndex] || null;
-}
 
 /* [PLAYER-STATE] [ITEM-ABILITY] Returns the stats at CRITICAL_STAT_INDEX for the player. */
 function getCriticalStats(player) {

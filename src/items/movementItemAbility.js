@@ -1,9 +1,4 @@
-/* [ITEM-MOVEMENT] [LOOKUP] Returns the inventory card for the current viewedCard (null if not in inventory). */
-function getInventoryCard(game, viewedCard) {
-  if (!viewedCard || viewedCard.ownerCollection !== "inventory") return null;
-  const owner = game.players[viewedCard.ownerIndex];
-  return owner?.inventory?.[viewedCard.ownerCardIndex] || null;
-}
+import { getInventoryCard } from "../shared/playerHelpers";
 
 const SKELETON_KEY_ITEM_ID = "skeleton-key";
 const SKELETON_KEY_RESULT_EFFECT_TYPE = "skeleton-key-result";

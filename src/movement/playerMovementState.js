@@ -1,4 +1,9 @@
-import { getHauntMovementOptionsState, getHauntCombatActorProxyState } from "../haunts/hauntDomain";
+import {
+  getHauntMovementOptionsState,
+  getHauntCombatActorProxyState,
+  getHauntBoardRenderState,
+} from "../haunts/hauntDomain";
+import { movesLabel } from "../shared/format";
 
 /* [MOVEMENT] [COMBAT] Returns the extra move cost imposed by enemies on the current tile. Heroes pay +1 per traitor/monster on tile; the traitor pays +1 per hero on tile. */
 function getEnemyObstacleCost(game, playerIndex) {
@@ -18,6 +23,17 @@ function getEnemyObstacleCost(game, playerIndex) {
       return h?.isAlive && h.floor === floor && h.x === x && h.y === y;
     }).length;
   } else {
+    // Hero: when the traitor is hidden (e.g. disguised as illusions), their parked player
+    // position is not a real obstacle — only the actual tokens on the board count.
+    // The combat proxy resolves to the illusion (if any) on this hero's tile, so a present
+    // illusion adds +1 cost, while a dispelled one (removed from the board) adds nothing.
+    const hiddenIndexes = getHauntBoardRenderState(game).hiddenPlayerIndexes || [];
+    if (hiddenIndexes.includes(traitorIndex)) {
+      const proxy = getHauntCombatActorProxyState(game, traitorIndex);
+      if (proxy && proxy.floor === floor && proxy.x === x && proxy.y === y) return 1;
+      return 0;
+    }
+
     // Hero: obstructed by the traitor (alive) or an active proxy (spirit) on same tile
     const traitor = game.players[traitorIndex];
     if (traitor?.isAlive && traitor.floor === floor && traitor.x === x && traitor.y === y) return 1;
@@ -156,7 +172,7 @@ export function movePlayerState(
     destinationTile?.enterEffect === "mystic-elevator" && !g.mysticElevatorUsed
       ? `${g.players[g.currentPlayerIndex].name} entered the Mystic Elevator. Use Elevator to roll 2 dice.`
       : movesLeft > 0
-        ? `${g.players[g.currentPlayerIndex].name} - ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`
+        ? `${g.players[g.currentPlayerIndex].name} - ${movesLabel(movesLeft)} left`
         : `${g.players[g.currentPlayerIndex].name} - no moves left`;
 
   const skeletonKeyMessage =
@@ -194,7 +210,7 @@ export function backtrackPlayerState(g) {
     players: updatedPlayers,
     movePath: newPath,
     pendingExplore: null,
-    message: `${g.players[g.currentPlayerIndex].name} - ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`,
+    message: `${g.players[g.currentPlayerIndex].name} - ${movesLabel(movesLeft)} left`,
   };
 }
 
@@ -213,18 +229,7 @@ export function exploreState(g, { dir, nx, ny, cost, OPPOSITE, getLeaveMoveCost 
 
   const tile = g.tileStack[tileIndex];
   const neededDoor = OPPOSITE[dir];
-  const allDirs = ["N", "E", "S", "W"];
-  const validRotations = [];
-
-  for (let rot = 0; rot < 4; rot++) {
-    const rotated = tile.doors.map((d) => {
-      const idx = allDirs.indexOf(d);
-      return allDirs[(idx + rot) % 4];
-    });
-    if (rotated.includes(neededDoor)) {
-      validRotations.push(rotated);
-    }
-  }
+  const validRotations = rotationsWithDoor(tile.doors, neededDoor);
 
   const movesLeft = player.movesLeft - resolvedCost;
   const newPath = [...g.movePath, { x: nx, y: ny, floor, cost: resolvedCost }];
@@ -264,7 +269,7 @@ export function confirmMoveState(g) {
   return {
     ...g,
     movePath: [{ x: p.x, y: p.y, floor: p.floor, cost: 0 }],
-    message: `${p.name} moved - ${p.movesLeft} move${p.movesLeft !== 1 ? "s" : ""} left`,
+    message: `${p.name} moved - ${movesLabel(p.movesLeft)} left`,
   };
 }
 
@@ -290,7 +295,7 @@ export function changeFloorState(g, { getConnectedMoveTarget, getLeaveMoveCost }
         players: updatedPlayers,
         movePath: path.slice(0, -1),
         pendingExplore: null,
-        message: `${p.name} - ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`,
+        message: `${p.name} - ${movesLabel(movesLeft)} left`,
       },
       cameraFloor: targetFloor,
     };
@@ -311,7 +316,7 @@ export function changeFloorState(g, { getConnectedMoveTarget, getLeaveMoveCost }
       movePath: [...g.movePath, { x: targetTile.x, y: targetTile.y, floor: targetFloor, cost: moveCost }],
       message:
         movesLeft > 0
-          ? `${p.name} moved to ${targetTile.name} - ${movesLeft} move${movesLeft !== 1 ? "s" : ""} left`
+          ? `${p.name} moved to ${targetTile.name} - ${movesLabel(movesLeft)} left`
           : `${p.name} moved to ${targetTile.name} - no moves left`,
     },
     cameraFloor: targetFloor,

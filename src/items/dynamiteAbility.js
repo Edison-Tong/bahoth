@@ -1,16 +1,10 @@
 import { DAMAGE_STATS } from "../game/gameState";
 import { getDamageConversionOptions, getPostDamageEffectsForChoice } from "./passiveItemEffectAbility";
+import { getInventoryCard } from "../shared/playerHelpers";
 
 const DYNAMITE_DAMAGE = 4;
 const DYNAMITE_DAMAGE_TYPE = "physical";
 const DYNAMITE_SAFE_THRESHOLD = 4;
-
-/* [LOOKUP] Returns the inventory card for the viewed card; null if not in inventory. Private local copy. */
-function getInventoryCard(game, viewedCard) {
-  if (!viewedCard || viewedCard.ownerCollection !== "inventory") return null;
-  const owner = game.players[viewedCard.ownerIndex];
-  return owner?.inventory?.[viewedCard.ownerCardIndex] || null;
-}
 
 /**
  * Activates the Dynamite item: discards it, sets hasAttackedThisTurn, and

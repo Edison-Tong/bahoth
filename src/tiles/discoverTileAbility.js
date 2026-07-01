@@ -1,6 +1,8 @@
+import { movesLabel } from "../shared/format";
+
 /* [FORMAT] [MOVEMENT] Formats remaining moves into a readable string (e.g. "3 moves left."). */
 function formatMovesLeft(player) {
-  return `${player.movesLeft} move${player.movesLeft !== 1 ? "s" : ""} left.`;
+  return `${movesLabel(player.movesLeft)} left.`;
 }
 
 /* [CARD-DECK] Finds and removes the first weapon card from the item deck. Used by the Armory discover effect. */

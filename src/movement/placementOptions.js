@@ -1,6 +1,7 @@
+import { rotationsWithDoor } from "../shared/tileRotation";
+
 /* [TILE-PLACEMENT] [VALIDATION] Returns all valid { floor, x, y, validRotations } placement slots adjacent to existing tiles that can accept at least one rotation of the incoming tile. */
 export function getPlacementOptionsState(board, tile, DIR, OPPOSITE) {
-  const allDirs = ["N", "E", "S", "W"];
   const placementsByCoord = new Map();
 
   for (const floor of tile.floors || []) {
@@ -13,16 +14,7 @@ export function getPlacementOptionsState(board, tile, DIR, OPPOSITE) {
         if (occupied) continue;
 
         const neededDoor = OPPOSITE[dir];
-        const validRotations = [];
-        for (let rot = 0; rot < 4; rot++) {
-          const rotatedDoors = tile.doors.map((door) => {
-            const doorIndex = allDirs.indexOf(door);
-            return allDirs[(doorIndex + rot) % 4];
-          });
-          if (rotatedDoors.includes(neededDoor)) {
-            validRotations.push(rotatedDoors);
-          }
-        }
+        const validRotations = rotationsWithDoor(tile.doors, neededDoor);
 
         if (validRotations.length === 0) continue;
 

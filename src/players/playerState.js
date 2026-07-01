@@ -1,4 +1,5 @@
 import { buildDynamiteRollReadyEventState } from "../items/dynamiteAbility";
+import { isStatIndexAlive, isLethalDamageAllocation } from "../shared/playerHelpers";
 
 /* [STAT-CHANGE] [PLAYER-STATE] Adjusts a single stat by `amount` index steps (clamped to track bounds). Pass options.preventDeath=true to stop the index at 1 instead of 0. */
 export function applyStatChangeState(players, playerIndex, stat, amount, options = {}) {
@@ -11,7 +12,7 @@ export function applyStatChangeState(players, playerIndex, stat, amount, options
     const maxIndex = pl.character[stat].length - 1;
     const nextIndex = Math.max(minIndex, Math.min(maxIndex, pl.statIndex[stat] + amount));
     const newStatIndex = { ...pl.statIndex, [stat]: nextIndex };
-    const isAlive = Object.values(newStatIndex).every((value) => value > 0);
+    const isAlive = isStatIndexAlive(newStatIndex);
 
     return { ...pl, statIndex: newStatIndex, isAlive };
   });
@@ -39,25 +40,12 @@ export function applyDamageAllocationState(
           : Math.max(minIndex, newStatIndex[stat] - amount);
     }
 
-    const isAlive = Object.values(newStatIndex).every((value) => value > 0);
+    const isAlive = isStatIndexAlive(newStatIndex);
     return { ...pl, statIndex: newStatIndex, isAlive };
   });
 }
 
 import { getHauntCanDeadPlayerTakeTurnState } from "../haunts/hauntDomain";
-
-/* [DAMAGE] [VALIDATION] Returns true if applying the choice allocation would reduce any stat to 0 (lethal). */
-function isLethalDamageAllocation(player, choice) {
-  if (!player || !choice || choice.adjustmentMode === "increase") return false;
-
-  const previewStatIndex = { ...player.statIndex };
-  for (const [stat, amount] of Object.entries(choice.allocation || {})) {
-    if (!amount || !Object.prototype.hasOwnProperty.call(previewStatIndex, stat)) continue;
-    previewStatIndex[stat] = Math.max(0, previewStatIndex[stat] - amount);
-  }
-
-  return Object.values(previewStatIndex).some((value) => value <= 0);
-}
 
 /* [PLAYER-STATE] [OMEN] Returns true if the player is carrying the Skull omen (in inventory or omens). */
 function playerHasSkull(player) {
