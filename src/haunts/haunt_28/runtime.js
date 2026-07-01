@@ -1,5 +1,17 @@
 import { GAME_PHASES, HAUNT_TEAMS } from "../core/hauntPhases";
 import { STAT_LABELS } from "../../game/gameState";
+import {
+  getCurrentPlayer,
+  getCurrentTile,
+  createUsageKey,
+  markHauntActionUsed,
+  getHeroIndexes,
+  getLivingHeroIndexes,
+  isHero,
+  getActionRoll,
+  getActionRollResult,
+  clearHauntActionRoll,
+} from "../core/hauntBase";
 
 // The set of starting tile IDs that can never be Flooded.
 const STARTING_TILE_IDS = new Set(["entrance-hall", "hallway", "grand-staircase", "upper-landing", "basement-landing"]);
@@ -34,34 +46,6 @@ export function createInitialScenarioState() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/* [PLAYER-STATE] Returns the current player object. */
-function getCurrentPlayer(game) {
-  return game.players[game.currentPlayerIndex] || null;
-}
-
-/* [LOOKUP] Returns the board tile at the current player's position. */
-function getCurrentTile(game) {
-  const player = getCurrentPlayer(game);
-  if (!player) return null;
-  return (game.board[player.floor] || []).find((t) => t.x === player.x && t.y === player.y) || null;
-}
-
-/* [HAUNT-ACTION] Creates a "turnNumber:playerIndex:actionId" string for once-per-turn gating. */
-function createUsageKey(game, actionId) {
-  return `${game.turnNumber}:${game.currentPlayerIndex}:${actionId}`;
-}
-
-/* [HAUNT-ACTION] Marks a haunt action usage key in hauntState. */
-function markHauntActionUsed(hauntState, usageKey) {
-  return {
-    ...hauntState,
-    oncePerTurnUsage: {
-      ...(hauntState.oncePerTurnUsage || {}),
-      [usageKey]: true,
-    },
-  };
-}
-
 /* [HAUNT-SETUP] Merges hauntState.scenarioState with defaults. */
 function getScenarioState(hauntState) {
   const s = hauntState?.scenarioState || {};
@@ -75,23 +59,6 @@ function getScenarioState(hauntState) {
     pendingChoice: s.pendingChoice || null,
     pendingForceExplosivesQueue: s.pendingForceExplosivesQueue || [],
   };
-}
-
-/* [LOOKUP] Returns hero player indexes (all non-traitor). */
-function getHeroIndexes(game) {
-  if (!game.hauntState) return [];
-  const traitorIndex = game.hauntState.traitorPlayerIndex;
-  return game.players.map((_, i) => i).filter((i) => i !== traitorIndex);
-}
-
-/* [LOOKUP] Returns living hero indexes. */
-function getLivingHeroIndexes(game) {
-  return getHeroIndexes(game).filter((i) => game.players[i]?.isAlive);
-}
-
-/* [VALIDATION] Returns true if the given player index is a hero. */
-function isHero(game, playerIndex) {
-  return getHeroIndexes(game).includes(playerIndex);
 }
 
 /* [HAUNT-SETUP] Called once when the haunt begins: floods the traitor's starting tile and positions the shark there. */
@@ -344,34 +311,6 @@ function buildPendingActionRoll(game, actionId, stat, options = {}) {
   };
 }
 
-/* [HAUNT-ACTION] Returns the current hauntActionRoll, or null. */
-function getActionRoll(game) {
-  return game.hauntActionRoll || null;
-}
-
-/* [HAUNT-ACTION] Computes { actionId, rollTotal, bonus, effectiveTotal, threshold, success } from settled roll. */
-function getActionRollResult(game) {
-  const rollState = getActionRoll(game);
-  const rollTotal = Number(rollState?.lastRoll?.total);
-  if (!rollState || !Number.isFinite(rollTotal)) return null;
-  const bonus = Number(rollState.bonus) || 0;
-  const effectiveTotal = rollTotal + bonus;
-  return {
-    actionId: rollState.actionId,
-    stat: rollState.stat,
-    rollTotal,
-    bonus,
-    effectiveTotal,
-    threshold: Number(rollState.threshold) || 0,
-    success: effectiveTotal >= (Number(rollState.threshold) || 0),
-  };
-}
-
-/* [HAUNT-ACTION] Removes hauntActionRoll from game state. */
-function clearHauntActionRoll(game) {
-  if (!game.hauntActionRoll) return game;
-  return { ...game, hauntActionRoll: null };
-}
 
 // ---------------------------------------------------------------------------
 // Exported hook: getCombatActorProxyState

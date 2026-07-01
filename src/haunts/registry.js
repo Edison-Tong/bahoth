@@ -2,199 +2,46 @@ import haunt1Definition from "./haunt_1/definition";
 import haunt18Definition from "./haunt_18/definition";
 import haunt28Definition from "./haunt_28/definition";
 import haunt47Definition from "./haunt_47/definition";
+import * as haunt1Runtime from "./haunt_1/runtime";
+import * as haunt18Runtime from "./haunt_18/runtime";
+import * as haunt28Runtime from "./haunt_28/runtime";
+import * as haunt47Runtime from "./haunt_47/runtime";
 import { SCENARIO_CARDS } from "./scenarioCards";
-import {
-  createInitialScenarioState,
-  resolveAfterDamageState,
-  resolveAfterMovementState,
-  resolveTurnStartState,
-  getCombatKnowledgeBonus,
-  getCombatBonusLabel as getCombatBonusLabel1,
-  getCombatActorProxyState,
-  getSpecialMoveOptionsState,
-  getTileTokenLabelsState,
-  getKnowledgeTokenHoldersState,
-  canDeadPlayerTakeTurn,
-  getActionAvailabilityState,
-  getActionButtonsState,
-  getActionRollPreviewState,
-  resolveActionState,
-  resolveActionRollContinueState,
-  resolveMonsterSpeedRollState,
-  getMonsterCardState,
-  getPlayerHauntTokensState,
-} from "./haunt_1/runtime";
-import {
-  createInitialScenarioState as createInitialScenarioState28,
-  onHauntBegin as onHauntBegin28,
-  resolveAfterDamageState as resolveAfterDamageState28,
-  resolveAfterMovementState as resolveAfterMovementState28,
-  resolveTurnStartState as resolveTurnStartState28,
-  getCombatBonus as getCombatBonus28,
-  getCombatActorProxyState as getCombatActorProxyState28,
-  getSpecialMoveOptionsState as getSpecialMoveOptionsState28,
-  getTileTokenLabelsState as getTileTokenLabelsState28,
-  getKnowledgeTokenHoldersState as getKnowledgeTokenHoldersState28,
-  canDeadPlayerTakeTurn as canDeadPlayerTakeTurn28,
-  getActionAvailabilityState as getActionAvailabilityState28,
-  getActionButtonsState as getActionButtonsState28,
-  getActionRollPreviewState as getActionRollPreviewState28,
-  resolveActionState as resolveActionState28,
-  resolveActionRollContinueState as resolveActionRollContinueState28,
-  resolveMonsterSpeedRollState as resolveMonsterSpeedRollState28,
-  getMonsterCardState as getMonsterCardState28,
-  getPlayerHauntTokensState as getPlayerHauntTokensState28,
-  getPlayerCardFlagsState as getPlayerCardFlagsState28,
-  getHauntTradeableTokensState as getHauntTradeableTokensState28,
-  resolveHauntTradeConfirmState as resolveHauntTradeConfirmState28,
-  getBoardRenderState as getBoardRenderState28,
-} from "./haunt_28/runtime";
-import {
-  createInitialScenarioState as createInitialScenarioState47,
-  onHauntBegin as onHauntBegin47,
-  resolveAfterDamageState as resolveAfterDamageState47,
-  resolveTurnStartState as resolveTurnStartState47,
-  getCombatBonus as getCombatBonus47,
-  getCombatBonusLabel as getCombatBonusLabel47,
-  getTileTokenLabelsState as getTileTokenLabelsState47,
-  getKnowledgeTokenHoldersState as getKnowledgeTokenHoldersState47,
-  getActionAvailabilityState as getActionAvailabilityState47,
-  getActionButtonsState as getActionButtonsState47,
-  getActionRollPreviewState as getActionRollPreviewState47,
-  resolveActionState as resolveActionState47,
-  resolveActionRollContinueState as resolveActionRollContinueState47,
-  getPlayerHauntTokensState as getPlayerHauntTokensState47,
-  getBoardRenderState as getBoardRenderState47,
-  getCombatInitOverride as getCombatInitOverride47,
-  resolveCombatOutcomeState as resolveCombatOutcomeState47,
-  getHauntCanPlayersTradeState as getHauntCanPlayersTradeState47,
-  getHauntCanAttackTargetState as getHauntCanAttackTargetState47,
-} from "./haunt_47/runtime";
-import {
-  createInitialScenarioState as createInitialScenarioState18,
-  onHauntBegin as onHauntBegin18,
-  resolveAfterDamageState as resolveAfterDamageState18,
-  resolveAfterMovementState as resolveAfterMovementState18,
-  resolveTurnStartState as resolveTurnStartState18,
-  getSpecialMoveOptionsState as getSpecialMoveOptionsState18,
-  getCombatActorProxyState as getCombatActorProxyState18,
-  getCombatBonusLabel as getCombatBonusLabel18,
-  resolveCombatOutcomeState as resolveCombatOutcomeState18,
-  canDeadPlayerTakeTurn as canDeadPlayerTakeTurn18,
-  getActionAvailabilityState as getActionAvailabilityState18,
-  getActionButtonsState as getActionButtonsState18,
-  getActionRollPreviewState as getActionRollPreviewState18,
-  resolveActionState as resolveActionState18,
-  resolveActionRollContinueState as resolveActionRollContinueState18,
-  getTileTokenLabelsState as getTileTokenLabelsState18,
-  getPlayerHauntTokensState as getPlayerHauntTokensState18,
-  getBoardRenderState as getBoardRenderState18,
-  getMonsterCardState as getMonsterCardState18,
-  getKnowledgeTokenHoldersState as getKnowledgeTokenHoldersState18,
-  getHauntCanAttackTargetState as getHauntCanAttackTargetState18,
-} from "./haunt_18/runtime";
 
-// Static registry mapping haunt IDs to definition objects and runtime hook bundles.
-// Add new haunts here when they are implemented.
-const HAUNT_REGISTRY = {
-  [haunt1Definition.id]: haunt1Definition,
-  [haunt18Definition.id]: haunt18Definition,
-  [haunt28Definition.id]: haunt28Definition,
-  [haunt47Definition.id]: haunt47Definition,
-};
+// Single source of truth for implemented haunts. To wire up a new haunt, add
+// one line here — its runtime module's exported hook functions ARE the hook
+// bundle (auto-collected below), so there is no per-hook aliasing to maintain
+// and no way to forget to register an exported hook.
+const IMPLEMENTED_HAUNTS = [
+  { definition: haunt1Definition, runtime: haunt1Runtime },
+  { definition: haunt18Definition, runtime: haunt18Runtime },
+  { definition: haunt28Definition, runtime: haunt28Runtime },
+  { definition: haunt47Definition, runtime: haunt47Runtime },
+];
 
-const HAUNT_RUNTIME_REGISTRY = {
-  [haunt1Definition.id]: {
-    createInitialScenarioState,
-    resolveAfterDamageState,
-    resolveAfterMovementState,
-    resolveTurnStartState,
-    getCombatBonus: getCombatKnowledgeBonus,
-    getCombatBonusLabel: getCombatBonusLabel1,
-    getCombatActorProxyState,
-    getSpecialMoveOptionsState,
-    getTileTokenLabelsState,
-    getKnowledgeTokenHoldersState,
-    canDeadPlayerTakeTurn,
-    getActionAvailabilityState,
-    getActionButtonsState,
-    getActionRollPreviewState,
-    resolveActionState,
-    resolveActionRollContinueState,
-    resolveMonsterSpeedRollState,
-    getMonsterCardState,
-    getPlayerHauntTokensState,
-  },
-  [haunt28Definition.id]: {
-    createInitialScenarioState: createInitialScenarioState28,
-    onHauntBegin: onHauntBegin28,
-    resolveAfterDamageState: resolveAfterDamageState28,
-    resolveAfterMovementState: resolveAfterMovementState28,
-    resolveTurnStartState: resolveTurnStartState28,
-    getCombatBonus: getCombatBonus28,
-    getCombatActorProxyState: getCombatActorProxyState28,
-    getSpecialMoveOptionsState: getSpecialMoveOptionsState28,
-    getTileTokenLabelsState: getTileTokenLabelsState28,
-    getKnowledgeTokenHoldersState: getKnowledgeTokenHoldersState28,
-    canDeadPlayerTakeTurn: canDeadPlayerTakeTurn28,
-    getActionAvailabilityState: getActionAvailabilityState28,
-    getActionButtonsState: getActionButtonsState28,
-    getActionRollPreviewState: getActionRollPreviewState28,
-    resolveActionState: resolveActionState28,
-    resolveActionRollContinueState: resolveActionRollContinueState28,
-    resolveMonsterSpeedRollState: resolveMonsterSpeedRollState28,
-    getMonsterCardState: getMonsterCardState28,
-    getPlayerHauntTokensState: getPlayerHauntTokensState28,
-    getPlayerCardFlagsState: getPlayerCardFlagsState28,
-    getHauntTradeableTokensState: getHauntTradeableTokensState28,
-    resolveHauntTradeConfirmState: resolveHauntTradeConfirmState28,
-    getBoardRenderState: getBoardRenderState28,
-  },
-  [haunt47Definition.id]: {
-    createInitialScenarioState: createInitialScenarioState47,
-    onHauntBegin: onHauntBegin47,
-    resolveAfterDamageState: resolveAfterDamageState47,
-    getCombatBonus: getCombatBonus47,
-    getCombatBonusLabel: getCombatBonusLabel47,
-    resolveTurnStartState: resolveTurnStartState47,
-    getTileTokenLabelsState: getTileTokenLabelsState47,
-    getKnowledgeTokenHoldersState: getKnowledgeTokenHoldersState47,
-    getActionAvailabilityState: getActionAvailabilityState47,
-    getActionButtonsState: getActionButtonsState47,
-    getActionRollPreviewState: getActionRollPreviewState47,
-    resolveActionState: resolveActionState47,
-    resolveActionRollContinueState: resolveActionRollContinueState47,
-    getPlayerHauntTokensState: getPlayerHauntTokensState47,
-    getBoardRenderState: getBoardRenderState47,
-    getCombatInitOverride: getCombatInitOverride47,
-    resolveCombatOutcomeState: resolveCombatOutcomeState47,
-    getHauntCanPlayersTradeState: getHauntCanPlayersTradeState47,
-    getHauntCanAttackTargetState: getHauntCanAttackTargetState47,
-  },
-  [haunt18Definition.id]: {
-    createInitialScenarioState: createInitialScenarioState18,
-    onHauntBegin: onHauntBegin18,
-    resolveAfterDamageState: resolveAfterDamageState18,
-    resolveAfterMovementState: resolveAfterMovementState18,
-    resolveTurnStartState: resolveTurnStartState18,
-    getSpecialMoveOptionsState: getSpecialMoveOptionsState18,
-    getCombatActorProxyState: getCombatActorProxyState18,
-    getCombatBonusLabel: getCombatBonusLabel18,
-    resolveCombatOutcomeState: resolveCombatOutcomeState18,
-    canDeadPlayerTakeTurn: canDeadPlayerTakeTurn18,
-    getActionAvailabilityState: getActionAvailabilityState18,
-    getActionButtonsState: getActionButtonsState18,
-    getActionRollPreviewState: getActionRollPreviewState18,
-    resolveActionState: resolveActionState18,
-    resolveActionRollContinueState: resolveActionRollContinueState18,
-    getTileTokenLabelsState: getTileTokenLabelsState18,
-    getPlayerHauntTokensState: getPlayerHauntTokensState18,
-    getBoardRenderState: getBoardRenderState18,
-    getMonsterCardState: getMonsterCardState18,
-    getKnowledgeTokenHoldersState: getKnowledgeTokenHoldersState18,
-    getHauntCanAttackTargetState: getHauntCanAttackTargetState18,
-  },
-};
+// Used until every scenario→haunt mapping resolves to an implemented haunt.
+const FALLBACK_HAUNT_DEFINITION = haunt1Definition;
+
+const HAUNT_REGISTRY = {};
+const HAUNT_RUNTIME_REGISTRY = {};
+
+for (const { definition, runtime } of IMPLEMENTED_HAUNTS) {
+  if (!definition?.id) {
+    throw new Error("[haunts] An implemented haunt is missing a definition.id.");
+  }
+  if (HAUNT_REGISTRY[definition.id]) {
+    throw new Error(`[haunts] Duplicate haunt id "${definition.id}" in the registry.`);
+  }
+  // Collect every exported function from the runtime namespace as a hook. Named
+  // exports of a haunt runtime are exactly its hooks, so this reproduces the
+  // old hand-maintained bundle without the boilerplate.
+  const hooks = {};
+  for (const [name, value] of Object.entries(runtime)) {
+    if (typeof value === "function") hooks[name] = value;
+  }
+  HAUNT_REGISTRY[definition.id] = definition;
+  HAUNT_RUNTIME_REGISTRY[definition.id] = hooks;
+}
 
 /* [HAUNT-SETUP] [LOOKUP] Look up a haunt's static definition (scenario text, win conditions, etc.) by ID. */
 export function getHauntDefinitionById(id) {
@@ -213,7 +60,7 @@ export function getHauntRuntimeHooksById(id) {
   return HAUNT_RUNTIME_REGISTRY[id] || null;
 }
 
-/* [HAUNT-SETUP] Picks the correct haunt after a triggered omen haunt roll using the selected reason card's omen→haunt mapping. Falls back to haunt 1 if no mapping is found. */
+/* [HAUNT-SETUP] Picks the correct haunt after a triggered omen haunt roll using the selected reason card's omen→haunt mapping. Warns and falls back to the fallback haunt if the mapped haunt isn't implemented yet. */
 export function selectTriggeredHauntDefinition(game) {
   const scenarioCardId = game?.selectedScenarioCardId;
   const omenId = game?.hauntRoll?.triggeringOmenId;
@@ -224,8 +71,14 @@ export function selectTriggeredHauntDefinition(game) {
     if (hauntId && HAUNT_REGISTRY[hauntId]) {
       return HAUNT_REGISTRY[hauntId];
     }
+    if (hauntId) {
+      // Not a silent fallback: surface that a mapped haunt is still unimplemented.
+      console.warn(
+        `[haunts] Scenario "${scenarioCardId}" maps omen "${omenId}" to "${hauntId}", ` +
+          `which is not implemented yet — falling back to "${FALLBACK_HAUNT_DEFINITION.id}".`
+      );
+    }
   }
 
-  // Fallback until all mappings are filled in
-  return haunt1Definition;
+  return FALLBACK_HAUNT_DEFINITION;
 }

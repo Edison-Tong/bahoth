@@ -1,5 +1,17 @@
 import { GAME_PHASES, HAUNT_TEAMS } from "../core/hauntPhases";
 import { OPPOSITE, STAT_LABELS } from "../../game/gameState";
+// Note: haunt_1 keeps its own team-based isHero/getHeroIndexes/getLivingHeroIndexes
+// (they read hauntState.teams.HEROES), which differ from hauntBase's traitor-index
+// versions — so those are intentionally NOT imported here.
+import {
+  getCurrentPlayer,
+  getCurrentTile,
+  createUsageKey,
+  markHauntActionUsed,
+  getActionRoll,
+  getActionRollResult,
+  clearHauntActionRoll,
+} from "../core/hauntBase";
 
 const JACKS_SPIRIT_SPEED_DICE = 3;
 
@@ -22,34 +34,6 @@ export function createInitialScenarioState() {
       speedTotal: 0,
     },
   };
-}
-
-/* [PLAYER-STATE] Shorthand: returns the current player object. */
-function getCurrentPlayer(game) {
-  return game.players[game.currentPlayerIndex] || null;
-}
-
-/* [LOOKUP] Returns the tile occupied by the current player. */
-function getCurrentTile(game) {
-  const player = getCurrentPlayer(game);
-  if (!player) return null;
-  return (game.board[player.floor] || []).find((tile) => tile.x === player.x && tile.y === player.y) || null;
-}
-
-/* [HAUNT-ACTION] [VALIDATION] Marks a haunt action key as used this turn (once-per-turn gate). */
-function markHauntActionUsed(hauntState, actionKey) {
-  return {
-    ...hauntState,
-    oncePerTurnUsage: {
-      ...(hauntState.oncePerTurnUsage || {}),
-      [actionKey]: true,
-    },
-  };
-}
-
-/* [HAUNT-ACTION] Creates a "turnNumber:playerIndex:actionId" string used as the once-per-turn usage key. */
-function createUsageKey(game, actionId) {
-  return `${game.turnNumber}:${game.currentPlayerIndex}:${actionId}`;
 }
 
 /* [HAUNT-ACTION] Merges hauntState.scenarioState with defaults to ensure all expected fields are present. */
@@ -380,30 +364,6 @@ function buildPendingActionRoll(game, actionId, stat, options = {}) {
   };
 }
 
-/* [HAUNT-ACTION] Returns the current hauntActionRoll state, or null. */
-function getActionRoll(game) {
-  return game.hauntActionRoll || null;
-}
-
-/* [HAUNT-ACTION] [DICE-ROLL] Computes { actionId, rollTotal, bonus, effectiveTotal, threshold, success } from the settled haunt action roll. */
-function getActionRollResult(game) {
-  const rollState = getActionRoll(game);
-  const rollTotal = Number(rollState?.lastRoll?.total);
-  if (!rollState || !Number.isFinite(rollTotal)) return null;
-
-  const bonus = Number(rollState.bonus) || 0;
-  const effectiveTotal = rollTotal + bonus;
-  return {
-    actionId: rollState.actionId,
-    stat: rollState.stat,
-    rollTotal,
-    bonus,
-    effectiveTotal,
-    threshold: Number(rollState.threshold) || 0,
-    success: effectiveTotal >= (Number(rollState.threshold) || 0),
-  };
-}
-
 /* [HAUNT-ACTION] [OVERLAY] Returns the roll-preview summary for the haunt action roll overlay. */
 export function getActionRollPreviewState(game) {
   if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_1") {
@@ -448,15 +408,6 @@ export function getActionRollPreviewState(game) {
   }
 
   return null;
-}
-
-/* [HAUNT-ACTION] Removes hauntActionRoll from game state after the roll has been processed. */
-function clearHauntActionRoll(game) {
-  if (!game.hauntActionRoll) return game;
-  return {
-    ...game,
-    hauntActionRoll: null,
-  };
 }
 
 /* [SPIRIT] [MOVEMENT] Syncs Jack's Spirit position to match the dead traitor's position when the traitor moves. */
@@ -1552,7 +1503,7 @@ export function getPlayerHauntTokensState(game, playerIndex) {
 }
 
 /* [HAUNT-COMBAT] [SPIRIT] Exported: returns +2 if the attacker (hero) holds Knowledge of Jack and is fighting the traitor/spirit. */
-export function getCombatKnowledgeBonus(game, actorIndex, defenderIndex, role) {
+export function getCombatBonus(game, actorIndex, defenderIndex, role) {
   if (game.activeHauntId !== "haunt_1" || !game.hauntState) return 0;
 
   const traitorIndex = game.hauntState.traitorPlayerIndex;
@@ -1576,7 +1527,7 @@ export function getCombatKnowledgeBonus(game, actorIndex, defenderIndex, role) {
 
 /* [HAUNT-COMBAT] Returns the message label for the haunt combat bonus, shown in roll item messages. */
 export function getCombatBonusLabel(game, actorIndex, defenderIndex, role) {
-  if (getCombatKnowledgeBonus(game, actorIndex, defenderIndex, role) > 0) {
+  if (getCombatBonus(game, actorIndex, defenderIndex, role) > 0) {
     return "Knowledge of Jack";
   }
   return null;
