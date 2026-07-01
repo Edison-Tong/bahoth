@@ -5,7 +5,6 @@ import {
   getCurrentTile,
   createUsageKey,
   markHauntActionUsed,
-  getHeroIndexes,
   getLivingHeroIndexes,
   isHero,
   getActionRoll,

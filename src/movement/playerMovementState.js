@@ -4,6 +4,7 @@ import {
   getHauntBoardRenderState,
 } from "../haunts/hauntDomain";
 import { movesLabel } from "../shared/format";
+import { rotationsWithDoor } from "../shared/tileRotation";
 
 /* [MOVEMENT] [COMBAT] Returns the extra move cost imposed by enemies on the current tile. Heroes pay +1 per traitor/monster on tile; the traitor pays +1 per hero on tile. */
 function getEnemyObstacleCost(game, playerIndex) {
