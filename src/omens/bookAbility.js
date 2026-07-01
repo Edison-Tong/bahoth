@@ -1,3 +1,5 @@
+import { matchesActiveAbility } from "../shared/playerHelpers";
+
 /* [ITEM-ABILITY] [OMEN] [VALIDATION] Returns whether the Book omen's Knowledge-substitution can be used now or queued for the next trait roll. */
 export function getBookUsageState({
   game,
@@ -48,11 +50,7 @@ export function applyBookNowState(game, viewedCard, deps) {
     statLabels,
   } = deps;
 
-  if (!viewedCard) return { game, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  if (viewedCard.activeAbilityRule?.action !== "substitute-knowledge-for-trait") {
-    return { game, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  }
-  if (viewedCard.ownerCollection !== "omens") {
+  if (!matchesActiveAbility(viewedCard, "substitute-knowledge-for-trait", "omens")) {
     return { game, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
   }
   if (viewedCard.ownerIndex !== game.currentPlayerIndex) {

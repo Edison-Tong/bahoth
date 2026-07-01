@@ -1,6 +1,6 @@
 import { DAMAGE_STATS } from "../game/gameState";
 import { getDamageConversionOptions, getPostDamageEffectsForChoice } from "./passiveItemEffectAbility";
-import { getInventoryCard } from "../shared/playerHelpers";
+import { getInventoryCard, matchesActiveAbility } from "../shared/playerHelpers";
 
 const DYNAMITE_DAMAGE = 4;
 const DYNAMITE_DAMAGE_TYPE = "physical";
@@ -16,11 +16,7 @@ const DYNAMITE_SAFE_THRESHOLD = 4;
 export function applyDynamiteNowState(g, viewedCard, deps = {}) {
   const { getMovementNeighbors, getTileByPosition } = deps;
 
-  if (!viewedCard) return { game: g, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.activeAbilityRule?.action !== "dynamite-aoe-attack") {
-    return { game: g, closeViewedCard: false, diceAnimation: null };
-  }
-  if (viewedCard.ownerCollection !== "inventory") {
+  if (!matchesActiveAbility(viewedCard, "dynamite-aoe-attack", "inventory")) {
     return { game: g, closeViewedCard: false, diceAnimation: null };
   }
   if (viewedCard.ownerIndex !== g.currentPlayerIndex) {

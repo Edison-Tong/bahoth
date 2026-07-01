@@ -367,11 +367,7 @@ export function applyMagicCameraNowState(game, viewedCard, args = {}, deps) {
   const { drawnEventPrimaryAction, queuedTraitRollOverride = null } = args;
   const { getMagicCameraUsageState, getEventRollButtonLabel, statLabels } = deps;
 
-  if (!viewedCard) return { game, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  if (viewedCard.activeAbilityRule?.action !== "substitute-sanity-for-knowledge") {
-    return { game, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
-  }
-  if (viewedCard.ownerCollection !== "inventory") {
+  if (!matchesActiveAbility(viewedCard, "substitute-sanity-for-knowledge", "inventory")) {
     return { game, closeViewedCard: false, diceAnimation: null, queueTraitRollOverride: undefined };
   }
   if (viewedCard.ownerIndex !== game.currentPlayerIndex) {
@@ -474,12 +470,9 @@ export function chooseAngelsFeatherValueState(g, total, viewedCard, deps, helper
   const { drawnEventPrimaryAction, queuedTraitRollOverride = null } = deps;
   const usageState = getAngelsFeatherUsageState({ game: g, drawnEventPrimaryAction, queuedTraitRollOverride });
   const { canApplyNow, canQueueForDrawnEvent } = usageState;
-  if (!viewedCard) return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
-  if (viewedCard.activeAbilityRule?.action !== "set-trait-roll-total") {
+  if (!matchesActiveAbility(viewedCard, "set-trait-roll-total", "inventory")) {
     return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
   }
-  if (viewedCard.ownerCollection !== "inventory")
-    return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
   if (viewedCard.ownerIndex !== g.currentPlayerIndex) {
     return { game: g, queueTraitRollOverride: undefined, closeViewedCard: false };
   }
