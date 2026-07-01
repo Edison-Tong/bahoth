@@ -33,7 +33,11 @@ export default function DiceRollOverlay({ diceAnimation, renderDiceRow, isMyTurn
                               ? "COLLAPSED ROOM — DAMAGE"
                               : diceAnimation.purpose === "portal-close-damage-roll"
                                 ? "PORTAL DAMAGE ROLL"
-                                : "FURNACE ROOM";
+                                : diceAnimation.purpose === "confront-illusion-damage-roll"
+                                  ? "ILLUSION DAMAGE ROLL"
+                                  : diceAnimation.purpose === "call-to-ring-traitor-damage"
+                                    ? "RING DAMAGE ROLL"
+                                    : "FURNACE ROOM";
 
   if (isMyTurn === false) {
     return null;

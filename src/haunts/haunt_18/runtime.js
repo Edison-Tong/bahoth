@@ -1,10 +1,9 @@
 import { GAME_PHASES, HAUNT_TEAMS } from "../core/hauntPhases";
 import { STAT_LABELS } from "../../game/gameState";
 
-// Illusion count = number of heroes in the game (total players minus the traitor).
+// Illusion count = total number of players (heroes + traitor).
 function getIllusionCount(game) {
-  if (!game.hauntState) return Math.max(1, game.players.length - 1);
-  return getHeroIndexes(game).length;
+  return game.players.length;
 }
 
 // ---------------------------------------------------------------------------
@@ -17,6 +16,8 @@ export function createInitialScenarioState() {
     // Illusion tokens currently on the board: [{ id: 1..N, floor, x, y }]
     // Token #1 is always the "real" traitor. All start face-down from the heroes' perspective.
     illusions: [],
+    // Which illusion ID is the traitor's real body. Set by the traitor after placement.
+    realIllusionId: null,
     // Whether the traitor is currently hidden among illusions (isAlive=false on player record).
     isHidden: false,
     // Which illusion the traitor is actively controlling this turn.
@@ -69,6 +70,7 @@ function getScenarioState(hauntState) {
     ...defaults,
     ...s,
     illusions: s.illusions || defaults.illusions,
+    realIllusionId: s.realIllusionId ?? defaults.realIllusionId,
     isHidden: s.isHidden ?? defaults.isHidden,
     activeIllusionId: s.activeIllusionId ?? defaults.activeIllusionId,
     illusionsMovedThisTurn: s.illusionsMovedThisTurn || [],
@@ -132,86 +134,76 @@ function playerHasMirror(player) {
   return (player?.inventory || []).some((card) => card.id === "mirror");
 }
 
-/* [HAUNT-SETUP] BFS from (startX, startY) on the given floor up to `range` moves.
-   Returns an array of tiles sorted by distance (nearest first), excluding the starting tile. */
-function bfsTilesInRange(board, floor, startX, startY, range) {
-  const floorTiles = board[floor] || [];
-  if (floorTiles.length === 0) return [];
-
-  const tileMap = {};
-  for (const t of floorTiles) tileMap[`${t.x}:${t.y}`] = t;
-
+/* [HAUNT-SETUP] Multi-floor BFS from (startFloor, startX, startY) up to `range` moves.
+   Follows door connections on the same floor AND stair/connectsTo links between floors.
+   Returns an array of { tile, dist, floor } sorted by distance, excluding the starting tile. */
+function bfsTilesInRange(board, startFloor, startX, startY, range) {
   const DIR_VECTORS = { N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0] };
   const OPPOSITE_DIR = { N: "S", S: "N", E: "W", W: "E" };
+  const FLOORS = ["ground", "upper", "basement"];
+
+  /* Quick lookup: floor → Map("x:y" → tile) */
+  const tileMapByFloor = {};
+  for (const fl of FLOORS) {
+    tileMapByFloor[fl] = new Map();
+    for (const t of board[fl] || []) tileMapByFloor[fl].set(`${t.x}:${t.y}`, t);
+  }
 
   const visited = new Set();
   const results = [];
-  const queue = [{ x: startX, y: startY, dist: 0 }];
-  visited.add(`${startX}:${startY}`);
+  const startTile = tileMapByFloor[startFloor]?.get(`${startX}:${startY}`);
+  if (!startTile) return [];
+
+  const queue = [{ floor: startFloor, x: startX, y: startY, dist: 0 }];
+  visited.add(`${startFloor}:${startX}:${startY}`);
 
   while (queue.length > 0) {
-    const { x, y, dist } = queue.shift();
-    const tile = tileMap[`${x}:${y}`];
+    const { floor, x, y, dist } = queue.shift();
+    const tile = tileMapByFloor[floor]?.get(`${x}:${y}`);
     if (!tile) continue;
 
     if (dist > 0) results.push({ tile, dist, floor });
-
     if (dist >= range) continue;
 
+    // --- Same-floor door neighbours ---
     for (const dir of tile.doors || []) {
       const [dx, dy] = DIR_VECTORS[dir];
       const nx = x + dx;
       const ny = y + dy;
-      const nKey = `${nx}:${ny}`;
+      const nKey = `${floor}:${nx}:${ny}`;
       if (visited.has(nKey)) continue;
-      const neighbor = tileMap[nKey];
+      const neighbor = tileMapByFloor[floor]?.get(`${nx}:${ny}`);
       if (!neighbor) continue;
       if (!(neighbor.doors || []).includes(OPPOSITE_DIR[dir])) continue;
       visited.add(nKey);
-      queue.push({ x: nx, y: ny, dist: dist + 1 });
+      queue.push({ floor, x: nx, y: ny, dist: dist + 1 });
+    }
+
+    // --- Cross-floor stair connections (connectsTo) ---
+    if (tile.connectsTo) {
+      for (const fl of FLOORS) {
+        const connected = (board[fl] || []).find((t) => t.id === tile.connectsTo);
+        if (!connected) continue;
+        const cKey = `${fl}:${connected.x}:${connected.y}`;
+        if (visited.has(cKey)) continue;
+        visited.add(cKey);
+        queue.push({ floor: fl, x: connected.x, y: connected.y, dist: dist + 1 });
+      }
+    }
+    // Also check tiles on other floors that connect back to this tile.
+    for (const fl of FLOORS) {
+      if (fl === floor) continue;
+      for (const otherTile of board[fl] || []) {
+        if (otherTile.connectsTo !== tile.id) continue;
+        const cKey = `${fl}:${otherTile.x}:${otherTile.y}`;
+        if (visited.has(cKey)) continue;
+        visited.add(cKey);
+        queue.push({ floor: fl, x: otherTile.x, y: otherTile.y, dist: dist + 1 });
+      }
     }
   }
 
   return results.sort((a, b) => a.dist - b.dist);
-}
-
-/* [HAUNT-SETUP] Builds the initial set of illusion token placements.
-   One goes on the traitor's tile; the rest are spread within Speed range on the same floor.
-   Each illusion is placed on a different tile if possible. */
-function buildInitialIllusionPlacements(game, traitorIndex, illusionCount) {
-  const traitor = game.players[traitorIndex];
-  const speed = getSpeedStatValue(traitor);
-  const tilesInRange = bfsTilesInRange(game.board, traitor.floor, traitor.x, traitor.y, Math.max(speed, 1));
-
-  const placements = [];
-
-  // First illusion goes on the traitor's own tile.
-  placements.push({ floor: traitor.floor, x: traitor.x, y: traitor.y });
-
-  // Remaining illusions on distinct tiles within Speed range.
-  const usedKeys = new Set([`${traitor.floor}:${traitor.x}:${traitor.y}`]);
-  for (let i = 1; i < illusionCount; i++) {
-    const candidate = tilesInRange.find((t) => !usedKeys.has(`${t.floor}:${t.tile.x}:${t.tile.y}`));
-    if (candidate) {
-      placements.push({ floor: candidate.floor, x: candidate.tile.x, y: candidate.tile.y });
-      usedKeys.add(`${candidate.floor}:${candidate.tile.x}:${candidate.tile.y}`);
-    } else {
-      // Fall back: allow stacking on an already-used tile.
-      const fallback = tilesInRange[0] || { floor: traitor.floor, tile: { x: traitor.x, y: traitor.y } };
-      placements.push({ floor: fallback.floor, x: fallback.tile.x, y: fallback.tile.y });
-    }
-  }
-
-  // Shuffle placements so the heroes can't tell from ordering which is real (#1).
-  for (let i = placements.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [placements[i], placements[j]] = [placements[j], placements[i]];
-  }
-
-  // Assign IDs 1..N. In the physical game the traitor knows #1 is theirs;
-  // here all positions are stored, and #1 is always "the real traitor".
-  // We store them randomly so heroes see tokens spread around the house.
-  return placements.map((pos, idx) => ({ id: idx + 1, ...pos }));
 }
 
 /* [HAUNT-ACTION] Removes hauntActionRoll from game state. */
@@ -290,21 +282,14 @@ function applyDispelIllusion(game, illusionId) {
   const scenarioState = getScenarioState(game.hauntState);
   const traitorIndex = game.hauntState.traitorPlayerIndex;
 
-  // Find where the dispelled illusion was (needed if it's #1 for traitor reveal).
+  // Find where the dispelled illusion was (needed if it's the real one for traitor reveal).
   const dispelledIllusion = scenarioState.illusions.find((ill) => ill.id === illusionId);
-  const isRealTraitor = illusionId === 1;
-
-  // All illusions recalled from board.
-  const nextMaxIllusionId = Math.max(0, scenarioState.maxIllusionId - 1);
-  const nextScenarioState = {
-    ...scenarioState,
-    illusions: [], // all recalled
-    maxIllusionId: nextMaxIllusionId,
-    activeIllusionId: null,
-  };
+  const realId = scenarioState.realIllusionId ?? 1;
+  const isRealTraitor = illusionId === realId;
 
   if (isRealTraitor && dispelledIllusion) {
-    // Traitor revealed: place explorer at the dispelled illusion's tile.
+    // Real body found: ALL illusions recalled, traitor revealed at that tile, lose a token.
+    const nextMaxIllusionId = Math.max(0, scenarioState.maxIllusionId - 1);
     const traitor = game.players[traitorIndex];
     const revivedTraitor = {
       ...traitor,
@@ -321,22 +306,34 @@ function applyDispelIllusion(game, illusionId) {
       players: nextPlayers,
       hauntState: {
         ...game.hauntState,
-        scenarioState: { ...nextScenarioState, isHidden: false },
+        scenarioState: {
+          ...scenarioState,
+          illusions: [], // all recalled
+          maxIllusionId: nextMaxIllusionId,
+          realIllusionId: null,
+          activeIllusionId: null,
+          isHidden: false,
+        },
       },
-      message: `Illusion #1 revealed! The traitor has been exposed. They appear at ${dispelledIllusion.floor} (${dispelledIllusion.x}, ${dispelledIllusion.y}). ${tokensLeft} Illusion token${tokensLeft !== 1 ? "s" : ""} remain.`,
+      message: `The real body was revealed! The traitor has been exposed. They appear at ${dispelledIllusion.floor} (${dispelledIllusion.x}, ${dispelledIllusion.y}). ${tokensLeft} Illusion token${tokensLeft !== 1 ? "s" : ""} remain.`,
     };
   }
 
-  // Not the real traitor: illusions recalled, traitor still hidden (needs to re-summon).
-  const illNumber = illusionId;
-  const tokensLeft = nextMaxIllusionId;
+  // Not the real body: remove ONLY this one illusion, others stay, no token lost.
+  const remainingIllusions = scenarioState.illusions.filter((ill) => ill.id !== illusionId);
+  const illusionsLeft = remainingIllusions.length;
   return {
     ...game,
     hauntState: {
       ...game.hauntState,
-      scenarioState: { ...nextScenarioState, isHidden: true },
+      scenarioState: {
+        ...scenarioState,
+        illusions: remainingIllusions,
+        activeIllusionId: scenarioState.activeIllusionId === illusionId ? null : scenarioState.activeIllusionId,
+        isHidden: true,
+      },
     },
-    message: `Illusion #${illNumber} was NOT the real traitor! All illusions recalled. ${tokensLeft} Illusion token${tokensLeft !== 1 ? "s" : ""} remain in play.`,
+    message: `That Illusion was not the real body! It vanishes. ${illusionsLeft} Illusion${illusionsLeft !== 1 ? "s" : ""} still remain.`,
   };
 }
 
@@ -345,45 +342,104 @@ function applyDispelIllusion(game, illusionId) {
 // Heals the traitor, places illusion tokens, and marks the traitor as hidden.
 // ---------------------------------------------------------------------------
 
-/* [HAUNT-SETUP] Called once when the haunt begins: heals traitor, places illusions, hides traitor. */
+/* [HAUNT-SETUP] Computes available placement options for the traitor: all tiles reachable from
+   illusion #1's position within Speed range, excluding tiles that already have an illusion. */
+function computePlaceIllusionOptions(game, traitorIndex, placedKeys) {
+  const traitor = game.players[traitorIndex];
+  const illusion1 = game.hauntState?.scenarioState?.illusions?.find((ill) => ill.id === 1);
+  const origin = illusion1 || { floor: traitor.floor, x: traitor.x, y: traitor.y };
+  const speed = getSpeedStatValue(traitor);
+  const tilesInRange = bfsTilesInRange(game.board, origin.floor, origin.x, origin.y, Math.max(speed, 1));
+  const keySet = new Set(Array.isArray(placedKeys) ? placedKeys : []);
+  return tilesInRange
+    .filter((t) => !keySet.has(`${t.floor}:${t.tile.x}:${t.tile.y}`))
+    .map((t) => ({
+      id: `place-illusion-tile:${t.floor}:${t.tile.x}:${t.tile.y}`,
+      label: `Place Illusion (${t.tile.x}, ${t.tile.y})`,
+      floor: t.floor,
+      x: t.tile.x,
+      y: t.tile.y,
+    }));
+}
+
+/* [HAUNT-SETUP] Called once when the haunt begins: heals traitor, places illusion #1 on traitor's
+   tile, then prompts the traitor to manually place the remaining illusions. */
 export function onHauntBegin(game) {
   const traitorIndex = game.hauntState.traitorPlayerIndex;
   const illusionCount = getIllusionCount(game);
 
   // 1. Heal the traitor's traits.
   const healedTraitor = healAllTraits(game.players[traitorIndex]);
+  const speed = getSpeedStatValue(healedTraitor);
 
-  // 2. Build illusion placements (random assignment so heroes can't tell which is real).
-  const illusions = buildInitialIllusionPlacements(
-    { ...game, players: game.players.map((p, i) => (i === traitorIndex ? healedTraitor : p)) },
-    traitorIndex,
-    illusionCount
-  );
+  // 2. Illusion #1 is always placed on the traitor's starting tile (it is the "real" traitor).
+  const traitorPos = { floor: healedTraitor.floor, x: healedTraitor.x, y: healedTraitor.y };
+  const firstIllusion = { id: 1, ...traitorPos };
+  const firstKey = `${traitorPos.floor}:${traitorPos.x}:${traitorPos.y}`;
 
-  // 3. Hide the traitor (set isAlive=false so their figure isn't shown — same pattern as haunt_28 shark).
-  //    The traitor's position will be synced to the active illusion on their turn.
-  const hiddenTraitor = {
-    ...healedTraitor,
-    isAlive: false,
-    movesLeft: 0,
-  };
+  // 3. Hide the traitor figure, but keep them alive for turn-order logic.
+  const hiddenTraitor = { ...healedTraitor, isAlive: true, movesLeft: 0 };
   const nextPlayers = game.players.map((p, i) => (i === traitorIndex ? hiddenTraitor : p));
+  const gameWithPlayers = { ...game, players: nextPlayers };
+
+  const remaining = illusionCount - 1;
+
+  // 4. Edge case: only 1 illusion total — only one possible real body, auto-set it.
+  if (remaining <= 0) {
+    return {
+      ...gameWithPlayers,
+      hauntState: {
+        ...game.hauntState,
+        scenarioState: {
+          ...getScenarioState(game.hauntState),
+          illusions: [firstIllusion],
+          realIllusionId: 1,
+          isHidden: true,
+          activeIllusionId: null,
+          illusionsMovedThisTurn: [],
+          maxIllusionId: illusionCount,
+          pendingChoice: null,
+        },
+      },
+      message: `The traitor has become an Illusion! Heroes must find the real one.`,
+    };
+  }
+
+  // 5. Give the turn to the traitor so they can manually place the remaining illusions.
+  const firstHeroPlayerIndex = game.currentPlayerIndex;
+  const tempGame = {
+    ...gameWithPlayers,
+    hauntState: {
+      ...game.hauntState,
+      scenarioState: { ...getScenarioState(game.hauntState), illusions: [firstIllusion] },
+    },
+  };
+  const options = computePlaceIllusionOptions(tempGame, traitorIndex, [firstKey]);
 
   return {
-    ...game,
-    players: nextPlayers,
+    ...gameWithPlayers,
+    currentPlayerIndex: traitorIndex,
+    movePath: [{ x: traitorPos.x, y: traitorPos.y, floor: traitorPos.floor, cost: 0 }],
     hauntState: {
       ...game.hauntState,
       scenarioState: {
         ...getScenarioState(game.hauntState),
-        illusions,
+        illusions: [firstIllusion],
         isHidden: true,
         activeIllusionId: null,
         illusionsMovedThisTurn: [],
         maxIllusionId: illusionCount,
+        pendingChoice: {
+          type: "place-illusion",
+          source: "setup",
+          remaining,
+          firstHeroPlayerIndex,
+          placedKeys: [firstKey],
+          options,
+        },
       },
     },
-    message: `The traitor has shattered into ${illusionCount} Illusions scattered around the house. Which one is the real traitor?`,
+    message: `Illusion #1 placed on your tile. Place ${remaining} more Illusion${remaining !== 1 ? "s" : ""} within ${speed} tile${speed !== 1 ? "s" : ""} — click highlighted tiles on the board.`,
   };
 }
 
@@ -466,6 +522,13 @@ export function resolveTurnStartState(game) {
   }
 
   const scenarioState = getScenarioState(game.hauntState);
+
+  // During manual illusion placement or real-body selection, skip the normal turn-start logic.
+  const pendingType = scenarioState.pendingChoice?.type;
+  if (pendingType === "place-illusion" || pendingType === "select-real-body") {
+    return { game, diceAnimation: null };
+  }
+
   if (!scenarioState.isHidden || scenarioState.illusions.length === 0) {
     return { game, diceAnimation: null };
   }
@@ -650,7 +713,8 @@ export function resolveCombatOutcomeState(game, outcome, combatState) {
     if (!illusion) return null;
 
     const dispelResult = applyDispelIllusion(game, illusion.id);
-    const isRevealedNow = illusion.id === 1;
+    const realId = scenarioState.realIllusionId ?? 1;
+    const isRevealedNow = illusion.id === realId;
 
     return {
       ...dispelResult,
@@ -658,7 +722,7 @@ export function resolveCombatOutcomeState(game, outcome, combatState) {
       // "If an attack reveals the traitor, that attack does no damage."
       damageChoice: isRevealedNow ? null : dispelResult.damageChoice,
       message: isRevealedNow
-        ? `${outcome.winnerName} strikes the Illusion — it's Number 1! The traitor is revealed! No damage (the attack was against an illusion). ${dispelResult.message}`
+        ? `${outcome.winnerName} strikes the Illusion — it's the real body! The traitor is revealed! No damage (the attack was against an illusion). ${dispelResult.message}`
         : `${outcome.winnerName} strikes the Illusion! ${dispelResult.message}`,
     };
   }
@@ -864,7 +928,53 @@ export function resolveActionState(game, { actionId }) {
     const id = parseInt(actionId.replace("dispel-illusion-choice-", ""), 10);
     if (Number.isFinite(id)) return resolveDispelIllusionChoiceState(game, id);
   }
+  if (actionId?.startsWith("place-illusion-tile:")) return resolvePlaceIllusionTileState(game, actionId);
+  if (actionId?.startsWith("select-real-body-")) {
+    const id = parseInt(actionId.replace("select-real-body-", ""), 10);
+    if (Number.isFinite(id)) return resolveSelectRealBodyState(game, id);
+  }
   return game;
+}
+
+/* [HAUNT-ACTION] Traitor picks which placed illusion is their real body. */
+function resolveSelectRealBodyState(game, illusionId) {
+  if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_18" || !game.hauntState) return game;
+
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  if (game.currentPlayerIndex !== traitorIndex) return game;
+
+  const scenarioState = getScenarioState(game.hauntState);
+  if (scenarioState.pendingChoice?.type !== "select-real-body") return game;
+
+  const illusion = scenarioState.illusions.find((ill) => ill.id === illusionId);
+  if (!illusion) return game;
+
+  const { source, firstHeroPlayerIndex } = scenarioState.pendingChoice;
+
+  const baseScenario = {
+    ...scenarioState,
+    realIllusionId: illusionId,
+    pendingChoice: null,
+  };
+
+  if (source === "summon") {
+    return {
+      ...game,
+      hauntState: { ...game.hauntState, scenarioState: baseScenario },
+      turnPhase: "endTurn",
+      message: `Real body chosen. The traitor vanishes! Turn ends.`,
+    };
+  }
+
+  // Setup: hand control back to the first hero.
+  const firstHero = game.players[firstHeroPlayerIndex];
+  return {
+    ...game,
+    currentPlayerIndex: firstHeroPlayerIndex,
+    movePath: [{ x: firstHero.x, y: firstHero.y, floor: firstHero.floor, cost: 0 }],
+    hauntState: { ...game.hauntState, scenarioState: baseScenario },
+    message: `Real body chosen. The haunt begins! ${firstHero.name} goes first.`,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -998,23 +1108,72 @@ function resolveSummonIllusionsState(game) {
 
   const traitor = game.players[traitorIndex];
   const illusionCount = scenarioState.maxIllusionId;
+  const speed = getSpeedStatValue(traitor);
 
-  // Place illusions from the traitor's current position.
-  const illusions = buildInitialIllusionPlacements(game, traitorIndex, illusionCount);
+  // Illusion #1 is always placed on the traitor's current tile.
+  const traitorPos = { floor: traitor.floor, x: traitor.x, y: traitor.y };
+  const firstIllusion = { id: 1, ...traitorPos };
+  const firstKey = `${traitorPos.floor}:${traitorPos.x}:${traitorPos.y}`;
 
-  // Hide the traitor.
-  const hiddenTraitor = { ...traitor, isAlive: false, movesLeft: 0 };
+  // Hide the traitor figure, but keep them alive for turn-order logic.
+  const hiddenTraitor = { ...traitor, isAlive: true, movesLeft: 0 };
   const nextPlayers = game.players.map((p, i) => (i === traitorIndex ? hiddenTraitor : p));
+
+  const remaining = illusionCount - 1;
+
+  // Edge case: only 1 token — only one possible real body, auto-set and end turn.
+  if (remaining <= 0) {
+    const nextHauntState = markHauntActionUsed(
+      {
+        ...game.hauntState,
+        scenarioState: {
+          ...scenarioState,
+          illusions: [firstIllusion],
+          realIllusionId: 1,
+          isHidden: true,
+          activeIllusionId: null,
+          illusionsMovedThisTurn: [],
+          pendingChoice: null,
+        },
+      },
+      usageKey
+    );
+    return {
+      ...game,
+      players: nextPlayers,
+      hauntState: nextHauntState,
+      turnPhase: "endTurn",
+      message: `The traitor places 1 Illusion and vanishes! Turn ends.`,
+    };
+  }
+
+  // Let the traitor manually place the remaining illusions within Speed range.
+  const tempGame = {
+    ...game,
+    players: nextPlayers,
+    hauntState: {
+      ...game.hauntState,
+      scenarioState: { ...scenarioState, illusions: [firstIllusion] },
+    },
+  };
+  const options = computePlaceIllusionOptions(tempGame, traitorIndex, [firstKey]);
 
   const nextHauntState = markHauntActionUsed(
     {
       ...game.hauntState,
       scenarioState: {
         ...scenarioState,
-        illusions,
+        illusions: [firstIllusion],
         isHidden: true,
         activeIllusionId: null,
         illusionsMovedThisTurn: [],
+        pendingChoice: {
+          type: "place-illusion",
+          source: "summon",
+          remaining,
+          placedKeys: [firstKey],
+          options,
+        },
       },
     },
     usageKey
@@ -1024,8 +1183,93 @@ function resolveSummonIllusionsState(game) {
     ...game,
     players: nextPlayers,
     hauntState: nextHauntState,
-    turnPhase: "endTurn",
-    message: `The traitor shatters into ${illusionCount} Illusion${illusionCount !== 1 ? "s" : ""} and vanishes! Turn ends.`,
+    message: `Illusion #1 placed on your tile. Place ${remaining} more Illusion${remaining !== 1 ? "s" : ""} within ${speed} tile${speed !== 1 ? "s" : ""} — click highlighted tiles.`,
+  };
+}
+
+/* [HAUNT-ACTION] Traitor places an illusion on a chosen tile during setup or Summon Illusions. */
+function resolvePlaceIllusionTileState(game, actionId) {
+  if (game.gamePhase !== GAME_PHASES.HAUNT_ACTIVE || game.activeHauntId !== "haunt_18" || !game.hauntState) return game;
+
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  if (game.currentPlayerIndex !== traitorIndex) return game;
+
+  const scenarioState = getScenarioState(game.hauntState);
+  if (scenarioState.pendingChoice?.type !== "place-illusion") return game;
+
+  const pendingChoice = scenarioState.pendingChoice;
+
+  // Find the matching option by its full id (avoids manual string parsing).
+  const matchedOption = (pendingChoice.options || []).find((o) => o.id === actionId);
+  if (!matchedOption) return game;
+
+  const { floor, x, y } = matchedOption;
+  const optionKey = `${floor}:${x}:${y}`;
+
+  // Assign the next illusion ID.
+  const nextId = scenarioState.illusions.length + 1;
+  const nextIllusions = [...scenarioState.illusions, { id: nextId, floor, x, y }];
+  const nextRemaining = pendingChoice.remaining - 1;
+  const nextPlacedKeys = [...(pendingChoice.placedKeys || []), optionKey];
+
+  // Helper: transition to real-body selection after all illusions placed.
+  const finalize = (finalIllusions) => {
+    const selectOptions = finalIllusions.map((ill) => ({
+      id: `select-real-body-${ill.id}`,
+      floor: ill.floor,
+      x: ill.x,
+      y: ill.y,
+      illusionId: ill.id,
+    }));
+    return {
+      ...game,
+      hauntState: {
+        ...game.hauntState,
+        scenarioState: {
+          ...scenarioState,
+          illusions: finalIllusions,
+          pendingChoice: {
+            type: "select-real-body",
+            source: pendingChoice.source,
+            firstHeroPlayerIndex: pendingChoice.firstHeroPlayerIndex,
+            options: selectOptions,
+          },
+        },
+      },
+      message: `All ${finalIllusions.length} Illusion${finalIllusions.length !== 1 ? "s" : ""} placed! Now tap which one is your real body on the board. (Heroes — look away!)`,
+    };
+  };
+
+  if (nextRemaining <= 0) {
+    return finalize(nextIllusions);
+  }
+
+  // More to place — recompute available options excluding already-placed tiles.
+  const tempGame = {
+    ...game,
+    hauntState: {
+      ...game.hauntState,
+      scenarioState: { ...scenarioState, illusions: nextIllusions },
+    },
+  };
+  const options = computePlaceIllusionOptions(tempGame, traitorIndex, nextPlacedKeys);
+
+  // If no valid tiles remain, finalize early.
+  if (options.length === 0) {
+    return finalize(nextIllusions);
+  }
+
+  return {
+    ...game,
+    hauntState: {
+      ...game.hauntState,
+      scenarioState: {
+        ...scenarioState,
+        illusions: nextIllusions,
+        pendingChoice: { ...pendingChoice, remaining: nextRemaining, placedKeys: nextPlacedKeys, options },
+      },
+    },
+    message: `Illusion #${nextId} placed. ${nextRemaining} more to place — click a highlighted tile.`,
   };
 }
 
@@ -1207,12 +1451,15 @@ export function resolveActionRollContinueState(game, { rollDice }) {
 // Exported hook: getTileTokenLabelsState
 // ---------------------------------------------------------------------------
 
-/* [BOARD-LAYOUT] Returns an "Illusion" variant token for any tile holding an active illusion. */
+/* [BOARD-LAYOUT] Returns an "Illusion" variant token for any tile holding an active illusion.
+   Includes hidden metadata so the traitor can privately highlight the real body. */
 export function getTileTokenLabelsState(game, { floor, x, y }) {
   if (game.activeHauntId !== "haunt_18" || !game.hauntState) return [];
   const scenarioState = getScenarioState(game.hauntState);
-  if (hasTileIllusion(scenarioState.illusions, floor, x, y)) {
-    return [{ label: "?", variant: "illusion" }];
+  const illusion = getIllusionAtPosition(scenarioState.illusions, floor, x, y);
+  if (illusion) {
+    const realId = scenarioState.realIllusionId ?? null;
+    return [{ label: "?", variant: "illusion", illusionId: illusion.id, isRealBody: realId === illusion.id }];
   }
   return [];
 }
@@ -1237,12 +1484,20 @@ export function getPlayerHauntTokensState(game, playerIndex) {
 // Exported hook: getBoardRenderState
 // ---------------------------------------------------------------------------
 
-/* [BOARD-RENDER] No flooded tiles; no single monster token (illusions rendered per-tile via getTileTokenLabelsState). */
+/* [BOARD-RENDER] No flooded tiles; no single monster token (illusions rendered per-tile via getTileTokenLabelsState).
+   While hidden, the traitor is alive but their explorer token should not be rendered on the board. */
 export function getBoardRenderState(game) {
   if (game.activeHauntId !== "haunt_18" || !game.hauntState) {
-    return { floodedTiles: [], monsterToken: null, trappedPlayerIndexes: [] };
+    return { floodedTiles: [], monsterToken: null, trappedPlayerIndexes: [], hiddenPlayerIndexes: [] };
   }
-  return { floodedTiles: [], monsterToken: null, trappedPlayerIndexes: [] };
+  const scenarioState = getScenarioState(game.hauntState);
+  const traitorIndex = game.hauntState.traitorPlayerIndex;
+  return {
+    floodedTiles: [],
+    monsterToken: null,
+    trappedPlayerIndexes: [],
+    hiddenPlayerIndexes: scenarioState.isHidden ? [traitorIndex] : [],
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -1258,8 +1513,6 @@ export function getMonsterCardState(game) {
 
   const traitorIndex = game.hauntState.traitorPlayerIndex;
   const traitor = game.players[traitorIndex];
-  if (!traitor) return null;
-
   const speedIdx = traitor.statIndex?.speed ?? 0;
   const mightIdx = traitor.statIndex?.might ?? 0;
   const sanityIdx = traitor.statIndex?.sanity ?? 0;

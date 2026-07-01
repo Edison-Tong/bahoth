@@ -1,4 +1,5 @@
 /* [SIDEBAR] [OVERLAY] Collapsible sidebar listing all players' stats, inventory, and omens. Also shows haunt-specific UI (Jack's Spirit tracker, knowledge tokens) when haunt is active. */
+import { useState } from "react";
 import {
   getHauntMonsterCardState,
   getHauntPlayerTokensState,
@@ -18,6 +19,12 @@ export default function PlayerSidebar({
   onQuit,
 }) {
   const traitorPlayerIndex = game?.hauntState?.traitorPlayerIndex;
+  const [peekActive, setPeekActive] = useState(false);
+
+  function handlePeekRealBody() {
+    setPeekActive(true);
+    setTimeout(() => setPeekActive(false), 6000);
+  }
 
   // Single hook — each haunt runtime provides its own monster card data.
   const monsterCard = getHauntMonsterCardState(game);
@@ -224,6 +231,31 @@ export default function PlayerSidebar({
                   </div>
                 </div>
               </div>
+              {/* Haunt 18: traitor-only peek button */}
+              {isTraitor &&
+                game.activeHauntId === "haunt_18" &&
+                (() => {
+                  const sc = game.hauntState?.scenarioState;
+                  const realId = sc?.realIllusionId;
+                  const realIllusion = realId != null ? (sc?.illusions || []).find((ill) => ill.id === realId) : null;
+                  if (!realIllusion) return null;
+                  return (
+                    <div className="haunt-peek-section">
+                      <button type="button" className="haunt-peek-btn" onClick={handlePeekRealBody}>
+                        Hold To Reveal Real Body - Traitor only, heroes look away
+                      </button>
+                      {peekActive && (
+                        <div className="haunt-peek-reveal">
+                          Your real body: Illusion #{realIllusion.id}
+                          <br />
+                          <span style={{ opacity: 0.8 }}>
+                            {realIllusion.floor} floor — ({realIllusion.x}, {realIllusion.y})
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
             </div>
             {i === traitorPlayerIndex && renderMonsterCard()}
           </div>

@@ -95,7 +95,11 @@ export default function BoardCanvas({
                   monsterToken.floor === cameraFloor &&
                   monsterToken.x === tile.x &&
                   monsterToken.y === tile.y;
-                const visiblePlayers = tilePlayersHere.filter((p) => !(monsterToken && p.index === traitorPlayerIndex));
+                const visiblePlayers = tilePlayersHere.filter(
+                  (p) =>
+                    !(monsterToken && p.index === traitorPlayerIndex) &&
+                    !(getHauntBoardRenderState(game).hiddenPlayerIndexes || []).includes(p.index)
+                );
                 return (
                   <div
                     key={tile.id + tile.x + tile.y}
@@ -206,6 +210,14 @@ export default function BoardCanvas({
                             className="portal-swirl"
                             title={token.label}
                           />
+                        ) : token.variant === "illusion" ? (
+                          <div
+                            key={`haunt-token-${tile.id}-${token.label}`}
+                            className={`illusion-token ${token.isRealBody ? "illusion-token-real-body" : ""}`}
+                            title="Illusion"
+                          >
+                            ?
+                          </div>
                         ) : (
                           <div key={`haunt-token-${tile.id}-${token.label}`} className="tile-token">
                             {token.label}
@@ -224,7 +236,9 @@ export default function BoardCanvas({
                   {/* Player tokens + monster token */}
                   {(() => {
                     const visiblePlayers = tilePlayersHere.filter(
-                      (p) => !(monsterToken && p.index === traitorPlayerIndex)
+                      (p) =>
+                        !(monsterToken && p.index === traitorPlayerIndex) &&
+                        !(getHauntBoardRenderState(game).hiddenPlayerIndexes || []).includes(p.index)
                     );
                     const sharkHere =
                       monsterToken &&

@@ -23,6 +23,8 @@ const PURPOSE_LABEL = {
   "monster-speed-roll": "Monster Movement",
   "hero-speed-roll": "Hero Movement",
   "portal-close-damage-roll": "Portal Damage",
+  "confront-illusion-damage-roll": "Illusion Damage",
+  "call-to-ring-traitor-damage": "Ring Damage",
   "event-roll": "Event Roll",
   "event-partial-reroll": "Event Reroll",
   "event-damage-roll": "Event Damage",

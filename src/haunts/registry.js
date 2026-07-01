@@ -1,4 +1,5 @@
 import haunt1Definition from "./haunt_1/definition";
+import haunt18Definition from "./haunt_18/definition";
 import haunt28Definition from "./haunt_28/definition";
 import haunt47Definition from "./haunt_47/definition";
 import { SCENARIO_CARDS } from "./scenarioCards";
@@ -69,11 +70,35 @@ import {
   getHauntCanPlayersTradeState as getHauntCanPlayersTradeState47,
   getHauntCanAttackTargetState as getHauntCanAttackTargetState47,
 } from "./haunt_47/runtime";
+import {
+  createInitialScenarioState as createInitialScenarioState18,
+  onHauntBegin as onHauntBegin18,
+  resolveAfterDamageState as resolveAfterDamageState18,
+  resolveAfterMovementState as resolveAfterMovementState18,
+  resolveTurnStartState as resolveTurnStartState18,
+  getSpecialMoveOptionsState as getSpecialMoveOptionsState18,
+  getCombatActorProxyState as getCombatActorProxyState18,
+  getCombatBonusLabel as getCombatBonusLabel18,
+  resolveCombatOutcomeState as resolveCombatOutcomeState18,
+  canDeadPlayerTakeTurn as canDeadPlayerTakeTurn18,
+  getActionAvailabilityState as getActionAvailabilityState18,
+  getActionButtonsState as getActionButtonsState18,
+  getActionRollPreviewState as getActionRollPreviewState18,
+  resolveActionState as resolveActionState18,
+  resolveActionRollContinueState as resolveActionRollContinueState18,
+  getTileTokenLabelsState as getTileTokenLabelsState18,
+  getPlayerHauntTokensState as getPlayerHauntTokensState18,
+  getBoardRenderState as getBoardRenderState18,
+  getMonsterCardState as getMonsterCardState18,
+  getKnowledgeTokenHoldersState as getKnowledgeTokenHoldersState18,
+  getHauntCanAttackTargetState as getHauntCanAttackTargetState18,
+} from "./haunt_18/runtime";
 
 // Static registry mapping haunt IDs to definition objects and runtime hook bundles.
 // Add new haunts here when they are implemented.
 const HAUNT_REGISTRY = {
   [haunt1Definition.id]: haunt1Definition,
+  [haunt18Definition.id]: haunt18Definition,
   [haunt28Definition.id]: haunt28Definition,
   [haunt47Definition.id]: haunt47Definition,
 };
@@ -145,6 +170,29 @@ const HAUNT_RUNTIME_REGISTRY = {
     resolveCombatOutcomeState: resolveCombatOutcomeState47,
     getHauntCanPlayersTradeState: getHauntCanPlayersTradeState47,
     getHauntCanAttackTargetState: getHauntCanAttackTargetState47,
+  },
+  [haunt18Definition.id]: {
+    createInitialScenarioState: createInitialScenarioState18,
+    onHauntBegin: onHauntBegin18,
+    resolveAfterDamageState: resolveAfterDamageState18,
+    resolveAfterMovementState: resolveAfterMovementState18,
+    resolveTurnStartState: resolveTurnStartState18,
+    getSpecialMoveOptionsState: getSpecialMoveOptionsState18,
+    getCombatActorProxyState: getCombatActorProxyState18,
+    getCombatBonusLabel: getCombatBonusLabel18,
+    resolveCombatOutcomeState: resolveCombatOutcomeState18,
+    canDeadPlayerTakeTurn: canDeadPlayerTakeTurn18,
+    getActionAvailabilityState: getActionAvailabilityState18,
+    getActionButtonsState: getActionButtonsState18,
+    getActionRollPreviewState: getActionRollPreviewState18,
+    resolveActionState: resolveActionState18,
+    resolveActionRollContinueState: resolveActionRollContinueState18,
+    getTileTokenLabelsState: getTileTokenLabelsState18,
+    getPlayerHauntTokensState: getPlayerHauntTokensState18,
+    getBoardRenderState: getBoardRenderState18,
+    getMonsterCardState: getMonsterCardState18,
+    getKnowledgeTokenHoldersState: getKnowledgeTokenHoldersState18,
+    getHauntCanAttackTargetState: getHauntCanAttackTargetState18,
   },
 };
 

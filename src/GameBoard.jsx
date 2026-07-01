@@ -414,6 +414,9 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
     hauntPendingChoiceType === "flood-tile-selection" ||
     hauntPendingChoiceType === "setup-flood-selection" ||
     hauntPendingChoiceType === "cue-ominous-music-placement" ||
+    hauntPendingChoiceType === "dispel-illusion-choice" ||
+    hauntPendingChoiceType === "place-illusion" ||
+    hauntPendingChoiceType === "select-real-body" ||
     hauntPendingChoiceType === "force-explosives-count";
   const gameIsOver = game.gamePhase === GAME_PHASES.GAME_OVER;
   const gameplayUiLocked =
@@ -737,6 +740,48 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
             ...g,
             damageChoice,
             message: `${da.actorName ?? actor?.name ?? "Hero"} takes ${damageRolled} Mental damage from dimensional feedback.`,
+          };
+        });
+        setDiceAnimation(null);
+      } else if (da.purpose === "confront-illusion-damage-roll") {
+        setGame((g) => {
+          const actor = g.players[da.playerIndex ?? g.currentPlayerIndex];
+          const damageRolled = Math.max(
+            1,
+            da.final.reduce((s, v) => s + v, 0)
+          );
+          const damageChoice = {
+            ...createDamageChoice(
+              { damage: damageRolled, damageType: "mental", sourceName: "Illusion — Mental Feedback" },
+              actor
+            ),
+            playerIndex: da.playerIndex ?? g.currentPlayerIndex,
+          };
+          return {
+            ...g,
+            damageChoice,
+            message: `${da.actorName ?? actor?.name ?? "Hero"} takes ${damageRolled} Mental damage from the Illusion.`,
+          };
+        });
+        setDiceAnimation(null);
+      } else if (da.purpose === "call-to-ring-traitor-damage") {
+        setGame((g) => {
+          const actor = g.players[da.playerIndex ?? g.currentPlayerIndex];
+          const damageRolled = Math.max(
+            1,
+            da.final.reduce((s, v) => s + v, 0)
+          );
+          const damageChoice = {
+            ...createDamageChoice(
+              { damage: damageRolled, damageType: "mental", sourceName: "Call to the Ring" },
+              actor
+            ),
+            playerIndex: da.playerIndex ?? g.currentPlayerIndex,
+          };
+          return {
+            ...g,
+            damageChoice,
+            message: `The ring's call deals ${damageRolled} Mental damage to the traitor.`,
           };
         });
         setDiceAnimation(null);
@@ -1819,6 +1864,12 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
       }
 
       const loserIsProxy = !!getHauntCombatActorProxyState(g, outcome.loserIndex);
+
+      // Haunt-specific outcome override runs first (e.g. dispel an illusion, trap instead of damage).
+      // It takes priority over the generic "proxy cannot be harmed" fallback below.
+      const hauntOutcomeOverride = getHauntCombatOutcomeOverride(g, outcome, combatState, { createDamageChoice });
+      if (hauntOutcomeOverride !== null) return hauntOutcomeOverride;
+
       if (loserIsProxy) {
         return {
           ...g,
@@ -1826,10 +1877,6 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
           message: `${outcome.winnerName} wins (${outcome.attackerTotal} vs ${outcome.defenderTotal}). ${outcome.loserName} cannot be harmed.`,
         };
       }
-
-      // Haunt-specific outcome override: e.g. trap instead of damage, or no damage on loss.
-      const hauntOutcomeOverride = getHauntCombatOutcomeOverride(g, outcome, combatState, { createDamageChoice });
-      if (hauntOutcomeOverride !== null) return hauntOutcomeOverride;
 
       const loser = g.players[outcome.loserIndex];
       const combatDamageType = combatState.combatDamageType || "physical";
@@ -2922,6 +2969,12 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
   const isFloodTileChoiceActive =
     hauntPendingChoice?.type === "flood-tile-selection" || hauntPendingChoice?.type === "setup-flood-selection";
   const floodTileChoiceOptions = isFloodTileChoiceActive ? hauntPendingChoice.options || [] : [];
+  const isDispelIllusionChoiceActive = hauntPendingChoice?.type === "dispel-illusion-choice";
+  const dispelIllusionChoiceOptions = isDispelIllusionChoiceActive ? hauntPendingChoice.options || [] : [];
+  const isPlaceIllusionChoiceActive = hauntPendingChoice?.type === "place-illusion";
+  const placeIllusionChoiceOptions = isPlaceIllusionChoiceActive ? hauntPendingChoice.options || [] : [];
+  const isSelectRealBodyChoiceActive = hauntPendingChoice?.type === "select-real-body";
+  const selectRealBodyChoiceOptions = isSelectRealBodyChoiceActive ? hauntPendingChoice.options || [] : [];
   const isCueOminousMusicChoiceActive = hauntPendingChoice?.type === "cue-ominous-music-placement";
   const cueOminousMusicTileChoiceOptions = isCueOminousMusicChoiceActive ? hauntPendingChoice.options || [] : [];
   const selectedCueOminousMusicTileChoiceId = isCueOminousMusicChoiceActive
@@ -2934,14 +2987,26 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
       ? stalkPreyTileChoiceOptions
       : isCueOminousMusicChoiceActive
         ? cueOminousMusicTileChoiceOptions
-        : floodTileChoiceOptions;
+        : isDispelIllusionChoiceActive
+          ? dispelIllusionChoiceOptions
+          : isPlaceIllusionChoiceActive
+            ? placeIllusionChoiceOptions
+            : isSelectRealBodyChoiceActive
+              ? selectRealBodyChoiceOptions
+              : floodTileChoiceOptions;
   const selectedBoardTileChoiceId = isEventTileChoiceActive
     ? selectedEventTileChoiceId
     : isCueOminousMusicChoiceActive
       ? selectedCueOminousMusicTileChoiceId
       : selectedStalkPreyTileChoiceId;
   const isBoardTileChoiceActive =
-    isEventTileChoiceActive || isStalkPreyTileChoiceActive || isFloodTileChoiceActive || isCueOminousMusicChoiceActive;
+    isEventTileChoiceActive ||
+    isStalkPreyTileChoiceActive ||
+    isFloodTileChoiceActive ||
+    isCueOminousMusicChoiceActive ||
+    isDispelIllusionChoiceActive ||
+    isPlaceIllusionChoiceActive ||
+    isSelectRealBodyChoiceActive;
 
   /* [EVENT-TILE-CHOICE] [HAUNT-ACTION] Handles clicking a board tile-choice target (event tile-choice, stalk-prey, or flood tile). */
   function handleBoardTileChoice(option) {
@@ -2957,8 +3022,19 @@ export default function GameBoard({ players, onQuit, onlineConfig, initialGameSt
       handleUseHauntAction(`pending-select-cue-ominous-music:${option.id}`);
       return;
     }
+    if (isPlaceIllusionChoiceActive && option?.id) {
+      handleUseHauntAction(option.id);
+      return;
+    }
+    if (isSelectRealBodyChoiceActive && option?.id) {
+      handleUseHauntAction(option.id);
+      return;
+    }
     if (isFloodTileChoiceActive && option?.id) {
       handleUseHauntAction(`pending-flood-tile:${option.id}`);
+    }
+    if (isDispelIllusionChoiceActive && option?.id) {
+      handleUseHauntAction(option.id);
     }
   }
 
