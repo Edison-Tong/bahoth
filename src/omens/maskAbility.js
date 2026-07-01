@@ -1,3 +1,5 @@
+import { matchesActiveAbility } from "../shared/playerHelpers";
+
 /* [ITEM-MOVEMENT] [VALIDATION] Returns true if the Mask can push at least one explorer to an adjacent tile right now. */
 export function isMaskPushAvailableThisTurn(game, viewedCard, getMovementNeighbors) {
   if (!viewedCard || viewedCard.ownerCollection !== "omens") return false;
@@ -33,11 +35,9 @@ export function isMaskPushAvailableThisTurn(game, viewedCard, getMovementNeighbo
 export function applyMaskNowState(game, viewedCard, deps) {
   const { isMaskAvailable, getDogMoveOptions, getTileByPosition } = deps;
 
-  if (!viewedCard) return { game, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.activeAbilityRule?.action !== "mask-push-adjacent-players") {
+  if (!matchesActiveAbility(viewedCard, "mask-push-adjacent-players", "omens")) {
     return { game, closeViewedCard: false, diceAnimation: null };
   }
-  if (viewedCard.ownerCollection !== "omens") return { game, closeViewedCard: false, diceAnimation: null };
   if (viewedCard.ownerIndex !== game.currentPlayerIndex) return { game, closeViewedCard: false, diceAnimation: null };
   if (!isMaskAvailable(game, viewedCard)) return { game, closeViewedCard: false, diceAnimation: null };
 

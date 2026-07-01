@@ -1,4 +1,4 @@
-import { getInventoryCard } from "../shared/playerHelpers";
+import { getInventoryCard, matchesActiveAbility } from "../shared/playerHelpers";
 
 /* [DICE-ROLL] [ITEM-REROLL] Returns the current roll source (haunt action roll or event last roll) with its sourceType. */
 function getTraitRollSource(game) {
@@ -106,11 +106,9 @@ export function getLuckyCoinSequenceRerollOptions(game, deps) {
 export function applyCreepyDollNowState(game, viewedCard, deps) {
   const { isCreepyDollAvailable, rollDice } = deps;
 
-  if (!viewedCard) return { game, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.activeAbilityRule?.action !== "reroll-all-trait-dice") {
+  if (!matchesActiveAbility(viewedCard, "reroll-all-trait-dice", "inventory")) {
     return { game, closeViewedCard: false, diceAnimation: null };
   }
-  if (viewedCard.ownerCollection !== "inventory") return { game, closeViewedCard: false, diceAnimation: null };
   if (viewedCard.ownerIndex !== game.currentPlayerIndex) return { game, closeViewedCard: false, diceAnimation: null };
   if (!isCreepyDollAvailable(game, viewedCard)) return { game, closeViewedCard: false, diceAnimation: null };
 
@@ -184,11 +182,9 @@ export function applyCreepyDollNowState(game, viewedCard, deps) {
 export function applyLuckyCoinNowState(game, viewedCard, targetRollSelection = null, deps) {
   const { isLuckyCoinAvailable, getLuckyCoinSequenceRerollOptions, rollDice, statLabels } = deps;
 
-  if (!viewedCard) return { game, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.activeAbilityRule?.action !== "reroll-blank-trait-dice") {
+  if (!matchesActiveAbility(viewedCard, "reroll-blank-trait-dice", "inventory")) {
     return { game, closeViewedCard: false, diceAnimation: null };
   }
-  if (viewedCard.ownerCollection !== "inventory") return { game, closeViewedCard: false, diceAnimation: null };
   if (viewedCard.ownerIndex !== game.currentPlayerIndex) return { game, closeViewedCard: false, diceAnimation: null };
   if (!isLuckyCoinAvailable(game, viewedCard)) return { game, closeViewedCard: false, diceAnimation: null };
 
@@ -292,11 +288,9 @@ export function applyLuckyCoinNowState(game, viewedCard, targetRollSelection = n
 export function applyRabbitsFootNowState(game, viewedCard, deps) {
   const { isRabbitsFootAvailable } = deps;
 
-  if (!viewedCard) return { game, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.activeAbilityRule?.action !== "reroll-one-die") {
+  if (!matchesActiveAbility(viewedCard, "reroll-one-die", "inventory")) {
     return { game, closeViewedCard: false, diceAnimation: null };
   }
-  if (viewedCard.ownerCollection !== "inventory") return { game, closeViewedCard: false, diceAnimation: null };
   if (viewedCard.ownerIndex !== game.currentPlayerIndex) return { game, closeViewedCard: false, diceAnimation: null };
   if (!isRabbitsFootAvailable(game, viewedCard)) return { game, closeViewedCard: false, diceAnimation: null };
 

@@ -26,3 +26,13 @@ export function getInventoryCard(game, viewedCard) {
   const owner = game.players[viewedCard.ownerIndex];
   return owner?.inventory?.[viewedCard.ownerCardIndex] || null;
 }
+
+/* [ITEM-ABILITY] True if viewedCard is a real card whose active ability matches `action` and lives in `collection`.
+   The standard front-guard for an active-ability activation (owner-turn checks stay at the call site). */
+export function matchesActiveAbility(viewedCard, action, collection) {
+  return (
+    !!viewedCard &&
+    viewedCard.activeAbilityRule?.action === action &&
+    viewedCard.ownerCollection === collection
+  );
+}

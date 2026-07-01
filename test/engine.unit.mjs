@@ -2,7 +2,12 @@
 // These pin the behavior of code that used to be duplicated inline, so later
 // phases can't silently change it.
 import { movesLabel } from "../src/shared/format.js";
-import { isStatIndexAlive, isLethalDamageAllocation, getInventoryCard } from "../src/shared/playerHelpers.js";
+import {
+  isStatIndexAlive,
+  isLethalDamageAllocation,
+  getInventoryCard,
+  matchesActiveAbility,
+} from "../src/shared/playerHelpers.js";
 import { rotationsWithDoor } from "../src/shared/tileRotation.js";
 import { test, assert, report } from "./harness.mjs";
 
@@ -44,6 +49,16 @@ test("resolves the referenced inventory card, else null", () => {
   assert(getInventoryCard(game, viewed) === card, "returns the card");
   assert(getInventoryCard(game, { ...viewed, ownerCollection: "omens" }) === null, "non-inventory → null");
   assert(getInventoryCard(game, { ...viewed, ownerCardIndex: 9 }) === null, "missing index → null");
+});
+
+console.log("\nshared/playerHelpers.matchesActiveAbility:");
+test("matches only the right action + collection on a real card", () => {
+  const card = { activeAbilityRule: { action: "reroll-one-die" }, ownerCollection: "inventory" };
+  assert(matchesActiveAbility(card, "reroll-one-die", "inventory") === true, "exact match");
+  assert(matchesActiveAbility(card, "reroll-all-trait-dice", "inventory") === false, "wrong action");
+  assert(matchesActiveAbility(card, "reroll-one-die", "omens") === false, "wrong collection");
+  assert(matchesActiveAbility(null, "reroll-one-die", "inventory") === false, "no card");
+  assert(matchesActiveAbility({}, "reroll-one-die", "inventory") === false, "no ability rule");
 });
 
 console.log("\nshared/tileRotation.rotationsWithDoor:");

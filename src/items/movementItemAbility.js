@@ -1,4 +1,4 @@
-import { getInventoryCard } from "../shared/playerHelpers";
+import { getInventoryCard, matchesActiveAbility } from "../shared/playerHelpers";
 
 const SKELETON_KEY_ITEM_ID = "skeleton-key";
 const SKELETON_KEY_RESULT_EFFECT_TYPE = "skeleton-key-result";
@@ -78,11 +78,9 @@ export function resolveSkeletonKeyResultAfterDismiss(game, effect) {
 
 /* [ITEM-MOVEMENT] [ITEM-ABILITY] Activates the Map: removes it from inventory, then opens a tile-choice event-awaiting state. */
 export function applyMapNowState(game, viewedCard) {
-  if (!viewedCard) return { game, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.activeAbilityRule?.action !== "teleport-any-tile") {
+  if (!matchesActiveAbility(viewedCard, "teleport-any-tile", "inventory")) {
     return { game, closeViewedCard: false, diceAnimation: null };
   }
-  if (viewedCard.ownerCollection !== "inventory") return { game, closeViewedCard: false, diceAnimation: null };
   if (viewedCard.ownerIndex !== game.currentPlayerIndex) return { game, closeViewedCard: false, diceAnimation: null };
 
   const owner = game.players[viewedCard.ownerIndex];
@@ -199,11 +197,9 @@ export function canUseNormalMovementNow(game, viewedCard) {
 
 /* [ITEM-MOVEMENT] [ITEM-ABILITY] Activates the Skeleton Key: arms it on the player (enabling wall-move arrows on the board). */
 export function applySkeletonKeyNowState(game, viewedCard) {
-  if (!viewedCard) return { game, closeViewedCard: false, diceAnimation: null };
-  if (viewedCard.activeAbilityRule?.action !== "move-through-walls") {
+  if (!matchesActiveAbility(viewedCard, "move-through-walls", "inventory")) {
     return { game, closeViewedCard: false, diceAnimation: null };
   }
-  if (viewedCard.ownerCollection !== "inventory") return { game, closeViewedCard: false, diceAnimation: null };
   if (viewedCard.ownerIndex !== game.currentPlayerIndex) return { game, closeViewedCard: false, diceAnimation: null };
   if (!canUseNormalMovementNow(game, viewedCard)) {
     return { game, closeViewedCard: false, diceAnimation: null };
