@@ -72,6 +72,399 @@ export function finalizeEventState(g, message) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Event effect handlers
+//
+// Each handler resolves one effect.type and returns { game, cameraFloor? }.
+// They receive a `ctx` bundle assembled by applyResolvedEventEffect (below),
+// which holds the game, the effect, the acting player, the event state, and the
+// deps a handler might need. Registered in EVENT_EFFECT_HANDLERS; unknown effect
+// types fall through to a no-op in the dispatcher.
+// ---------------------------------------------------------------------------
+
+/* [STAT-CHANGE] [EVENT] Grants a trait-roll blessing on the current tile. */
+function handleGrantBonus({ g, eventState }) {
+  return {
+    game: {
+      ...g,
+      eventState: {
+        ...eventState,
+        summary: appendEventSummary(eventState.summary, "A blessing now empowers trait rolls on this tile."),
+      },
+    },
+  };
+}
+
+/* [STAT-CHANGE] [EVENT-CHOICE] Opens a flexible stat gain (as a damageChoice) or a trait-choice awaiting. */
+function handleStatChoice({ g, effect, player, eventState }) {
+  if (effect.mode === "gain") {
+    const gainOptions = [...(effect.options || [])];
+    const maxFlexibleGain =
+      effect.amountType === "up-to-max"
+        ? gainOptions.reduce((sum, stat) => {
+            const trackLength = player.character?.[stat]?.length || 0;
+            const currentIndex = player.statIndex?.[stat] || 0;
+            return sum + Math.max(0, trackLength - 1 - currentIndex);
+          }, 0)
+        : null;
+
+    return {
+      game: {
+        ...g,
+        damageChoice: {
+          source: "event-stat-choice",
+          effect,
+          originalDamageType: "general",
+          damageType: "general",
+          adjustmentMode: "increase",
+          amount: maxFlexibleGain ?? (effect.amount || 1),
+          allowedStats: gainOptions,
+          allocation: Object.fromEntries(gainOptions.map((stat) => [stat, 0])),
+          playerName: player.name,
+          canConvertToGeneral: false,
+          conversionSourceNames: [],
+          postDamageEffects: [],
+          allowPartial: effect.amountType === "up-to-max",
+        },
+        eventState: {
+          ...eventState,
+          awaiting: null,
+        },
+        turnPhase: "event",
+      },
+    };
+  }
+
+  return {
+    game: {
+      ...g,
+      eventState: {
+        ...eventState,
+        awaiting: {
+          type: "stat-choice",
+          prompt: "Choose a trait.",
+          options: effect.options,
+          effect,
+        },
+      },
+    },
+  };
+}
+
+/* [ITEM-ABILITY] [EVENT-CHOICE] Discards or buries an item: auto-resolves 0/1 matches, else opens an item-choice. */
+function handleDiscardOrBuryItem({ g, effect, player, eventState }) {
+  const matchingItems = player.inventory
+    .map((card, index) => ({ card, index }))
+    .filter(({ card }) => {
+      if (effect.filter === "non-weapon-item") return !card.isWeapon;
+      return true;
+    });
+
+  if (matchingItems.length === 0) {
+    return { game: g };
+  }
+
+  if (matchingItems.length === 1) {
+    const [{ index }] = matchingItems;
+    return {
+      game: {
+        ...g,
+        players: g.players.map((current, currentIndex) =>
+          currentIndex === g.currentPlayerIndex
+            ? { ...current, inventory: current.inventory.filter((_, cardIndex) => cardIndex !== index) }
+            : current
+        ),
+      },
+    };
+  }
+
+  return {
+    game: {
+      ...g,
+      eventState: {
+        ...eventState,
+        awaiting: {
+          type: "item-choice",
+          prompt: effect.type === "bury-item" ? "Choose an Item to bury." : "Choose an Item to discard.",
+          options: matchingItems.map(({ card, index }) => ({ label: card.name, value: index })),
+          effect,
+        },
+      },
+    },
+  };
+}
+
+/* [MOVEMENT] [EVENT-TILE-CHOICE] Moves the player to a discovered destination; auto-resolves 0/1 options, else opens a tile-choice. */
+function handleMove({ g, effect, player, eventState, DIR, getTileAtPosition }) {
+  const options = getDiscoveredTileOptions(g.board, player, effect.destination, null, DIR, getTileAtPosition);
+  if (options.length === 0) {
+    return {
+      game: {
+        ...g,
+        eventState: {
+          ...eventState,
+          summary: appendEventSummary(eventState.summary, "No valid destination is available."),
+        },
+      },
+    };
+  }
+
+  if (options.length === 1) {
+    const [{ tile, floor }] = options;
+    return {
+      game: {
+        ...g,
+        players: g.players.map((current, currentIndex) =>
+          currentIndex === g.currentPlayerIndex ? { ...current, x: tile.x, y: tile.y, floor } : current
+        ),
+        movePath: [{ x: tile.x, y: tile.y, floor, cost: 0 }],
+      },
+      cameraFloor: floor,
+    };
+  }
+
+  return {
+    game: {
+      ...g,
+      eventState: {
+        ...eventState,
+        awaiting: {
+          type: "tile-choice",
+          prompt: "Choose a tile.",
+          effect,
+          selectedOptionId: null,
+          options: options.map(({ tile, floor }) => ({
+            id: `${tile.id}-${floor}-${tile.x}-${tile.y}`,
+            floor,
+            x: tile.x,
+            y: tile.y,
+            label: tile.name,
+            tileId: tile.id,
+          })),
+        },
+      },
+    },
+  };
+}
+
+/* [TILE-EFFECT] [EVENT-TILE-CHOICE] Places a token on a discovered tile; auto-resolves 0/1 options, else opens a tile-choice. */
+function handlePlaceToken({ g, effect, player, eventState, DIR, getTileAtPosition }) {
+  const placeTokenOnTile = (board, floor, x, y) => ({
+    ...board,
+    [floor]: board[floor].map((tile) =>
+      tile.x === x && tile.y === y
+        ? {
+            ...tile,
+            obstacle: effect.token === "obstacle" ? true : tile.obstacle,
+            tokens:
+              effect.token === "obstacle" ? tile.tokens || [] : [...(tile.tokens || []), { type: effect.token }],
+          }
+        : tile
+    ),
+  });
+
+  const options = getDiscoveredTileOptions(g.board, player, effect.location, effect.token, DIR, getTileAtPosition);
+  if (options.length === 0) {
+    return { game: g };
+  }
+
+  if (options.length === 1) {
+    const [{ tile, floor }] = options;
+    return {
+      game: {
+        ...g,
+        board: placeTokenOnTile(g.board, floor, tile.x, tile.y),
+      },
+    };
+  }
+
+  return {
+    game: {
+      ...g,
+      eventState: {
+        ...eventState,
+        awaiting: {
+          type: "tile-choice",
+          prompt: `Choose where to place the ${effect.token.replace(/-/g, " ")} token ${describeTokenPlacementLocation(effect.location)}.`,
+          effect,
+          selectedOptionId: null,
+          options: options.map(({ tile, floor }) => ({
+            id: `${tile.id}-${floor}-${tile.x}-${tile.y}`,
+            floor,
+            x: tile.x,
+            y: tile.y,
+            label: tile.name,
+            tileId: tile.id,
+          })),
+        },
+      },
+    },
+  };
+}
+
+/* [STAT-CHANGE] [EVENT] Applies a resolved stat change (lose/gain/heal on one stat or all). */
+function handleStatChange({ g, effect, chosenStat, applyEventStatChange }) {
+  const nextPlayers = applyEventStatChange(g.players, g.currentPlayerIndex, effect, chosenStat);
+  return { game: { ...g, players: nextPlayers } };
+}
+
+/* [CARD-DECK] [EVENT] Draws the top card of a deck (currently only the item deck). */
+function handleDrawCard({ g, effect, player, createDrawnItemCard }) {
+  if (effect.deck !== "item") return { game: g };
+  const nextDeck = [...g.itemDeck];
+  const nextItem = nextDeck.shift();
+  return finalizeEventState(
+    {
+      ...g,
+      itemDeck: nextDeck,
+      drawnCard: nextItem ? createDrawnItemCard(nextItem) : null,
+    },
+    nextItem
+      ? `${player.name} draws ${nextItem.name}.`
+      : `${player.name} tried to draw an Item card, but the deck is empty.`
+  );
+}
+
+/* [DAMAGE] [EVENT] Resolves event damage: rolls dice if needed, then opens a damageChoice (or blocks if reduced to 0). */
+function handleDamage({ g, effect, player, eventState, rollDice, resolveDamageEffect, createDamageChoice }) {
+  if (effect.amountType === "dice" && effect.resolvedAmount === undefined) {
+    return {
+      game: {
+        ...g,
+        eventState: {
+          ...eventState,
+          awaiting: {
+            type: "event-damage-roll-ready",
+            effect,
+          },
+        },
+        turnPhase: "event",
+      },
+    };
+  }
+
+  const getMaxDamageAmount = (targetPlayer, damageType) => {
+    if (!targetPlayer) return 0;
+    if (damageType === "physical") {
+      return (targetPlayer.statIndex.might || 0) + (targetPlayer.statIndex.speed || 0);
+    }
+    if (damageType === "mental") {
+      return (targetPlayer.statIndex.sanity || 0) + (targetPlayer.statIndex.knowledge || 0);
+    }
+    return (
+      (targetPlayer.statIndex.might || 0) +
+      (targetPlayer.statIndex.speed || 0) +
+      (targetPlayer.statIndex.sanity || 0) +
+      (targetPlayer.statIndex.knowledge || 0)
+    );
+  };
+
+  const rolledDamage =
+    effect.resolvedAmount ??
+    (effect.amountType === "dice" ? rollDice(effect.dice || 1).reduce((sum, die) => sum + die, 0) : null);
+  const maxFlexibleDamage = effect.amountType === "up-to-max" ? getMaxDamageAmount(player, effect.damageType) : null;
+  const effectAmount = rolledDamage ?? maxFlexibleDamage ?? effect.amount ?? 0;
+  const resolved = resolveDamageEffect(player, {
+    type: "event-damage",
+    damageType: effect.damageType,
+    damage: effectAmount,
+  });
+
+  if (resolved.damage <= 0) {
+    return {
+      game: {
+        ...g,
+        eventState: {
+          ...eventState,
+          summary: appendEventSummary(eventState.summary, `${player.name} blocks all damage.`),
+        },
+      },
+    };
+  }
+
+  return {
+    game: {
+      ...g,
+      damageChoice: {
+        ...createDamageChoice(resolved, player),
+        source: "event-effect",
+        allowPartial: effect.amountType === "up-to-max",
+      },
+      eventState: {
+        ...eventState,
+        summary: appendEventSummary(
+          eventState.summary,
+          rolledDamage !== null
+            ? `${player.name} rolls ${rolledDamage} for ${effect.damageType} damage.`
+            : effect.amountType === "up-to-max"
+              ? `${player.name} may take up to ${resolved.damage} ${effect.damageType} damage.`
+              : `${player.name} takes ${resolved.damage} ${effect.damageType} damage.`
+        ),
+      },
+      turnPhase: "event",
+    },
+  };
+}
+
+/* [HAUNT-SETUP] [EVENT] Starts a haunt from an event effect, or marks it triggered if the haunt isn't implemented yet. */
+function handleStartHaunt({ g, effect, eventState, deps }) {
+  const { getHauntDefinitionById, startSelectedHauntState } = deps;
+  const hauntId = `haunt_${effect.hauntNumber}`;
+  const hauntDefinition = getHauntDefinitionById?.(hauntId);
+  if (hauntDefinition && startSelectedHauntState) {
+    const launched = startSelectedHauntState({ ...g, eventState: null }, { hauntDefinition });
+    return { game: launched };
+  }
+  // Haunt not yet implemented — surface a message and mark triggered
+  return {
+    game: {
+      ...g,
+      hauntTriggered: true,
+      eventState: {
+        ...eventState,
+        summary: appendEventSummary(
+          eventState.summary,
+          `The haunt begins. Use haunt ${effect.hauntNumber} from ${effect.book.replace(/-/g, " ")}.`
+        ),
+      },
+    },
+  };
+}
+
+/* [EVENT-CHOICE] Records a resolved choice into eventState.context.choices for later conditionals. */
+function handleRecordContext({ g, effect, eventState }) {
+  return {
+    game: {
+      ...g,
+      eventState: {
+        ...eventState,
+        context: {
+          ...eventState.context,
+          choices: {
+            ...(eventState.context.choices || {}),
+            [effect.key]: effect.value,
+          },
+        },
+      },
+    },
+  };
+}
+
+// effect.type -> handler. Adding an effect type is a single entry here.
+const EVENT_EFFECT_HANDLERS = {
+  "grant-bonus": handleGrantBonus,
+  "stat-choice": handleStatChoice,
+  "discard-item": handleDiscardOrBuryItem,
+  "bury-item": handleDiscardOrBuryItem,
+  move: handleMove,
+  "place-token": handlePlaceToken,
+  "stat-change": handleStatChange,
+  "draw-card": handleDrawCard,
+  damage: handleDamage,
+  "start-haunt": handleStartHaunt,
+  "record-context": handleRecordContext,
+};
+
 /* [EVENT] [STAT-CHANGE] Applies a single resolved event effect (stat change, damage, move, draw-card, etc.) to the game state. */
 export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) {
   const {
@@ -131,365 +524,27 @@ export function applyResolvedEventEffect(g, effect, selectedValue = null, deps) 
   const eventState = g.eventState;
   const chosenStat = selectedValue || eventState?.context?.selectedStats?.[effect.stepKey] || null;
 
-  if (effect.type === "grant-bonus") {
-    return {
-      game: {
-        ...g,
-        eventState: {
-          ...eventState,
-          summary: appendEventSummary(eventState.summary, "A blessing now empowers trait rolls on this tile."),
-        },
-      },
-    };
-  }
+  const handler = EVENT_EFFECT_HANDLERS[effect.type];
+  if (!handler) return { game: g };
 
-  if (effect.type === "stat-choice") {
-    if (effect.mode === "gain") {
-      const gainOptions = [...(effect.options || [])];
-      const maxFlexibleGain =
-        effect.amountType === "up-to-max"
-          ? gainOptions.reduce((sum, stat) => {
-              const trackLength = player.character?.[stat]?.length || 0;
-              const currentIndex = player.statIndex?.[stat] || 0;
-              return sum + Math.max(0, trackLength - 1 - currentIndex);
-            }, 0)
-          : null;
-
-      return {
-        game: {
-          ...g,
-          damageChoice: {
-            source: "event-stat-choice",
-            effect,
-            originalDamageType: "general",
-            damageType: "general",
-            adjustmentMode: "increase",
-            amount: maxFlexibleGain ?? (effect.amount || 1),
-            allowedStats: gainOptions,
-            allocation: Object.fromEntries(gainOptions.map((stat) => [stat, 0])),
-            playerName: player.name,
-            canConvertToGeneral: false,
-            conversionSourceNames: [],
-            postDamageEffects: [],
-            allowPartial: effect.amountType === "up-to-max",
-          },
-          eventState: {
-            ...eventState,
-            awaiting: null,
-          },
-          turnPhase: "event",
-        },
-      };
-    }
-
-    return {
-      game: {
-        ...g,
-        eventState: {
-          ...eventState,
-          awaiting: {
-            type: "stat-choice",
-            prompt: "Choose a trait.",
-            options: effect.options,
-            effect,
-          },
-        },
-      },
-    };
-  }
-
-  if (effect.type === "discard-item" || effect.type === "bury-item") {
-    const matchingItems = player.inventory
-      .map((card, index) => ({ card, index }))
-      .filter(({ card }) => {
-        if (effect.filter === "non-weapon-item") return !card.isWeapon;
-        return true;
-      });
-
-    if (matchingItems.length === 0) {
-      return { game: g };
-    }
-
-    if (matchingItems.length === 1) {
-      const [{ index }] = matchingItems;
-      return {
-        game: {
-          ...g,
-          players: g.players.map((current, currentIndex) =>
-            currentIndex === g.currentPlayerIndex
-              ? { ...current, inventory: current.inventory.filter((_, cardIndex) => cardIndex !== index) }
-              : current
-          ),
-        },
-      };
-    }
-
-    return {
-      game: {
-        ...g,
-        eventState: {
-          ...eventState,
-          awaiting: {
-            type: "item-choice",
-            prompt: effect.type === "bury-item" ? "Choose an Item to bury." : "Choose an Item to discard.",
-            options: matchingItems.map(({ card, index }) => ({ label: card.name, value: index })),
-            effect,
-          },
-        },
-      },
-    };
-  }
-
-  if (effect.type === "move") {
-    const options = getDiscoveredTileOptions(g.board, player, effect.destination, null, DIR, getTileAtPosition);
-    if (options.length === 0) {
-      return {
-        game: {
-          ...g,
-          eventState: {
-            ...eventState,
-            summary: appendEventSummary(eventState.summary, "No valid destination is available."),
-          },
-        },
-      };
-    }
-
-    if (options.length === 1) {
-      const [{ tile, floor }] = options;
-      return {
-        game: {
-          ...g,
-          players: g.players.map((current, currentIndex) =>
-            currentIndex === g.currentPlayerIndex ? { ...current, x: tile.x, y: tile.y, floor } : current
-          ),
-          movePath: [{ x: tile.x, y: tile.y, floor, cost: 0 }],
-        },
-        cameraFloor: floor,
-      };
-    }
-
-    return {
-      game: {
-        ...g,
-        eventState: {
-          ...eventState,
-          awaiting: {
-            type: "tile-choice",
-            prompt: "Choose a tile.",
-            effect,
-            selectedOptionId: null,
-            options: options.map(({ tile, floor }) => ({
-              id: `${tile.id}-${floor}-${tile.x}-${tile.y}`,
-              floor,
-              x: tile.x,
-              y: tile.y,
-              label: tile.name,
-              tileId: tile.id,
-            })),
-          },
-        },
-      },
-    };
-  }
-
-  if (effect.type === "place-token") {
-    const placeTokenOnTile = (board, floor, x, y) => ({
-      ...board,
-      [floor]: board[floor].map((tile) =>
-        tile.x === x && tile.y === y
-          ? {
-              ...tile,
-              obstacle: effect.token === "obstacle" ? true : tile.obstacle,
-              tokens:
-                effect.token === "obstacle" ? tile.tokens || [] : [...(tile.tokens || []), { type: effect.token }],
-            }
-          : tile
-      ),
-    });
-
-    const options = getDiscoveredTileOptions(g.board, player, effect.location, effect.token, DIR, getTileAtPosition);
-    if (options.length === 0) {
-      return { game: g };
-    }
-
-    if (options.length === 1) {
-      const [{ tile, floor }] = options;
-      return {
-        game: {
-          ...g,
-          board: placeTokenOnTile(g.board, floor, tile.x, tile.y),
-        },
-      };
-    }
-
-    return {
-      game: {
-        ...g,
-        eventState: {
-          ...eventState,
-          awaiting: {
-            type: "tile-choice",
-            prompt: `Choose where to place the ${effect.token.replace(/-/g, " ")} token ${describeTokenPlacementLocation(effect.location)}.`,
-            effect,
-            selectedOptionId: null,
-            options: options.map(({ tile, floor }) => ({
-              id: `${tile.id}-${floor}-${tile.x}-${tile.y}`,
-              floor,
-              x: tile.x,
-              y: tile.y,
-              label: tile.name,
-              tileId: tile.id,
-            })),
-          },
-        },
-      },
-    };
-  }
-
-  if (effect.type === "stat-change") {
-    const nextPlayers = applyEventStatChange(g.players, g.currentPlayerIndex, effect, chosenStat);
-    return { game: { ...g, players: nextPlayers } };
-  }
-
-  if (effect.type === "draw-card") {
-    if (effect.deck !== "item") return { game: g };
-    const nextDeck = [...g.itemDeck];
-    const nextItem = nextDeck.shift();
-    return finalizeEventState(
-      {
-        ...g,
-        itemDeck: nextDeck,
-        drawnCard: nextItem ? createDrawnItemCard(nextItem) : null,
-      },
-      nextItem
-        ? `${player.name} draws ${nextItem.name}.`
-        : `${player.name} tried to draw an Item card, but the deck is empty.`
-    );
-  }
-
-  if (effect.type === "damage") {
-    if (effect.amountType === "dice" && effect.resolvedAmount === undefined) {
-      return {
-        game: {
-          ...g,
-          eventState: {
-            ...eventState,
-            awaiting: {
-              type: "event-damage-roll-ready",
-              effect,
-            },
-          },
-          turnPhase: "event",
-        },
-      };
-    }
-
-    const getMaxDamageAmount = (targetPlayer, damageType) => {
-      if (!targetPlayer) return 0;
-      if (damageType === "physical") {
-        return (targetPlayer.statIndex.might || 0) + (targetPlayer.statIndex.speed || 0);
-      }
-      if (damageType === "mental") {
-        return (targetPlayer.statIndex.sanity || 0) + (targetPlayer.statIndex.knowledge || 0);
-      }
-      return (
-        (targetPlayer.statIndex.might || 0) +
-        (targetPlayer.statIndex.speed || 0) +
-        (targetPlayer.statIndex.sanity || 0) +
-        (targetPlayer.statIndex.knowledge || 0)
-      );
-    };
-
-    const rolledDamage =
-      effect.resolvedAmount ??
-      (effect.amountType === "dice" ? rollDice(effect.dice || 1).reduce((sum, die) => sum + die, 0) : null);
-    const maxFlexibleDamage = effect.amountType === "up-to-max" ? getMaxDamageAmount(player, effect.damageType) : null;
-    const effectAmount = rolledDamage ?? maxFlexibleDamage ?? effect.amount ?? 0;
-    const resolved = resolveDamageEffect(player, {
-      type: "event-damage",
-      damageType: effect.damageType,
-      damage: effectAmount,
-    });
-
-    if (resolved.damage <= 0) {
-      return {
-        game: {
-          ...g,
-          eventState: {
-            ...eventState,
-            summary: appendEventSummary(eventState.summary, `${player.name} blocks all damage.`),
-          },
-        },
-      };
-    }
-
-    return {
-      game: {
-        ...g,
-        damageChoice: {
-          ...createDamageChoice(resolved, player),
-          source: "event-effect",
-          allowPartial: effect.amountType === "up-to-max",
-        },
-        eventState: {
-          ...eventState,
-          summary: appendEventSummary(
-            eventState.summary,
-            rolledDamage !== null
-              ? `${player.name} rolls ${rolledDamage} for ${effect.damageType} damage.`
-              : effect.amountType === "up-to-max"
-                ? `${player.name} may take up to ${resolved.damage} ${effect.damageType} damage.`
-                : `${player.name} takes ${resolved.damage} ${effect.damageType} damage.`
-          ),
-        },
-        turnPhase: "event",
-      },
-    };
-  }
-
-  if (effect.type === "start-haunt") {
-    const { getHauntDefinitionById, startSelectedHauntState } = deps;
-    const hauntId = `haunt_${effect.hauntNumber}`;
-    const hauntDefinition = getHauntDefinitionById?.(hauntId);
-    if (hauntDefinition && startSelectedHauntState) {
-      const launched = startSelectedHauntState({ ...g, eventState: null }, { hauntDefinition });
-      return { game: launched };
-    }
-    // Haunt not yet implemented — surface a message and mark triggered
-    return {
-      game: {
-        ...g,
-        hauntTriggered: true,
-        eventState: {
-          ...eventState,
-          summary: appendEventSummary(
-            eventState.summary,
-            `The haunt begins. Use haunt ${effect.hauntNumber} from ${effect.book.replace(/-/g, " ")}.`
-          ),
-        },
-      },
-    };
-  }
-
-  if (effect.type === "record-context") {
-    return {
-      game: {
-        ...g,
-        eventState: {
-          ...eventState,
-          context: {
-            ...eventState.context,
-            choices: {
-              ...(eventState.context.choices || {}),
-              [effect.key]: effect.value,
-            },
-          },
-        },
-      },
-    };
-  }
-
-  return { game: g };
+  return handler({
+    g,
+    effect,
+    selectedValue,
+    deps,
+    player,
+    eventState,
+    chosenStat,
+    applyEventStatChange,
+    DIR,
+    getTileAtPosition,
+    applyStatChange,
+    PLAYER_STAT_ORDER,
+    createDrawnItemCard,
+    rollDice,
+    resolveDamageEffect,
+    createDamageChoice,
+  });
 }
 
 /* [EVENT] Steps through the active event's steps list until it reaches a step requiring player input (roll, choice, tile-choice, etc.), applying automatic effects along the way. Returns { game, cameraFloor? }. */

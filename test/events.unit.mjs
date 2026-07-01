@@ -80,4 +80,64 @@ test("draws the top item card and shrinks the item deck", () => {
   assert(next.drawnCard?.name === topName, "drew the top card of the deck");
 });
 
+console.log("\neffect: record-context");
+test("stores the value under context.choices[key]", () => {
+  const game = makeEventGame();
+  const { game: next } = applyResolvedEventEffect(game, { type: "record-context", key: "door", value: "open" }, null, deps);
+  assert(next.eventState.context.choices.door === "open", "recorded choice");
+});
+
+console.log("\neffect: discard-item / bury-item");
+test("single matching item is removed from inventory", () => {
+  const game = makeEventGame();
+  game.players[P0].inventory = [
+    { name: "Revolver", isWeapon: true },
+    { name: "Bottle", isWeapon: false },
+  ];
+  const { game: next } = applyResolvedEventEffect(game, { type: "discard-item", filter: "non-weapon-item" }, null, deps);
+  assert(next.players[P0].inventory.length === 1, "one item removed");
+  assert(next.players[P0].inventory[0].name === "Revolver", "the weapon is kept");
+});
+
+test("no matching item leaves the game unchanged", () => {
+  const game = makeEventGame();
+  game.players[P0].inventory = [{ name: "Revolver", isWeapon: true }];
+  const { game: next } = applyResolvedEventEffect(game, { type: "discard-item", filter: "non-weapon-item" }, null, deps);
+  assert(next.players[P0].inventory.length === 1, "weapon-only inventory untouched");
+});
+
+test("multiple matches open an item-choice awaiting", () => {
+  const game = makeEventGame();
+  game.players[P0].inventory = [
+    { name: "Bottle", isWeapon: false },
+    { name: "Candle", isWeapon: false },
+  ];
+  const { game: next } = applyResolvedEventEffect(game, { type: "bury-item" }, null, deps);
+  assert(next.eventState.awaiting?.type === "item-choice", "item-choice awaiting opened");
+  assert(next.eventState.awaiting.options.length === 2, "both items offered");
+});
+
+console.log("\neffect: damage (fixed amount)");
+test("creates an event-effect damageChoice when damage > 0", () => {
+  const game = makeEventGame();
+  const { game: next } = applyResolvedEventEffect(game, { type: "damage", damageType: "physical", amount: 2 }, null, deps);
+  assert(next.damageChoice?.source === "event-effect", "damageChoice created with source event-effect");
+  assert(next.turnPhase === "event", "turnPhase set to event");
+});
+
+console.log("\neffect: start-haunt");
+test("implemented haunt launches into haunt setup", () => {
+  const game = makeEventGame();
+  const { game: next } = applyResolvedEventEffect(game, { type: "start-haunt", hauntNumber: 47, book: "some-book" }, null, deps);
+  assert(next.activeHauntId === "haunt_47", `activeHauntId haunt_47, got ${next.activeHauntId}`);
+  assert(next.hauntTriggered === true, "hauntTriggered set");
+});
+
+test("unimplemented haunt marks triggered + surfaces a message", () => {
+  const game = makeEventGame();
+  const { game: next } = applyResolvedEventEffect(game, { type: "start-haunt", hauntNumber: 2, book: "secrets-of-survival" }, null, deps);
+  assert(next.hauntTriggered === true, "hauntTriggered set");
+  assert(/haunt 2/i.test(next.eventState.summary), `summary references haunt 2, got "${next.eventState.summary}"`);
+});
+
 report();
